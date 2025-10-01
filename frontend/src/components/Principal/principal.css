@@ -1,0 +1,494 @@
+/* ====== :root ROJO (sin degradados) — variables con prefijo reg- ====== */
+:root {
+  /* 🎨 PALETA ROJA */
+  --reg-primary: #B71C1C;          /* Rojo principal */
+  --reg-primary-light: #E53935;    /* Rojo claro para focus/hover */
+  --reg-primary-dark: #7F0000;     /* Rojo profundo para hover */
+
+  --reg-secondary: #1D428A;        /* Azul secundario opcional */
+  --reg-accent: #C62828;
+
+  --reg-success: #10B981;
+  --reg-warning: #F59E0B;
+  --reg-danger: #D32F2F;
+
+  --reg-light: #F8FAFC;
+  --reg-dark: #0F172A;
+
+  --reg-gray-100: #F1F5F9;
+  --reg-gray-200: #E2E8F0;
+  --reg-gray-300: #CBD5E1;
+  --reg-gray-400: #94A3B8;
+  --reg-gray-500: #64748B;
+  --reg-gray-600: #475569;
+  --reg-gray-700: #334155;
+  --reg-gray-800: #1E293B;
+  --reg-gray-900: #0F172A;
+
+  --reg-border-radius: 12px;
+  --reg-border-radius-lg: 16px;
+  --reg-border-radius-xl: 20px;
+
+  --reg-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  --reg-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --reg-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --reg-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --reg-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* ===== Reset táctil y foco accesible ===== */
+* { -webkit-tap-highlight-color: transparent; }
+
+.menu-button,
+.logout-button {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  outline: none;
+}
+.title-accent {
+  color: var(--reg-primary);  /* usa tu rojo principal */
+  font-weight: 700;          /* un poco más de énfasis */
+}
+.menu-button:focus { outline: none; }
+.menu-button:focus-visible {
+  outline: 3px solid var(--reg-primary-light);
+  outline-offset: 2px;
+}
+
+.logout-button:focus { outline: none; }
+.logout-button:focus-visible {
+  outline: 3px solid rgba(211, 47, 47, .35); /* reg-danger con transparencia */
+  outline-offset: 2px;
+}
+
+/* ===== Contenedor principal ===== */
+.pagina-principal-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: url('../../imagenes/img_fondo.png') center center / cover no-repeat fixed;
+  box-sizing: border-box;
+  transition: opacity 0.3s ease;
+}
+
+/* ===== Tarjeta ===== */
+.pagina-principal-card {
+  width: 100%;
+  max-width: 900px;
+  background-color: #ffffff;
+  border-radius: var(--reg-border-radius);
+  box-shadow: var(--reg-shadow-lg);
+  padding: 30px 30px 20px;
+  margin: auto;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  will-change: transform, opacity;
+  border: 1px solid var(--reg-gray-200);
+}
+
+/* ===== Header ===== */
+.pagina-principal-header { text-align: center; margin-bottom: 40px; }
+
+.logo-container {
+  width: 106px;
+  height: 106px;
+  padding: .8rem;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--reg-shadow-md);
+  border: 3px solid var(--reg-primary); /* borde rojo */
+  overflow: hidden;
+}
+
+.logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--reg-dark);
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--reg-gray-500);
+  margin: 0;
+}
+
+/* ===== Menú (con scroll interno) ===== */
+.menu-container {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+}
+
+.menu-container::-webkit-scrollbar { width: 8px; }
+.menu-container::-webkit-scrollbar-track {
+  background: var(--reg-gray-100);
+  border-radius: 8px;
+}
+.menu-container::-webkit-scrollbar-thumb {
+  background-color: var(--reg-primary);
+  border-radius: 8px;
+  border: 2px solid #ffffff;
+}
+.menu-container { scrollbar-width: thin; scrollbar-color: var(--reg-primary) var(--reg-gray-100); }
+
+/* ===== Grid (flex) ===== */
+.menu-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 5px 0;
+  justify-content: center;
+}
+
+/* Ancho “estable” en tarjetas */
+.menu-button {
+  width: clamp(220px, 28vw, 260px);
+  flex: 0 0 auto;
+}
+
+/* ===== Botones del menú ===== */
+.menu-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 25px 15px;
+  background-color: #ffffff;
+  border-radius: 10px;
+  border: 1px solid var(--reg-gray-200);
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background-color .2s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  color: var(--reg-gray-700);
+  text-decoration: none;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  min-height: 140px;
+}
+
+/* Hover SOLO en dispositivos con hover */
+@media (hover: hover) and (pointer: fine) {
+  .menu-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+    border-color: var(--reg-primary);
+    background-color: #FFF5F5; /* rojo muy claro, sin degradado */
+  }
+  .menu-button::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: #FFF5F5;
+    z-index: -1;
+    transform: scaleY(0);
+    transform-origin: bottom;
+    transition: transform 0.3s ease;
+  }
+  .menu-button:hover::before { transform: scaleY(1); }
+}
+
+/* Estado activo (tap) sutil */
+.menu-button:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+/* Icono y texto */
+.button-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #FDEAEA; /* “tinte” rojo claro sin degradado */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 15px;
+  color: var(--reg-primary);
+  font-size: 20px;
+}
+
+.button-text {
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--reg-gray-800);
+}
+
+/* Textos responsivos */
+.text-short { display: none; }
+.text-full  { display: inline; }
+
+/* ===== Botón cerrar sesión ===== */
+.logout-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  background-color: #fff;
+  border: 1px solid var(--reg-danger);
+  border-radius: 8px;
+  color: var(--reg-danger);
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease;
+  margin-top: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .logout-button:hover {
+    background-color: #FFF1F1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(211, 47, 47, 0.20);
+  }
+}
+
+.logout-icon { font-size: 16px; }
+.logout-text-short { display: none; }
+.logout-text-full  { display: inline; }
+
+/* ===== Modal ===== */
+@keyframes logout-modal-fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes logout-modal-pop { from { transform: translateY(4px); opacity: .98 } to { transform: translateY(0); opacity: 1 } }
+
+.logout-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+  animation: logout-modal-fadeIn 0.2s ease-out;
+  padding: 20px;
+}
+
+.logout-modal-container {
+  background-color: white;
+  border-radius: var(--reg-border-radius-lg);
+  width: 90%;
+  max-width: 500px;
+  padding: 28px;
+  box-shadow: var(--reg-shadow-xl);
+  text-align: center;
+  position: relative;
+  border-top: 4px solid transparent;
+  animation: logout-modal-pop .18s ease-out;
+  border: 3px solid var(--reg-gray-200);
+}
+
+.logout-modal--danger { border-top-color: var(--reg-danger); }
+
+.logout-modal__icon {
+  font-size: 2.5rem;
+  color: var(--reg-danger);
+  margin-bottom: 1rem;
+}
+
+.logout-modal-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--reg-dark);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.logout-modal-title--danger { color: var(--reg-danger); }
+
+.logout-modal-text {
+  font-size: 1rem;
+  color: var(--reg-gray-700);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.logout-modal-buttons {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.logout-btn {
+  padding: .75rem 1.25rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: .95rem;
+  cursor: pointer;
+  transition: var(--reg-transition);
+  flex: 1;
+  max-width: 200px;
+  min-width: 120px;
+  border: 1px solid transparent;
+}
+
+.logout-btn--ghost {
+  background: #fff;
+  color: var(--reg-gray-800);
+  border-color: var(--reg-gray-300);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .logout-btn--ghost:hover {
+    background: var(--reg-gray-100);
+    transform: translateY(-2px);
+    box-shadow: var(--reg-shadow-md);
+  }
+}
+
+.logout-btn--solid-danger {
+  background: var(--reg-danger);
+  color: #fff;
+  border-color: var(--reg-danger);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .logout-btn--solid-danger:hover {
+    filter: brightness(.95);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 18px rgba(211, 47, 47, .2);
+  }
+}
+
+/* ===== Animaciones contenedor ===== */
+.slide-fade-out { animation: slideFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+@keyframes slideFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(20px); }
+}
+
+/* ===== Footer ===== */
+.pagina-principal-footer {
+  text-align: right;
+  font-size: 14px;
+  color: var(--reg-gray-600);
+}
+
+.pagina-principal-footer a {
+  color: var(--reg-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+.pagina-principal-footer a:hover { text-decoration: underline; }
+
+/* ===== Responsive ===== */
+
+/* Tablets */
+@media (max-width: 768px) {
+  .pagina-principal-container { padding: 15px; }
+  .pagina-principal-card {
+    padding: 20px;
+    max-height: 95vh;
+    height: fit-content;
+  }
+  .logo-container { width: 80px; height: 80px; margin-bottom: 15px; }
+  .title { font-size: 22px; margin-bottom: 5px; }
+  .subtitle { font-size: 14px; }
+  .pagina-principal-header { margin-bottom: 25px; }
+
+  .menu-grid { gap: 15px; }
+  .menu-button {
+    padding: 20px 10px;
+    min-height: 120px;
+    width: clamp(200px, 42vw, 240px);
+  }
+
+  .button-icon { width: 40px; height: 40px; margin-bottom: 10px; font-size: 18px; }
+  .button-text { font-size: 14px; }
+
+  .logout-modal-container { padding: 20px; margin: 10px; }
+  .logout-modal-title { font-size: 1.2rem; }
+  .logout-modal-text { font-size: 0.9rem; }
+
+  .logout-btn { padding: .6rem 1rem; font-size: .9rem; min-width: 100px; }
+  .pagina-principal-footer { text-align: center; }
+}
+
+/* Móviles */
+@media (max-width: 480px) {
+  .pagina-principal-container {
+    padding: 10px;
+    align-items: flex-start;
+    padding-top: 20px;
+  }
+  .pagina-principal-card {
+    padding: 15px;
+    border-radius: 8px;
+    max-height: none;
+    height: fit-content;
+    min-height: auto;
+  }
+  .logo-container { width: 60px; height: 60px; margin-bottom: 10px; border-width: 2px; }
+  .title { font-size: 18px; line-height: 1.3; }
+  .subtitle { font-size: 12px; }
+  .pagina-principal-header { margin-bottom: 20px; }
+
+  .menu-grid { gap: 10px; }
+  .menu-button {
+    padding: 12px 8px;
+    min-height: 70px;
+    border-radius: 8px;
+    width: calc(50% - 10px);
+  }
+  .button-icon { width: 26px; height: 26px; margin-bottom: 6px; font-size: 14px; }
+  .button-text { font-size: 11px; font-weight: 600; line-height: 1.2; }
+
+  .text-short { display: inline; }
+  .text-full  { display: none; }
+
+  .logout-text-short { display: inline; }
+  .logout-text-full  { display: none; }
+
+  .logout-button { padding: 10px; font-size: 14px; gap: 8px; margin-top: 15px; }
+  .logout-icon { font-size: 14px; }
+
+  .logout-modal-overlay { padding: 15px; align-items: center; justify-content: center; }
+  .logout-modal-container {
+    padding: 20px;
+    width: 90%;
+    max-width: 350px;
+    border-radius: 16px;
+    margin: 0;
+    animation: logout-modal-pop .18s ease-out;
+  }
+  .logout-modal__icon { font-size: 2rem; }
+  .logout-modal-title { font-size: 1.1rem; margin-bottom: 10px; }
+  .logout-modal-text { font-size: 0.9rem; margin-bottom: 18px; }
+  .logout-modal-buttons { gap: 12px; }
+  .logout-btn { padding: .7rem .8rem; font-size: .85rem; min-width: 100px; border-radius: 12px; }
+}
+
+/* Móviles muy pequeños */
+@media (max-width: 360px) {
+  .menu-grid { gap: 8px; }
+  .menu-button { padding: 10px 6px; min-height: 65px; }
+  .button-icon { width: 24px; height: 24px; margin-bottom: 4px; font-size: 12px; }
+  .button-text { font-size: 10px; }
+  .title { font-size: 16px; }
+
+  .logout-modal-container { padding: 18px; max-width: 320px; }
+  .logout-modal-title { font-size: 1rem; }
+  .logout-modal-text { font-size: 0.85rem; }
+  .logout-btn { padding: .6rem .6rem; font-size: .8rem; min-width: 90px; }
+}
