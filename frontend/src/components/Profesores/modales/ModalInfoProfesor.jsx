@@ -3,11 +3,8 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import './ModalInfoProfesor.css';
 
 /**
- * Muestra SOLO la vista "Académico" con:
- * - Cargo
- * - Departamento/Área (si existiera)
- * - Materia principal + badge con total de materias
- * - Listado de Cátedras (Curso – División — Materia)
+ * Muestra información académica + disponibilidad + fecha de carga del docente.
+ * Espera el shape que devuelve backend/modules/profesores/obtener_profesores.php
  */
 const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
   // Cerrar con ESC
@@ -18,13 +15,23 @@ const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
     return () => document.removeEventListener('keydown', onKey);
   }, [mostrar, onClose]);
 
-  // Acordeón de materias (opcional)
+  // Acordeón de materias
   const [verMaterias, setVerMaterias] = useState(true);
 
   /* ================= Helpers ================= */
   const texto = useCallback((v) => {
     const s = v === null || v === undefined ? '' : String(v).trim();
     return s === '' ? '-' : s;
+  }, []);
+
+  const fmtFecha = useCallback((d) => {
+    if (!d) return '-';
+    // d ya viene como YYYY-MM-DD; lo mostramos “DD/MM/YYYY”
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      const [y, m, dd] = d.split('-');
+      return `${dd}/${m}/${y}`;
+    }
+    return d; // fallback
   }, []);
 
   const P = profesor ?? {};
@@ -46,7 +53,6 @@ const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
     return [...new Set(lista.filter(Boolean).map((s) => String(s).trim()))]
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   }, [P]);
-
   const materiasTotal = Number(P?.materias_total ?? (materias.length || 0));
 
   // Cátedras: array de { curso, division, materia } que trae el backend
@@ -56,9 +62,19 @@ const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
   if (!mostrar) return null;
 
   /* =============== Extracts =============== */
-  const idProfesor   = P.id_profesor ?? '-';
-  const cargo        = texto(P.cargo_nombre);
-  const departamento = texto(P.departamento || P.area);
+  const idProfesor      = P.id_profesor ?? '-';
+  const cargo           = texto(P.cargo_nombre);
+  const departamento    = texto(P.departamento || P.area);
+
+  // Disponibilidad (de obtener_profesores.php)
+  const turnoSiNom      = texto(P.turno_si_nombre);
+  const fechaSiStr      = fmtFecha(P.fecha_si || null);
+
+  const turnoNoNom      = texto(P.turno_no_nombre);
+  const fechaNoStr      = fmtFecha(P.fecha_no || null);
+
+  // Registro (solo fecha de carga, sin activo ni motivo)
+  const fechaCargaStr   = fmtFecha(P.fecha_carga || null);
 
   return (
     <div
@@ -66,10 +82,10 @@ const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
       onClick={(e) => e.target.classList.contains('mi-modal__overlay') && onClose?.()}
     >
       <div className="mi-modal__container" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        {/* Header compacto (solo título y subtítulo con ID y nombre) */}
+        {/* Header compacto */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
-            <h2 className="mi-modal__title">Información Académica</h2>
+            <h2 className="mi-modal__title">Información del Docente</h2>
             <p className="mi-modal__subtitle">
               ID: {idProfesor} &nbsp;|&nbsp; {nombreCompleto}
             </p>
@@ -82,10 +98,11 @@ const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
           </button>
         </div>
 
-        {/* Contenido ÚNICO: ACADÉMICO */}
+        {/* Contenido */}
         <div className="mi-modal__content">
           <section className="mi-tabpanel is-active">
             <div className="mi-grid">
+              {/* Situación Académica */}
               <article className="mi-card">
                 <h3 className="mi-card__title">Situación Académica</h3>
 
@@ -111,7 +128,7 @@ const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
                   </span>
                 </div>
 
-                {/* Materias (opcional, por si querés ver la lista completa) */}
+                {/* Materias (acordeón) */}
                 <div className="mi-accordion">
                   <button
                     type="button"
@@ -143,6 +160,40 @@ const ModalInfoProfesor = ({ mostrar, profesor, onClose }) => {
                       </ul>
                     )}
                   </div>
+                </div>
+              </article>
+
+              {/* Disponibilidad: Turnos y Fechas */}
+              <article className="mi-card">
+                <h3 className="mi-card__title">Disponibilidad</h3>
+
+                <div className="mi-row">
+                  <span className="mi-label">Turno SÍ</span>
+                  <span className="mi-value">{turnoSiNom}</span>
+                </div>
+
+                <div className="mi-row">
+                  <span className="mi-label">Fecha SÍ</span>
+                  <span className="mi-value">{fechaSiStr}</span>
+                </div>
+
+                <div className="mi-row">
+                  <span className="mi-label">Turno NO</span>
+                  <span className="mi-value">{turnoNoNom}</span>
+                </div>
+
+                <div className="mi-row">
+                  <span className="mi-label">Fecha NO</span>
+                  <span className="mi-value">{fechaNoStr}</span>
+                </div>
+              </article>
+
+              {/* Registro (solo fecha de carga) */}
+              <article className="mi-card">
+                <h3 className="mi-card__title">Registro</h3>
+                <div className="mi-row">
+                  <span className="mi-label">Fecha de carga</span>
+                  <span className="mi-value">{fechaCargaStr}</span>
                 </div>
               </article>
 

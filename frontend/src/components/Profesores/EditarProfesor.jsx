@@ -1,5 +1,5 @@
 // src/components/Profesores/EditarProfesor.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSave, faArrowLeft, faUser, faBriefcase } from '@fortawesome/free-solid-svg-icons';
@@ -27,6 +27,22 @@ const splitNyAP = (fullName = '') => {
   return ['', s];
 };
 
+// helper: hace que clickear el contenedor abra el datepicker
+const useClickOpensDatepicker = () => {
+  const ref = useRef(null);
+  const onContainerClick = () => {
+    const el = ref.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === 'function') el.showPicker();
+      else el.focus();
+    } catch {
+      el.focus();
+    }
+  };
+  return { ref, onContainerClick };
+};
+
 const EditarProfesor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -36,6 +52,18 @@ const EditarProfesor = () => {
   const [nombre, setNombre] = useState('');
   const [idCargo, setIdCargo] = useState('');
   const [cargos, setCargos] = useState([]);
+
+  // 🔹 Nuevos campos
+  const [turnos, setTurnos] = useState([]);        // [{id_turno, turno}]
+  const [idTurnoSi, setIdTurnoSi] = useState('');  // puede ser ''
+  const [idTurnoNo, setIdTurnoNo] = useState('');  // puede ser ''
+  const [fechaSi, setFechaSi] = useState('');      // YYYY-MM-DD o ''
+  const [fechaNo, setFechaNo] = useState('');      // YYYY-MM-DD o ''
+  const [fechaCarga, setFechaCarga] = useState(''); // YYYY-MM-DD (editable)
+
+  const fechaSiCtl = useClickOpensDatepicker();
+  const fechaNoCtl = useClickOpensDatepicker();
+  const fechaCargaCtl = useClickOpensDatepicker();
 
   const [idProfesor, setIdProfesor] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -67,8 +95,16 @@ const EditarProfesor = () => {
       setNombre(toMayus(no));
       setIdCargo(p.id_cargo ?? '');
 
-      // Lista de cargos para el select
+      // 🔹 Nuevos campos desde backend
+      setIdTurnoSi(p.id_turno_si ?? '');
+      setIdTurnoNo(p.id_turno_no ?? '');
+      setFechaSi(p.fecha_si ?? '');
+      setFechaNo(p.fecha_no ?? '');
+      setFechaCarga(p.fecha_carga ?? '');
+
+      // Listas
       setCargos(Array.isArray(data.cargos) ? data.cargos : []);
+      setTurnos(Array.isArray(data.turnos) ? data.turnos : []);
     } catch (e) {
       if (e.name !== 'AbortError') showToast('Error de red al cargar: ' + e.message, 'error');
     } finally {
@@ -96,7 +132,16 @@ const EditarProfesor = () => {
           id_profesor: idProfesor,
           apellido: toMayus(apellido.trim()),
           nombre: nombre.trim() ? toMayus(nombre.trim()) : null,
-          id_cargo: idCargo
+          id_cargo: idCargo,
+
+          // 🔹 Nuevos campos (permitir null)
+          id_turno_si: idTurnoSi === '' ? null : Number(idTurnoSi),
+          id_turno_no: idTurnoNo === '' ? null : Number(idTurnoNo),
+          fecha_si: fechaSi || null,
+          fecha_no: fechaNo || null,
+
+          // 🔹 fecha_carga editable
+          fecha_carga: fechaCarga || null,
         }),
       });
       const json = await res.json();
@@ -210,6 +255,100 @@ const EditarProfesor = () => {
                       <option key={c.id_cargo} value={c.id_cargo}>{c.cargo}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* 🔹 Turnos y Fechas */}
+              <div className="edit-socio-input-group">
+                <div className="edit-fl-wrapper always-active">
+                  <label htmlFor="id_turno_si" className="edit-fl-label">Turno SÍ</label>
+                  <select
+                    id="id_turno_si"
+                    value={idTurnoSi === null ? '' : (idTurnoSi || '')}
+                    onChange={(e) => setIdTurnoSi(e.target.value)}
+                    className="edit-socio-input edit-select"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {turnos.map(t => (
+                      <option key={t.id_turno} value={t.id_turno}>{t.turno}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div
+                  className="edit-socio-floating-label-wrapper"
+                  onClick={fechaSiCtl.onContainerClick}
+                >
+                  <input
+                    ref={fechaSiCtl.ref}
+                    type="date"
+                    value={fechaSi || ''}
+                    onChange={(e) => setFechaSi(e.target.value)}
+                    placeholder=" "
+                    className="edit-socio-input"
+                    id="fecha_si"
+                  />
+                  <label htmlFor="fecha_si" className={`edit-socio-floating-label ${fechaSi ? 'edit-socio-floating-label-filled' : ''}`}>
+                    Fecha SÍ
+                  </label>
+                </div>
+              </div>
+
+              <div className="edit-socio-input-group">
+                <div className="edit-fl-wrapper always-active">
+                  <label htmlFor="id_turno_no" className="edit-fl-label">Turno NO</label>
+                  <select
+                    id="id_turno_no"
+                    value={idTurnoNo === null ? '' : (idTurnoNo || '')}
+                    onChange={(e) => setIdTurnoNo(e.target.value)}
+                    className="edit-socio-input edit-select"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {turnos.map(t => (
+                      <option key={t.id_turno} value={t.id_turno}>{t.turno}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div
+                  className="edit-socio-floating-label-wrapper"
+                  onClick={fechaNoCtl.onContainerClick}
+                >
+                  <input
+                    ref={fechaNoCtl.ref}
+                    type="date"
+                    value={fechaNo || ''}
+                    onChange={(e) => setFechaNo(e.target.value)}
+                    placeholder=" "
+                    className="edit-socio-input"
+                    id="fecha_no"
+                  />
+                  <label htmlFor="fecha_no" className={`edit-socio-floating-label ${fechaNo ? 'edit-socio-floating-label-filled' : ''}`}>
+                    Fecha NO
+                  </label>
+                </div>
+              </div>
+
+              {/* 🔹 Fecha de carga (editable) */}
+              <div className="edit-socio-input-group">
+                <div
+                  className="edit-socio-floating-label-wrapper"
+                  onClick={fechaCargaCtl.onContainerClick}
+                  style={{ width: '100%' }}
+                >
+                  <input
+                    ref={fechaCargaCtl.ref}
+                    type="date"
+                    value={fechaCarga || ''}
+                    onChange={(e) => setFechaCarga(e.target.value)}
+                    placeholder=" "
+                    className="edit-socio-input"
+                    id="fecha_carga"
+                    required
+                  />
+                  <label htmlFor="fecha_carga" className={`edit-socio-floating-label ${fechaCarga ? 'edit-socio-floating-label-filled' : ''}`}>
+                    Fecha de carga
+                  </label>
                 </div>
               </div>
             </div>

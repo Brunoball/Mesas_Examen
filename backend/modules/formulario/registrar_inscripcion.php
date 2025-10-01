@@ -1,111 +1,121 @@
 <?php
 // backend/modules/formulario/registrar_inscripcion.php
-// Inserta filas en mesas_examen.inscripcion para las materias seleccionadas
+// Marca en mesas_examen.previas la columna inscripcion=1 para las materias seleccionadas (por DNI)
 
+header('Content-Type: application/json; charset=utf-8');
+
+// Siempre 200 (sin 4xx), devolvemos { exito:false, mensaje, detalle? } cuando haya problemas
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
     echo json_encode(['exito' => false, 'mensaje' => 'Método no permitido']);
     exit;
 }
 
 $raw = file_get_contents('php://input');
-$in = json_decode($raw, true);
+$in  = json_decode($raw, true);
 
 $dni      = isset($in['dni']) ? preg_replace('/\D+/', '', $in['dni']) : '';
 $materias = isset($in['materias']) && is_array($in['materias']) ? $in['materias'] : [];
 
 if ($dni === '' || !preg_match('/^\d{7,9}$/', $dni)) {
-    http_response_code(422);
     echo json_encode(['exito' => false, 'mensaje' => 'DNI inválido']);
     exit;
 }
-if (!$materias) {
-    http_response_code(422);
+$materias = array_values(array_unique(array_filter(array_map('intval', $materias), fn($x) => $x > 0)));
+if (!count($materias)) {
     echo json_encode(['exito' => false, 'mensaje' => 'No se enviaron materias a inscribir']);
     exit;
 }
 
-// Conexión PDO
 require_once __DIR__ . '/../../config/db.php'; // Debe definir $pdo (PDO)
 
 try {
-    // Normalizamos IDs de materias a enteros únicos
-    $materias = array_values(array_unique(array_map('intval', $materias)));
-    $placeholders = implode(',', array_fill(0, count($materias), '?'));
+    if (!($pdo instanceof PDO)) {
+        echo json_encode(['exito' => false, 'mensaje' => 'Conexión PDO no inicializada']);
+        exit;
+    }
+    // Config PDO
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, true);
 
-    // Traemos desde PREVIAS los datos necesarios de cada materia seleccionada
-    // (así no dependemos de que el front mande toda la info)
-    $sqlPrevias = "
+    $anioActual = (int)date('Y');
+    $inPlace    = implode(',', array_fill(0, count($materias), '?'));
+
+    // Transacción (por consistencia; aunque es 1 UPDATE, nos cubrimos)
+    $pdo->beginTransaction();
+
+    // 1) Verificar que EXISTEN esas previas para el DNI (id_condicion=3) y traer su estado actual
+    $sqlCheck = "
         SELECT 
-            p.dni,
-            p.alumno,
-            p.cursando_id_curso,
-            p.cursando_id_division,
             p.id_materia,
-            p.materia_id_curso,
-            p.materia_id_division,
-            p.id_condicion
-        FROM mesas_examen.previas p
+            COALESCE(p.inscripcion,0) AS inscripcion
+        FROM mesas_examen.previas AS p
         WHERE p.dni = ?
-          AND p.id_materia IN ($placeholders)
+          AND p.id_condicion = 3
+          AND p.id_materia IN ($inPlace)
         ORDER BY p.id_materia
+        FOR UPDATE
     ";
+    $stChk = $pdo->prepare($sqlCheck);
+    $stChk->execute(array_merge([$dni], $materias));
+    $rows = $stChk->fetchAll();
 
-    $st = $pdo->prepare($sqlPrevias);
-    $st->execute(array_merge([$dni], $materias));
-    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
-
-    if (!$rows) {
-        echo json_encode(['exito' => false, 'mensaje' => 'No se encontraron esas materias para el DNI en previas.']);
+    if (!$rows || count($rows) !== count($materias)) {
+        // Alguna de las materias no existe como previa condición 3 para ese DNI
+        $pdo->rollBack();
+        echo json_encode([
+            'exito'   => false,
+            'mensaje' => 'Alguna materia no corresponde a previas (condición 3) para ese DNI.'
+        ]);
         exit;
     }
 
-    // Preparamos INSERT a la tabla inscripcion (igual que previas)
-    $anioActual = (int)date('Y');
+    // ¿Cuántas ya estaban inscriptas (=1)?
+    $yaMarcadas = array_sum(array_map(fn($r) => (int)$r['inscripcion'] === 1 ? 1 : 0, $rows));
 
-    $sqlInsert = "
-        INSERT INTO mesas_examen.inscripcion
-            (dni, alumno, cursando_id_curso, cursando_id_division,
-             id_materia, materia_id_curso, materia_id_division,
-             id_condicion, anio)
-        VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ";
-    $ins = $pdo->prepare($sqlInsert);
-
-    // (Opcional) si agregaste UNIQUE(dni,id_materia,anio), podés usar try/catch y contar “ignorados”.
-    $pdo->beginTransaction();
-    $insertados = 0;
-
-    foreach ($rows as $r) {
-        $ok = $ins->execute([
-            $r['dni'],
-            $r['alumno'],
-            (int)$r['cursando_id_curso'],
-            (int)$r['cursando_id_division'],
-            (int)$r['id_materia'],
-            (int)$r['materia_id_curso'],
-            (int)$r['materia_id_division'],
-            (int)$r['id_condicion'],
-            $anioActual,
+    if ($yaMarcadas === count($materias)) {
+        // Todas ya estaban marcadas como inscriptas
+        $pdo->rollBack();
+        echo json_encode([
+            'exito'            => false,
+            'mensaje'          => 'Este alumno ya fue inscripto en las materias seleccionadas.',
+            'ya_inscripto'     => true,
+            'anio_inscripcion' => $anioActual
         ]);
-        if ($ok) $insertados++;
+        exit;
     }
+
+    // 2) Marcar PREVIAS: inscripcion = 1 para esas materias del DNI si estaban 0/NULL
+    $sqlUpdate = "
+        UPDATE mesas_examen.previas
+        SET inscripcion = 1
+        WHERE dni = ?
+          AND id_condicion = 3
+          AND id_materia IN ($inPlace)
+          AND COALESCE(inscripcion,0) = 0
+    ";
+    $stUpd = $pdo->prepare($sqlUpdate);
+    $stUpd->execute(array_merge([$dni], $materias));
+    $marcadas = $stUpd->rowCount(); // cantidad de filas que pasaron de 0/NULL -> 1
 
     $pdo->commit();
 
+    // Para no romper tu front: 'insertados' = materias marcadas
     echo json_encode([
-        'exito' => true,
-        'mensaje' => 'Inscripción registrada',
-        'insertados' => $insertados,
-        'anio' => $anioActual,
+        'exito'      => true,
+        'mensaje'    => 'Inscripción registrada correctamente.',
+        'insertados' => $marcadas,  // tu front usa json.insertados
+        'marcadas'   => $marcadas,
+        'anio'       => $anioActual
     ]);
 } catch (Throwable $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    http_response_code(500);
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    // Siempre 200 con detalle (evitamos 5xx)
     echo json_encode([
-        'exito' => false,
-        'mensaje' => 'Error al registrar inscripción',
-        'detalle' => $e->getMessage(),
+        'exito'   => false,
+        'mensaje' => 'Error al registrar la inscripción.',
+        'detalle' => $e->getMessage()
     ]);
 }

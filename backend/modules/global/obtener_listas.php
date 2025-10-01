@@ -16,6 +16,7 @@ try {
         'condiciones' => [],
         'cursos'      => [],
         'divisiones'  => [],
+        'turnos'      => [],   // 🔹 agregado para la nueva tabla
     ];
 
     // AREAS
@@ -68,6 +69,17 @@ try {
             ORDER BY nombre_division ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
         $listas['divisiones'][] = [
+            'id'     => (int)$row['id'],
+            'nombre' => (string)$row['nombre'],
+        ];
+    }
+
+    // TURNOS 🔹 nuevo bloque
+    $sql = "SELECT id_turno AS id, turno AS nombre
+            FROM mesas_examen.turnos
+            ORDER BY turno ASC";
+    foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
+        $listas['turnos'][] = [
             'id'     => (int)$row['id'],
             'nombre' => (string)$row['nombre'],
         ];

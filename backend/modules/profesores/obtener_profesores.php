@@ -23,8 +23,10 @@ try {
     /**
      * Traemos:
      *  - Datos del docente + cargo
+     *  - Turnos: id/nombre (Sí y No) + fechas (fecha_si / fecha_no)
      *  - Materias (DISTINCT)
      *  - Cátedras (curso, división, materia)
+     *  - Fecha de carga
      */
     $sql = "
         SELECT
@@ -34,6 +36,18 @@ try {
             -- Cargo
             d.id_cargo,
             c.cargo                                                           AS cargo_nombre,
+
+            -- Turnos (sí / no) + fechas
+            d.id_turno_si,
+            ts.turno                                                          AS turno_si_nombre,
+            d.fecha_si,
+
+            d.id_turno_no,
+            tn.turno                                                          AS turno_no_nombre,
+            d.fecha_no,
+
+            -- Fecha de carga
+            d.fecha_carga,
 
             -- Materias (todas las que dicta)
             GROUP_CONCAT(DISTINCT m.materia ORDER BY m.materia SEPARATOR '||') AS materias_concat,
@@ -51,12 +65,20 @@ try {
 
         FROM mesas_examen.docentes d
         LEFT JOIN mesas_examen.cargos    c  ON c.id_cargo    = d.id_cargo
+        LEFT JOIN mesas_examen.turnos    ts ON ts.id_turno   = d.id_turno_si
+        LEFT JOIN mesas_examen.turnos    tn ON tn.id_turno   = d.id_turno_no
         LEFT JOIN mesas_examen.catedras  ct ON ct.id_docente = d.id_docente
         LEFT JOIN mesas_examen.materias  m  ON m.id_materia  = ct.id_materia
         LEFT JOIN mesas_examen.curso     cu ON cu.id_curso   = ct.id_curso
         LEFT JOIN mesas_examen.division  dv ON dv.id_division= ct.id_division
         $where
-        GROUP BY d.id_docente, d.docente, d.id_cargo, c.cargo, d.activo, d.motivo
+        GROUP BY
+            d.id_docente, d.docente,
+            d.id_cargo, c.cargo,
+            d.id_turno_si, ts.turno, d.fecha_si,
+            d.id_turno_no, tn.turno, d.fecha_no,
+            d.fecha_carga,
+            d.activo, d.motivo
         ORDER BY d.docente ASC
     ";
 
@@ -102,6 +124,18 @@ try {
             'id_cargo'              => isset($r['id_cargo']) ? (int)$r['id_cargo'] : null,
             'cargo_nombre'          => $r['cargo_nombre'] ?? null,
 
+            // Turnos y fechas
+            'id_turno_si'           => isset($r['id_turno_si']) ? (int)$r['id_turno_si'] : null,
+            'turno_si_nombre'       => $r['turno_si_nombre'] ?? null,
+            'fecha_si'              => $r['fecha_si'] ?? null,  // YYYY-MM-DD
+
+            'id_turno_no'           => isset($r['id_turno_no']) ? (int)$r['id_turno_no'] : null,
+            'turno_no_nombre'       => $r['turno_no_nombre'] ?? null,
+            'fecha_no'              => $r['fecha_no'] ?? null,  // YYYY-MM-DD
+
+            // Fecha de carga
+            'fecha_carga'           => $r['fecha_carga'] ?? null, // YYYY-MM-DD
+
             // Materias
             'materias'              => $materias,
             'materias_total'        => $materias_total,
@@ -113,11 +147,9 @@ try {
             // Cátedras (Curso – División — Materia)
             'catedras'              => $catedras,
 
-            // Si tu modelo no tiene área/departamento asociados:
+            // Campos no modelados (placeholder para UI)
             'departamento'          => null,
             'area'                  => null,
-
-            // Otros opcionales esperados por la UI
             'tipo_documento_nombre' => null,
             'tipo_documento_sigla'  => null,
             'num_documento'         => null,
@@ -129,8 +161,8 @@ try {
             'localidad'             => null,
 
             // Estado real desde DB
-            'activo'                => (int)$r['activo'],
-            'motivo'                => $r['motivo'],
+            'activo'                => isset($r['activo']) ? (int)$r['activo'] : 0,
+            'motivo'                => $r['motivo'] ?? null,
         ];
     }
 

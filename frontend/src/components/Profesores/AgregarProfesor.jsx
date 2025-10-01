@@ -1,5 +1,5 @@
 // src/components/Profesores/AgregarProfesor.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSave, faArrowLeft, faUserPlus } from '@fortawesome/free-solid-svg-icons';
@@ -10,17 +10,43 @@ import './AgregarProfesor.css';
 const toUpper = (v) => (typeof v === 'string' ? v.toUpperCase() : v);
 const trimSpaces = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
+// helper para abrir el datepicker al clickear el contenedor
+const useClickOpensDatepicker = () => {
+  const ref = useRef(null);
+  const onClick = () => {
+    const el = ref.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === 'function') el.showPicker();
+      else el.focus();
+    } catch {
+      el.focus();
+    }
+  };
+  return { ref, onClick };
+};
+
 export default function AgregarProfesor() {
   const navigate = useNavigate();
 
-  // Solo necesitamos la lista de CARGOS
+  // Listas
   const [cargos, setCargos] = useState([]);
+  const [turnos, setTurnos] = useState([]); // normalizados a {id_turno, turno}
   const [loading, setLoading] = useState(false);
 
   // Form mínimo
   const [apellido, setApellido] = useState('');
   const [nombre, setNombre] = useState('');
   const [idCargo, setIdCargo] = useState('');
+
+  // 🔹 Nuevos campos
+  const [idTurnoSi, setIdTurnoSi] = useState('');
+  const [idTurnoNo, setIdTurnoNo] = useState('');
+  const [fechaSi, setFechaSi] = useState('');
+  const [fechaNo, setFechaNo] = useState('');
+
+  const fechaSiCtl = useClickOpensDatepicker();
+  const fechaNoCtl = useClickOpensDatepicker();
 
   const [toast, setToast] = useState({ show: false, message: '', type: 'exito' });
   const showToast = (message, type = 'exito', duracion = 3000) => {
@@ -40,9 +66,19 @@ export default function AgregarProfesor() {
           return;
         }
 
-        // El endpoint debería traer { listas: { cargos: [{id, nombre}, ...] } }
+        // cargos: [{id, nombre}]
         const cargosLista = Array.isArray(json?.listas?.cargos) ? json.listas.cargos : [];
         setCargos(cargosLista);
+
+        // turnos puede venir como [{id, nombre}] o [{id_turno, turno}]
+        const turnosRaw = Array.isArray(json?.listas?.turnos) ? json.listas.turnos : [];
+        const turnosNorm = turnosRaw
+          .map(t => ({
+            id_turno: t.id_turno ?? t.id ?? null,
+            turno: t.turno ?? t.nombre ?? '',
+          }))
+          .filter(t => t.id_turno !== null && t.turno !== '');
+        setTurnos(turnosNorm);
       } catch (e) {
         showToast('Error de conexión al cargar listas', 'error');
       } finally {
@@ -51,7 +87,7 @@ export default function AgregarProfesor() {
     };
 
     fetchListas();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const validar = () => {
     const ap = trimSpaces(apellido);
@@ -61,9 +97,13 @@ export default function AgregarProfesor() {
     if (!no) return 'El nombre es obligatorio.';
     if (!idCargo) return 'Seleccioná un cargo.';
 
-    // Un poco de validación de formato básico
+    // Validación simple
     if (!/^[A-ZÑÁÉÍÓÚÜ.\s-]+$/.test(ap)) return 'Apellido: solo letras y espacios.';
     if (!/^[A-ZÑÁÉÍÓÚÜ.\s-]+$/.test(no)) return 'Nombre: solo letras y espacios.';
+
+    // Validación de fechas (si vienen)
+    const isDate = (d) => !d || /^\d{4}-\d{2}-\d{2}$/.test(d);
+    if (!isDate(fechaSi) || !isDate(fechaNo)) return 'Formato de fecha inválido (use YYYY-MM-DD).';
 
     return null;
   };
@@ -85,7 +125,16 @@ export default function AgregarProfesor() {
       const resp = await fetch(`${BASE_URL}/api.php?action=agregar_profesor`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docente, id_cargo: idCargo }),
+        body: JSON.stringify({
+          docente,
+          id_cargo: idCargo,
+
+          // 🔹 campos opcionales
+          id_turno_si: idTurnoSi === '' ? null : Number(idTurnoSi),
+          id_turno_no: idTurnoNo === '' ? null : Number(idTurnoNo),
+          fecha_si: fechaSi || null,
+          fecha_no: fechaNo || null,
+        }),
       });
       const data = await resp.json();
 
@@ -180,6 +229,82 @@ export default function AgregarProfesor() {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 🔹 Turnos y fechas (opcionales) */}
+          <div className="add-alumno-section">
+            <h3 className="add-alumno-section-title">Disponibilidad (opcional)</h3>
+            <div className="add-alumno-section-content">
+              <div className="add-group">
+                <div className="add-input-wrapper always-active" style={{ flex: 1 }}>
+                  <label className="add-label">Turno SÍ</label>
+                  <select
+                    name="id_turno_si"
+                    value={idTurnoSi}
+                    onChange={(e) => setIdTurnoSi(e.target.value)}
+                    className="add-input"
+                    disabled={loading}
+                  >
+                    <option value="">-- Sin especificar --</option>
+                    {turnos.map((t) => (
+                      <option key={t.id_turno} value={t.id_turno}>{t.turno}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div
+                  className={`add-input-wrapper ${fechaSi ? 'has-value' : ''}`}
+                  style={{ flex: 1 }}
+                  onClick={fechaSiCtl.onClick}
+                >
+                  <label className="add-label">Fecha SÍ</label>
+                  <input
+                    ref={fechaSiCtl.ref}
+                    type="date"
+                    name="fecha_si"
+                    value={fechaSi}
+                    onChange={(e) => setFechaSi(e.target.value)}
+                    className="add-input"
+                  />
+                  <span className="add-input-highlight" />
+                </div>
+              </div>
+
+              <div className="add-group">
+                <div className="add-input-wrapper always-active" style={{ flex: 1 }}>
+                  <label className="add-label">Turno NO</label>
+                  <select
+                    name="id_turno_no"
+                    value={idTurnoNo}
+                    onChange={(e) => setIdTurnoNo(e.target.value)}
+                    className="add-input"
+                    disabled={loading}
+                  >
+                    <option value="">-- Sin especificar --</option>
+                    {turnos.map((t) => (
+                      <option key={t.id_turno} value={t.id_turno}>{t.turno}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div
+                  className={`add-input-wrapper ${fechaNo ? 'has-value' : ''}`}
+                  style={{ flex: 1 }}
+                  onClick={fechaNoCtl.onClick}
+                >
+                  <label className="add-label">Fecha NO</label>
+                  <input
+                    ref={fechaNoCtl.ref}
+                    type="date"
+                    name="fecha_no"
+                    value={fechaNo}
+                    onChange={(e) => setFechaNo(e.target.value)}
+                    className="add-input"
+                  />
+                  <span className="add-input-highlight" />
                 </div>
               </div>
             </div>
