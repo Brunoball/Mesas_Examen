@@ -1,12 +1,11 @@
 import React, { useMemo, useState, useCallback } from "react";
 import "./Formulario.css";
 import Toast from "../global/Toast";
-import escudo from "../../imagenes/Escudo.png"; // <- corregido (sube 2 niveles)
+import escudo from "../../imagenes/Escudo.png";
 import BASE_URL from "../../config/config";
 
-/* ============== Subvista: Resumen Alumno ============== */
+/* ============== Subvista: Resumen Alumno (hero rojo + materias en blanco) ============== */
 const ResumenAlumno = ({ data, onVolver, onConfirmar }) => {
-  // Selecciona todo por defecto
   const [seleccion, setSeleccion] = useState(
     () => new Set(data.alumno.materias.map((m) => m.id_materia))
   );
@@ -38,70 +37,118 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar }) => {
     });
   };
 
+  const a = data.alumno;
+
   return (
-    <div className="resumen">
-      <div className="resumen-header">
-        <h2>Resumen de inscripción</h2>
-        <img src={escudo} alt="Escudo" className="escudo" />
-      </div>
+    <div className="auth-card">
+      {/* ===== Panel izquierdo (HERO ROJO con resumen y formulario readonly) ===== */}
+      <aside className="auth-hero">
+        <div className="hero-inner">
+          <div className="hero-top">
+            <img src={escudo} alt="Escudo IPET 50" className="hero-logo" />
+            <h1 className="hero-title">
+              ¡Bienvenido{a?.nombre ? "," : ""} <br />
+              {a?.nombre || "alumno"}!
+            </h1>
+            <p className="hero-sub">Revisá tus datos de inscripción.</p>
+          </div>
 
-      <div className="resumen-grid">
-        <div>
-          <strong>Alumno:</strong> {data.alumno.nombre}
-        </div>
-        <div>
-          <strong>DNI:</strong> {data.alumno.dni}
-        </div>
-        <div>
-          <strong>Año actual:</strong> {data.alumno.anio_actual}
-        </div>
-        <div>
-          <strong>Cursando:</strong>{" "}
-          {`Curso ${data.alumno.cursando.curso} • División ${data.alumno.cursando.division}`}
-        </div>
-      </div>
-
-      <h3 style={{ marginTop: 12 }}>Materias adeudadas</h3>
-      <div className="materias-grid">
-        {materiasOrdenadas.map((m) => {
-          const checked = seleccion.has(m.id_materia);
-          return (
-            <label
-              key={m.id_materia}
-              className={`materia-card ${checked ? "selected" : ""}`}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggle(m.id_materia)}
-              />
-              <span className="nombre">{m.materia}</span>
-              <small className="sub">{`(Curso ${m.curso} • Div. ${m.division})`}</small>
+          {/* Formulario SOLO LECTURA */}
+          <div className="hero-form" aria-label="Datos del alumno (solo lectura)">
+            <label className="hf-field">
+              <span className="hf-label">Nombre y Apellido</span>
+              <input className="hf-input" value={a?.nombre ?? ""} readOnly />
             </label>
-          );
-        })}
-      </div>
 
-      <div className="resumen-actions" style={{ marginTop: 12, display: "flex", gap: 10 }}>
-        <button type="button" className="btn-secondary" onClick={onVolver}>
-          Volver
-        </button>
-        <button type="button" className="btn-primary" onClick={handleConfirm}>
-          Confirmar inscripción
-        </button>
-      </div>
+            <label className="hf-field">
+              <span className="hf-label">DNI</span>
+              <input className="hf-input" value={a?.dni ?? ""} readOnly />
+            </label>
+
+            <label className="hf-field">
+              <span className="hf-label">Año actual</span>
+              <input className="hf-input" value={a?.anio_actual ?? ""} readOnly />
+            </label>
+
+            <div className="hf-row">
+              <label className="hf-field">
+                <span className="hf-label">Curso</span>
+                <input
+                  className="hf-input"
+                  value={a?.cursando?.curso ?? ""}
+                  readOnly
+                />
+              </label>
+              <label className="hf-field">
+                <span className="hf-label">División</span>
+                <input
+                  className="hf-input"
+                  value={a?.cursando?.division ?? ""}
+                  readOnly
+                />
+              </label>
+            </div>
+
+            <label className="hf-field">
+              <span className="hf-label">Gmail</span>
+              <input className="hf-input" value={data?.gmail ?? ""} readOnly />
+            </label>
+
+            <div className="hf-hint">Estos datos no se pueden modificar aquí.</div>
+          </div>
+
+          {/* Acciones secundarias (volver) en el héroe */}
+          <div className="hero-actions">
+            <button type="button" className="btn-hero-secondary" onClick={onVolver}>
+              Volver
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ===== Panel derecho (MATERIAS ADEUDADAS en tarjetas) ===== */}
+      <section className="auth-body">
+        <header className="auth-header">
+          <h2 className="auth-title">Materias adeudadas</h2>
+          <p className="auth-sub">Seleccioná con qué materias te querés inscribir.</p>
+        </header>
+
+        <div className="materias-grid">
+          {materiasOrdenadas.map((m) => {
+            const checked = seleccion.has(m.id_materia);
+            return (
+              <label
+                key={m.id_materia}
+                className={`materia-card ${checked ? "selected" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(m.id_materia)}
+                />
+                <span className="nombre">{m.materia}</span>
+                <small className="sub">{`(Curso ${m.curso} • Div. ${m.division})`}</small>
+              </label>
+            );
+          })}
+        </div>
+
+        <div className="actions">
+          <button type="button" className="btn-primary" onClick={handleConfirm}>
+            Confirmar inscripción
+          </button>
+        </div>
+      </section>
     </div>
   );
 };
 
-/* ============== Formulario principal ============== */
+/* ============== Formulario principal (login) ============== */
 const Formulario = () => {
   const [gmail, setGmail] = useState("");
   const [dni, setDni] = useState("");
   const [toast, setToast] = useState(null);
   const [cargando, setCargando] = useState(false);
-
-  // Paso 2 (vista): si `dataAlumno` existe, mostramos ResumenAlumno
   const [dataAlumno, setDataAlumno] = useState(null);
 
   const mostrarToast = useCallback((tipo, mensaje, duracion = 3800) => {
@@ -118,17 +165,11 @@ const Formulario = () => {
     e.preventDefault();
 
     if (!isValidGmail(gmail)) {
-      mostrarToast(
-        "error",
-        "Ingresá un Gmail válido (debe terminar en @gmail.com)."
-      );
+      mostrarToast("error", "Ingresá un Gmail válido (@gmail.com).");
       return;
     }
     if (!isValidDni(dni)) {
-      mostrarToast(
-        "error",
-        "Ingresá un DNI válido (solo números, 7 a 9 dígitos)."
-      );
+      mostrarToast("error", "Ingresá un DNI válido (7 a 9 dígitos).");
       return;
     }
 
@@ -142,29 +183,23 @@ const Formulario = () => {
           body: JSON.stringify({ gmail: gmail.trim(), dni }),
         }
       );
-
-      // leemos siempre el cuerpo (el backend ahora devuelve 200 con exito:true/false)
       const json = await resp.json();
 
       if (!json.exito) {
-        mostrarToast(
-          "advertencia",
-          json.mensaje || "No se encontraron previas para el DNI."
-        );
+        mostrarToast("advertencia", json.mensaje || "No se encontraron previas para el DNI.");
         return;
       }
 
-      // 🚫 si ya está inscripto, SOLO mostrar toast y NO pasar a elegir materias
       if (json.ya_inscripto) {
         mostrarToast(
           "advertencia",
           `Este alumno ya fue inscripto en las mesas de examen ${json.anio_inscripcion}.`
         );
-        return; // <- clave: no seteamos dataAlumno
+        return;
       }
 
-      // si no está inscripto, seguimos al resumen para elegir materias
-      setDataAlumno(json);
+      // Guardamos también el gmail enviado para mostrarlo en el héroe
+      setDataAlumno({ ...json, gmail: gmail.trim() });
     } catch (err) {
       console.error(err);
       mostrarToast("error", "Error consultando el servidor.");
@@ -173,7 +208,7 @@ const Formulario = () => {
     }
   };
 
-  const confirmarInscripcion = async ({ dni, gmail: _gmail, materias }) => {
+  const confirmarInscripcion = async ({ dni, materias }) => {
     if (!materias?.length) {
       mostrarToast("advertencia", "Seleccioná al menos una materia.");
       return;
@@ -184,25 +219,17 @@ const Formulario = () => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dni, materias }), // la tabla inscripcion no guarda gmail
+          body: JSON.stringify({ dni, materias }),
         }
       );
-
       const json = await resp.json();
 
       if (!json.exito) {
-        mostrarToast(
-          "error",
-          json?.mensaje || `No se pudo registrar la inscripción.`
-        );
+        mostrarToast("error", json?.mensaje || `No se pudo registrar la inscripción.`);
         return;
       }
 
-      mostrarToast(
-        "exito",
-        `Inscripción registrada (${json.insertados} materia/s).`
-      );
-      // limpiar y volver al formulario
+      mostrarToast("exito", `Inscripción registrada (${json.insertados} materia/s).`);
       setDataAlumno(null);
       setDni("");
       setGmail("");
@@ -212,30 +239,8 @@ const Formulario = () => {
     }
   };
 
-  // Vista 2: Resumen
-  if (dataAlumno) {
-    return (
-      <div className="form-page">
-        {toast && (
-          <Toast
-            tipo={toast.tipo}
-            mensaje={toast.mensaje}
-            duracion={toast.duracion}
-            onClose={() => setToast(null)}
-          />
-        )}
-        <ResumenAlumno
-          data={dataAlumno}
-          onVolver={() => setDataAlumno(null)}
-          onConfirmar={confirmarInscripcion}
-        />
-      </div>
-    );
-  }
-
-  // Vista 1: Formulario (solo Gmail y DNI)
   return (
-    <div className="form-page">
+    <div className="auth-page">
       {toast && (
         <Toast
           tipo={toast.tipo}
@@ -245,44 +250,74 @@ const Formulario = () => {
         />
       )}
 
-      <form className="formulario" onSubmit={onSubmit} noValidate>
-        <div className="form-header">
-          <h2 className="titulo">Inscripción a mesas de examen — IPET N°50</h2>
-        <img src={escudo} alt="Escudo" className="escudo" />
-        </div>
+      {dataAlumno ? (
+        <ResumenAlumno
+          data={dataAlumno}
+          onVolver={() => setDataAlumno(null)}
+          onConfirmar={confirmarInscripcion}
+        />
+      ) : (
+        <div className="auth-card">
+          {/* Panel izquierdo (hero) */}
+          <aside className="auth-hero">
+            <div className="hero-inner">
+              <img src={escudo} alt="Escudo IPET 50" className="hero-logo" />
+              <h1 className="hero-title">¡Bienvenido<br />de nuevo!</h1>
+              <p className="hero-sub">Ingresá con tu Gmail y DNI para continuar.</p>
+            </div>
+          </aside>
 
-        <div className="form-group">
-          <label htmlFor="gmail">Gmail</label>
-          <input
-            id="gmail"
-            type="email"
-            inputMode="email"
-            placeholder="tuusuario@gmail.com"
-            value={gmail}
-            onChange={(e) => setGmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
-        </div>
+          {/* Panel derecho (formulario) */}
+          <section className="auth-body">
+            <header className="auth-header">
+              <h2 className="auth-title">Iniciar sesión</h2>
+              <p className="auth-sub">¡Nos alegra verte! Ingresá para continuar.</p>
+            </header>
 
-        <div className="form-group">
-          <label htmlFor="dni">DNI</label>
-          <input
-            id="dni"
-            type="text"
-            inputMode="numeric"
-            placeholder="Solo números"
-            value={dni}
-            onChange={(e) => setDni(e.target.value.replace(/\D+/g, ""))}
-            required
-            autoComplete="off"
-          />
-        </div>
+            <form className="auth-form" onSubmit={onSubmit} noValidate>
+              <label className="field">
+                <span className="field-label">Gmail</span>
+                <input
+                  className="field-input"
+                  id="gmail"
+                  type="email"
+                  inputMode="email"
+                  placeholder="tuusuario@gmail.com"
+                  value={gmail}
+                  onChange={(e) => setGmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </label>
 
-        <button type="submit" className="btn-submit" disabled={cargando}>
-          {cargando ? "Buscando..." : "Continuar"}
-        </button>
-      </form>
+              <label className="field">
+                <span className="field-label">DNI</span>
+                <input
+                  className="field-input"
+                  id="dni"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Solo números"
+                  value={dni}
+                  onChange={(e) => setDni(e.target.value.replace(/\D+/g, ""))}
+                  required
+                  autoComplete="off"
+                />
+              </label>
+
+              <div className="form-extra">
+                <label className="remember">
+                  <input type="checkbox" /> <span>Recordarme</span>
+                </label>
+              </div>
+
+              <button type="submit" className="btn-cta" disabled={cargando}>
+                {cargando ? "Buscando..." : "Continuar"}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
