@@ -1,6 +1,6 @@
 <?php
 // backend/modules/formulario/registrar_inscripcion.php
-// Marca en mesas_examen.previas la columna inscripcion=1 para las materias seleccionadas (por DNI)
+// Marca en previas la columna inscripcion=1 para las materias seleccionadas (por DNI)
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -20,6 +20,7 @@ if ($dni === '' || !preg_match('/^\d{7,9}$/', $dni)) {
     echo json_encode(['exito' => false, 'mensaje' => 'DNI inválido']);
     exit;
 }
+
 $materias = array_values(array_unique(array_filter(array_map('intval', $materias), fn($x) => $x > 0)));
 if (!count($materias)) {
     echo json_encode(['exito' => false, 'mensaje' => 'No se enviaron materias a inscribir']);
@@ -33,6 +34,7 @@ try {
         echo json_encode(['exito' => false, 'mensaje' => 'Conexión PDO no inicializada']);
         exit;
     }
+
     // Config PDO
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
@@ -41,7 +43,7 @@ try {
     $anioActual = (int)date('Y');
     $inPlace    = implode(',', array_fill(0, count($materias), '?'));
 
-    // Transacción (por consistencia; aunque es 1 UPDATE, nos cubrimos)
+    // Transacción
     $pdo->beginTransaction();
 
     // 1) Verificar que EXISTEN esas previas para el DNI (id_condicion=3) y traer su estado actual
@@ -49,7 +51,7 @@ try {
         SELECT 
             p.id_materia,
             COALESCE(p.inscripcion,0) AS inscripcion
-        FROM mesas_examen.previas AS p
+        FROM previas AS p
         WHERE p.dni = ?
           AND p.id_condicion = 3
           AND p.id_materia IN ($inPlace)
@@ -87,7 +89,7 @@ try {
 
     // 2) Marcar PREVIAS: inscripcion = 1 para esas materias del DNI si estaban 0/NULL
     $sqlUpdate = "
-        UPDATE mesas_examen.previas
+        UPDATE previas
         SET inscripcion = 1
         WHERE dni = ?
           AND id_condicion = 3
@@ -104,7 +106,7 @@ try {
     echo json_encode([
         'exito'      => true,
         'mensaje'    => 'Inscripción registrada correctamente.',
-        'insertados' => $marcadas,  // tu front usa json.insertados
+        'insertados' => $marcadas,
         'marcadas'   => $marcadas,
         'anio'       => $anioActual
     ]);
@@ -112,7 +114,6 @@ try {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    // Siempre 200 con detalle (evitamos 5xx)
     echo json_encode([
         'exito'   => false,
         'mensaje' => 'Error al registrar la inscripción.',

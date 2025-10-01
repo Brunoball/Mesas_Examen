@@ -44,12 +44,11 @@ const MAX_CASCADE_ITEMS = 15;
 
 const formatearFechaISO = (v) => {
   if (!v || typeof v !== 'string') return '';
-  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); // acepta "YYYY-MM-DD" o "YYYY-MM-DD hh:mm"
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return v;
   return `${m[3]}/${m[2]}/${m[1]}`;
 };
 
-// Hook simple para detectar mobile
 function useIsMobile(breakpoint = 768) {
   const getMatch = () =>
     (typeof window !== 'undefined'
@@ -77,13 +76,14 @@ function useIsMobile(breakpoint = 768) {
 ================================ */
 const Previas = () => {
   const [previas, setPrevias] = useState([]);
-  const [previasDB, setPreviasDB] = useState([]);
+  const [previasDB, setPreviasDB] = useState([]); // (se mantiene por si lo necesitás a futuro)
   const [cargando, setCargando] = useState(false);
+
+  const [tab, setTab] = useState('todos'); // 'todos' | 'inscriptos'
 
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [bloquearInteraccion, setBloquearInteraccion] = useState(true);
 
-  // flags de animación
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
 
@@ -98,14 +98,15 @@ const Previas = () => {
     mensaje: ''
   });
 
-  // Acordeones
   const [openSecciones, setOpenSecciones] = useState({
+    curso: false,
     division: false,
-    anio: false,
-    materia: false,
   });
 
-  // Filtros
+  // Listas básicas (desde backend)
+  const [listas, setListas] = useState({ cursos: [], divisiones: [] });
+
+  // Filtros (eliminados: anioSeleccionado y materiaSeleccionada)
   const [filtros, setFiltros] = useState(() => {
     const saved = localStorage.getItem('filtros_previas');
     if (saved) {
@@ -113,60 +114,46 @@ const Previas = () => {
         const parsed = JSON.parse(saved);
         return {
           busqueda: parsed.busqueda ?? '',
+          cursoSeleccionado: parsed.cursoSeleccionado ?? '',
           divisionSeleccionada: parsed.divisionSeleccionada ?? '',
-          anioSeleccionado: parsed.anioSeleccionado ?? null,
-          materiaSeleccionada: parsed.materiaSeleccionada ?? '',
           filtroActivo: parsed.filtroActivo ?? null,
         };
       } catch {}
     }
     return {
       busqueda: '',
+      cursoSeleccionado: '',
       divisionSeleccionada: '',
-      anioSeleccionado: null,
-      materiaSeleccionada: '',
       filtroActivo: null,
     };
   });
 
-  const { busqueda, divisionSeleccionada, anioSeleccionado, materiaSeleccionada, filtroActivo } = filtros;
+  const {
+    busqueda,
+    cursoSeleccionado,
+    divisionSeleccionada,
+    filtroActivo
+  } = filtros;
+
   const busquedaDefer = useDeferredValue(busqueda);
 
   const hayFiltros = !!(
     (busquedaDefer && busquedaDefer.trim() !== '') ||
-    (divisionSeleccionada && divisionSeleccionada !== '') ||
-    (anioSeleccionado !== null) ||
-    (materiaSeleccionada && materiaSeleccionada !== '')
+    (cursoSeleccionado && cursoSeleccionado !== '') ||
+    (divisionSeleccionada && divisionSeleccionada !== '')
   );
 
-  // Listas únicas desde dataset
-  const divisionesDisponibles = useMemo(() => {
-    const set = new Set(
-      (previasDB || [])
-        .map(p => p?.cursando_division_nombre)
-        .filter(Boolean)
-        .map(d => d.toString().trim())
-    );
-    return Array.from(set).sort((a, b) =>
-      a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })
-    );
-  }, [previasDB]);
+  // Tab base dataset (Todos vs Inscriptos)
+  const basePorTab = useMemo(() => {
+    if (tab === 'inscriptos') {
+      return previas.filter((p) => Number(p?.inscripcion ?? 0) === 1);
+    }
+    return previas; // todos
+  }, [tab, previas]);
 
-  const materiasDisponibles = useMemo(() => {
-    const set = new Set(
-      (previasDB || [])
-        .map(p => p?.materia_nombre)
-        .filter(Boolean)
-        .map(d => d.toString().trim())
-    );
-    return Array.from(set).sort((a, b) =>
-      a.localeCompare(b, 'es', { sensitivity: 'base' })
-    );
-  }, [previasDB]);
-
-  // Búsqueda y filtros
+  // Búsqueda y filtros sobre la base según pestaña
   const previasFiltradas = useMemo(() => {
-    let resultados = previas;
+    let resultados = basePorTab;
 
     if (busquedaDefer && busquedaDefer.trim() !== '') {
       const q = normalizar(busquedaDefer);
@@ -178,26 +165,32 @@ const Previas = () => {
       );
     }
 
+    if (cursoSeleccionado && cursoSeleccionado !== '') {
+      const curNorm = normalizar(cursoSeleccionado);
+      resultados = resultados.filter((p) =>
+        normalizar(p?.cursando_curso_nombre ?? '') === curNorm
+      );
+    }
+
     if (divisionSeleccionada && divisionSeleccionada !== '') {
       const divNorm = normalizar(divisionSeleccionada);
-      resultados = resultados.filter((p) => normalizar(p?.cursando_division_nombre ?? '') === divNorm);
-    }
-
-    if (anioSeleccionado !== null) {
-      resultados = resultados.filter((p) => Number(p?.anio) === Number(anioSeleccionado));
-    }
-
-    if (materiaSeleccionada && materiaSeleccionada !== '') {
-      const matNorm = normalizar(materiaSeleccionada);
-      resultados = resultados.filter((p) => normalizar(p?.materia_nombre ?? '') === matNorm);
+      resultados = resultados.filter((p) =>
+        normalizar(p?.cursando_division_nombre ?? '') === divNorm
+      );
     }
 
     if (filtroActivo === 'todos') {
-      resultados = previas;
+      resultados = basePorTab;
     }
 
     return resultados;
-  }, [previas, busquedaDefer, divisionSeleccionada, anioSeleccionado, materiaSeleccionada, filtroActivo]);
+  }, [
+    basePorTab,
+    busquedaDefer,
+    cursoSeleccionado,
+    divisionSeleccionada,
+    filtroActivo
+  ]);
 
   const puedeExportar = useMemo(() => {
     return (hayFiltros || filtroActivo === 'todos') && previasFiltradas.length > 0 && !cargando;
@@ -255,7 +248,7 @@ const Previas = () => {
     };
   }, []);
 
-  // Carga inicial de PREVIAS
+  // Cargar PREVIAS
   useEffect(() => {
     const cargarPrevias = async () => {
       try {
@@ -286,11 +279,32 @@ const Previas = () => {
     cargarPrevias();
   }, [mostrarToast]);
 
+  // Cargar listas básicas (cursos y divisiones) para filtros
+  useEffect(() => {
+    const fetchListas = async () => {
+      try {
+        const url = `${BASE_URL}/api.php?action=listas_basicas`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json.exito) throw new Error(json.mensaje || 'Error al obtener listas');
+        setListas({
+          cursos: json.listas?.cursos ?? [],
+          divisiones: json.listas?.divisiones ?? [],
+        });
+      } catch (e) {
+        console.error('Error cargando listas:', e);
+        // No bloqueo la UI; solo dejo las listas vacías
+      }
+    };
+    fetchListas();
+  }, []);
+
+  // Persistencia de filtros
   useEffect(() => {
     localStorage.setItem('filtros_previas', JSON.stringify(filtros));
   }, [filtros]);
 
-  // Dispara cascada SOLO cuando el buscador pasa de '' a no ''
   useEffect(() => {
     const prev = prevBusquedaRef.current || '';
     const ahora = (busquedaDefer || '').trim();
@@ -306,9 +320,8 @@ const Previas = () => {
   const handleMostrarTodos = useCallback(() => {
     setFiltros({
       busqueda: '',
+      cursoSeleccionado: '',
       divisionSeleccionada: '',
-      anioSeleccionado: null,
-      materiaSeleccionada: '',
       filtroActivo: 'todos',
     });
     triggerCascadaConPreMask();
@@ -318,44 +331,37 @@ const Previas = () => {
     setFiltros((prev) => {
       const next = { ...prev, busqueda: valor };
       next.filtroActivo =
-        (valor?.trim() || prev.divisionSeleccionada || prev.anioSeleccionado !== null || prev.materiaSeleccionada)
+        (valor?.trim() ||
+          prev.cursoSeleccionado ||
+          prev.divisionSeleccionada)
           ? 'filtros'
           : null;
       return next;
     });
   }, []);
 
+  const handleFiltrarPorCurso = useCallback((cursoNombre) => {
+    setFiltros((prev) => {
+      const next = { ...prev, cursoSeleccionado: cursoNombre };
+      next.filtroActivo =
+        (prev.busqueda?.trim() ||
+          cursoNombre ||
+          prev.divisionSeleccionada)
+          ? 'filtros'
+          : null;
+      return next;
+    });
+    setMostrarFiltros(false);
+    triggerCascadaConPreMask();
+  }, [triggerCascadaConPreMask]);
+
   const handleFiltrarPorDivision = useCallback((division) => {
     setFiltros((prev) => {
       const next = { ...prev, divisionSeleccionada: division };
       next.filtroActivo =
-        (prev.busqueda?.trim() || division || prev.anioSeleccionado !== null || prev.materiaSeleccionada)
-          ? 'filtros'
-          : null;
-      return next;
-    });
-    setMostrarFiltros(false);
-    triggerCascadaConPreMask();
-  }, [triggerCascadaConPreMask]);
-
-  const handleFiltrarPorAnio = useCallback((anio) => {
-    setFiltros((prev) => {
-      const next = { ...prev, anioSeleccionado: anio };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || prev.divisionSeleccionada || anio !== null || prev.materiaSeleccionada)
-          ? 'filtros'
-          : null;
-      return next;
-    });
-    setMostrarFiltros(false);
-    triggerCascadaConPreMask();
-  }, [triggerCascadaConPreMask]);
-
-  const handleFiltrarPorMateria = useCallback((materia) => {
-    setFiltros((prev) => {
-      const next = { ...prev, materiaSeleccionada: materia };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || prev.divisionSeleccionada || prev.anioSeleccionado !== null || materia)
+        (prev.busqueda?.trim() ||
+          prev.cursoSeleccionado ||
+          division)
           ? 'filtros'
           : null;
       return next;
@@ -368,7 +374,20 @@ const Previas = () => {
     setFiltros((prev) => {
       const next = { ...prev, busqueda: '' };
       next.filtroActivo =
-        (prev.divisionSeleccionada || prev.anioSeleccionado !== null || prev.materiaSeleccionada)
+        (prev.cursoSeleccionado ||
+          prev.divisionSeleccionada)
+          ? 'filtros'
+          : null;
+      return next;
+    });
+  }, []);
+
+  const quitarCurso = useCallback(() => {
+    setFiltros((prev) => {
+      const next = { ...prev, cursoSeleccionado: '' };
+      next.filtroActivo =
+        (prev.busqueda?.trim() ||
+          prev.divisionSeleccionada)
           ? 'filtros'
           : null;
       return next;
@@ -379,29 +398,8 @@ const Previas = () => {
     setFiltros((prev) => {
       const next = { ...prev, divisionSeleccionada: '' };
       next.filtroActivo =
-        (prev.busqueda?.trim() || prev.anioSeleccionado !== null || prev.materiaSeleccionada)
-          ? 'filtros'
-          : null;
-      return next;
-    });
-  }, []);
-
-  const quitarAnio = useCallback(() => {
-    setFiltros((prev) => {
-      const next = { ...prev, anioSeleccionado: null };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || prev.divisionSeleccionada || prev.materiaSeleccionada)
-          ? 'filtros'
-          : null;
-      return next;
-    });
-  }, []);
-
-  const quitarMateria = useCallback(() => {
-    setFiltros((prev) => {
-      const next = { ...prev, materiaSeleccionada: '' };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || prev.divisionSeleccionada || prev.anioSeleccionado !== null)
+        (prev.busqueda?.trim() ||
+          prev.cursoSeleccionado)
           ? 'filtros'
           : null;
       return next;
@@ -412,16 +410,16 @@ const Previas = () => {
     setFiltros((prev) => ({
       ...prev,
       busqueda: '',
+      cursoSeleccionado: '',
       divisionSeleccionada: '',
-      anioSeleccionado: null,
-      materiaSeleccionada: '',
       filtroActivo: null,
     }));
   }, []);
 
-  // Exportar a Excel lo visible
+  // Exportar a Excel lo visible (según pestaña)
   const exportarExcel = useCallback(() => {
-    if (!puedeExportar) {
+    const puede = (hayFiltros || filtroActivo === 'todos') && previasFiltradas.length > 0 && !cargando;
+    if (!puede) {
       setToast({ mostrar: true, tipo: 'error', mensaje: 'No hay filas visibles para exportar.' });
       return;
     }
@@ -437,18 +435,19 @@ const Previas = () => {
       'Curso Materia': p?.materia_curso_nombre ?? '',
       'División Materia': p?.materia_division_nombre ?? '',
       'Condición': p?.condicion_nombre ?? '',
+      'Inscripto': Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No',
       'Fecha carga': formatearFechaISO(p?.fecha_carga ?? '')
     }));
 
     const headers = [
       'ID Previa','Alumno','DNI','Año (previa)','Curso (cursando)','División (cursando)',
-      'Materia','Curso Materia','División Materia','Condición','Fecha carga'
+      'Materia','Curso Materia','División Materia','Condición','Inscripto','Fecha carga'
     ];
 
     const ws = XLSX.utils.json_to_sheet(filas, { header: headers });
     ws['!cols'] = [
       { wch: 10 },{ wch: 28 },{ wch: 14 },{ wch: 12 },{ wch: 18 },{ wch: 20 },
-      { wch: 26 },{ wch: 16 },{ wch: 18 },{ wch: 14 },{ wch: 16 },
+      { wch: 26 },{ wch: 16 },{ wch: 18 },{ wch: 14 },{ wch: 10 },{ wch: 16 },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -462,10 +461,10 @@ const Previas = () => {
     const mm = String(fecha.getMonth() + 1).padStart(2, '0');
     const dd = String(fecha.getDate()).padStart(2, '0');
 
-    const sufijo = filtroActivo === 'todos' ? 'Todos' : 'Filtrados';
+    const sufijo = tab === 'inscriptos' ? 'Inscriptos' : (filtroActivo === 'todos' ? 'Todos' : 'Filtrados');
     const fechaStr = `${yyyy}-${mm}-${dd}`;
     saveAs(blob, `Previas_${sufijo}_${fechaStr}(${filas.length}).xlsx`);
-  }, [puedeExportar, previasFiltradas, filtroActivo]);
+  }, [hayFiltros, filtroActivo, previasFiltradas, cargando, tab]);
 
   /* ================================
      Fila virtualizada (desktop)
@@ -495,6 +494,9 @@ const Previas = () => {
         </div>
         <div className="prev-column prev-icons-column">
           <div className="prev-icons-container">
+            <span className={`prev-badge ${Number(p?.inscripcion ?? 0) === 1 ? 'prev-badge-ok' : 'prev-badge-pend'}`}>
+              {Number(p?.inscripcion ?? 0) === 1 ? 'Inscript.' : 'Pend.'}
+            </span>
             <button
               className="prev-iconchip is-info"
               title="Ver información"
@@ -506,7 +508,8 @@ const Previas = () => {
                     `${p.alumno} • DNI ${p.dni}\n` +
                     `Materia: ${p.materia_nombre}\n` +
                     `Condición: ${p.condicion_nombre}\n` +
-                    `Curso/División: ${p.materia_curso_division}`
+                    `Curso/División: ${p.materia_curso_division}\n` +
+                    `Inscripto: ${Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No'}`
                 })
               }
               aria-label="Ver información"
@@ -522,7 +525,11 @@ const Previas = () => {
   /* ================================
      Render
   ================================= */
-  const hayChips = !!(busqueda || divisionSeleccionada || anioSeleccionado !== null || materiaSeleccionada);
+  const hayChips = !!(
+    busqueda ||
+    cursoSeleccionado ||
+    divisionSeleccionada
+  );
 
   return (
     <div className="prev-container">
@@ -539,6 +546,24 @@ const Previas = () => {
         {/* Header superior */}
         <div className="prev-headerbar">
           <span className="prev-title">Gestión de Previas</span>
+
+          {/* Tabs */}
+          <div className="prev-tabs">
+            <button
+              className={`prev-tab ${tab === 'todos' ? 'is-active' : ''}`}
+              onClick={() => setTab('todos')}
+              title="Ver todas las previas"
+            >
+              Todos
+            </button>
+            <button
+              className={`prev-tab ${tab === 'inscriptos' ? 'is-active' : ''}`}
+              onClick={() => setTab('inscriptos')}
+              title="Ver solo inscriptos"
+            >
+              Inscriptos
+            </button>
+          </div>
 
           {/* Búsqueda */}
           <div className="prev-search">
@@ -565,7 +590,7 @@ const Previas = () => {
               onClick={() => {
                 setMostrarFiltros((prev) => {
                   const next = !prev;
-                  if (next) setOpenSecciones((s) => ({ ...s, division: false }));
+                  if (next) setOpenSecciones((s) => ({ ...s, curso: false, division: false }));
                   return next;
                 });
               }}
@@ -578,35 +603,39 @@ const Previas = () => {
 
             {mostrarFiltros && (
               <div className="prev-filtros-menu" role="menu">
-                {/* AÑO (de la previa) */}
+                {/* CURSO (cursando) — listas_basicas */}
                 <div className="prev-filtros-group">
                   <button
                     type="button"
-                    className={`prev-filtros-group-header ${openSecciones.anio ? 'is-open' : ''}`}
-                    onClick={() => setOpenSecciones((s) => ({ ...s, anio: !s.anio }))}
-                    aria-expanded={openSecciones.anio}
+                    className={`prev-filtros-group-header ${openSecciones.curso ? 'is-open' : ''}`}
+                    onClick={() => setOpenSecciones((s) => ({ ...s, curso: !s.curso }))}
+                    aria-expanded={openSecciones.curso}
                   >
-                    <span className="prev-filtros-group-title">Filtrar por año (previa)</span>
+                    <span className="prev-filtros-group-title">Filtrar por curso (cursando)</span>
                     <FaChevronDown className="prev-accordion-caret" />
                   </button>
 
-                  <div className={`prev-filtros-group-body ${openSecciones.anio ? 'is-open' : 'is-collapsed'}`}>
-                    <div className="prev-anio-filtros">
-                      {[1,2,3,4,5,6,7].map((n) => (
-                        <button
-                          key={`anio-${n}`}
-                          className={`prev-anio-filtro ${filtros.anioSeleccionado === n ? 'prev-active' : ''}`}
-                          onClick={() => handleFiltrarPorAnio(n)}
-                          title={`Filtrar por Año ${n}`}
-                        >
-                          {n}
-                        </button>
-                      ))}
+                  <div className={`prev-filtros-group-body ${openSecciones.curso ? 'is-open' : 'is-collapsed'}`}>
+                    <div className="prev-alfabeto-filtros">
+                      {listas.cursos.length === 0 ? (
+                        <span className="prev-filtro-empty">No hay cursos disponibles</span>
+                      ) : (
+                        listas.cursos.map((c) => (
+                          <button
+                            key={`curso-${c.id}-${c.nombre}`}
+                            className={`prev-letra-filtro ${filtros.cursoSeleccionado === c.nombre ? 'prev-active' : ''}`}
+                            onClick={() => handleFiltrarPorCurso(c.nombre)}
+                            title={`Filtrar por curso ${c.nombre}`}
+                          >
+                            {c.nombre}
+                          </button>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* DIVISIÓN (cursando) */}
+                {/* DIVISIÓN (cursando) — listas_basicas */}
                 <div className="prev-filtros-group">
                   <button
                     type="button"
@@ -620,17 +649,17 @@ const Previas = () => {
 
                   <div className={`prev-filtros-group-body ${openSecciones.division ? 'is-open' : 'is-collapsed'}`}>
                     <div className="prev-alfabeto-filtros">
-                      {divisionesDisponibles.length === 0 ? (
+                      {listas.divisiones.length === 0 ? (
                         <span className="prev-filtro-empty">No hay divisiones disponibles</span>
                       ) : (
-                        divisionesDisponibles.map((div) => (
+                        listas.divisiones.map((d) => (
                           <button
-                            key={`div-${div}`}
-                            className={`prev-letra-filtro ${filtros.divisionSeleccionada === div ? 'prev-active' : ''}`}
-                            onClick={() => handleFiltrarPorDivision(div)}
-                            title={`Filtrar por división ${div}`}
+                            key={`div-${d.id}-${d.nombre}`}
+                            className={`prev-letra-filtro ${filtros.divisionSeleccionada === d.nombre ? 'prev-active' : ''}`}
+                            onClick={() => handleFiltrarPorDivision(d.nombre)}
+                            title={`Filtrar por división ${d.nombre}`}
                           >
-                            {div}
+                            {d.nombre}
                           </button>
                         ))
                       )}
@@ -638,39 +667,7 @@ const Previas = () => {
                   </div>
                 </div>
 
-                {/* MATERIA */}
-                <div className="prev-filtros-group">
-                  <button
-                    type="button"
-                    className={`prev-filtros-group-header ${openSecciones.materia ? 'is-open' : ''}`}
-                    onClick={() => setOpenSecciones((s) => ({ ...s, materia: !s.materia }))}
-                    aria-expanded={openSecciones.materia}
-                  >
-                    <span className="prev-filtros-group-title">Filtrar por materia</span>
-                    <FaChevronDown className="prev-accordion-caret" />
-                  </button>
-
-                  <div className={`prev-filtros-group-body ${openSecciones.materia ? 'is-open' : 'is-collapsed'}`}>
-                    <div className="prev-alfabeto-filtros">
-                      {materiasDisponibles.length === 0 ? (
-                        <span className="prev-filtro-empty">No hay materias disponibles</span>
-                      ) : (
-                        materiasDisponibles.map((mat) => (
-                          <button
-                            key={`mat-${mat}`}
-                            className={`prev-letra-filtro ${filtros.materiaSeleccionada === mat ? 'prev-active' : ''}`}
-                            onClick={() => handleFiltrarPorMateria(mat)}
-                            title={`Filtrar por materia ${mat}`}
-                          >
-                            {mat}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mostrar Todos */}
+                {/* Mostrar Todos (dentro de la pestaña actual) */}
                 <div
                   className="prev-filtros-menu-item prev-mostrar-todas"
                   onClick={() => {
@@ -693,7 +690,8 @@ const Previas = () => {
             <div className="prev-toolbar-left">
               <div className="prev-contador">
                 <span className="prev-count-desktop">
-                  Cant previas: {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
+                  {tab === 'inscriptos' ? 'Inscriptos: ' : 'Cant previas: '}
+                  {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
                 </span>
                 <span className="prev-count-mobile">
                   {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
@@ -714,27 +712,19 @@ const Previas = () => {
                     </div>
                   )}
 
+                  {cursoSeleccionado && (
+                    <div className="prev-chip" title="Filtro activo">
+                      <span className="prev-chip-text prev-chip-desktop">Curso: {cursoSeleccionado}</span>
+                      <span className="prev-chip-text prev-chip-mobile">{cursoSeleccionado}</span>
+                      <button className="prev-chip-close" onClick={quitarCurso} aria-label="Quitar filtro" title="Quitar este filtro">×</button>
+                    </div>
+                  )}
+
                   {divisionSeleccionada && (
                     <div className="prev-chip" title="Filtro activo">
                       <span className="prev-chip-text prev-chip-desktop">División: {divisionSeleccionada}</span>
                       <span className="prev-chip-text prev-chip-mobile">{divisionSeleccionada}</span>
                       <button className="prev-chip-close" onClick={quitarDivision} aria-label="Quitar filtro" title="Quitar este filtro">×</button>
-                    </div>
-                  )}
-
-                  {anioSeleccionado != null && (
-                    <div className="prev-chip" title="Filtro activo">
-                      <span className="prev-chip-text prev-chip-desktop">Año: {anioSeleccionado}</span>
-                      <span className="prev-chip-text prev-chip-mobile">{anioSeleccionado}</span>
-                      <button className="prev-chip-close" onClick={quitarAnio} aria-label="Quitar filtro" title="Quitar este filtro">×</button>
-                    </div>
-                  )}
-
-                  {materiaSeleccionada && (
-                    <div className="prev-chip" title="Filtro activo">
-                      <span className="prev-chip-text prev-chip-desktop">Materia: {materiaSeleccionada}</span>
-                      <span className="prev-chip-text prev-chip-mobile">{materiaSeleccionada}</span>
-                      <button className="prev-chip-close" onClick={quitarMateria} aria-label="Quitar filtro" title="Quitar este filtro">×</button>
                     </div>
                   )}
 
@@ -750,7 +740,7 @@ const Previas = () => {
             </div>
           </div>
 
-          {/* TABLA (solo desktop) */}
+          {/* TABLA (desktop) */}
           {!isMobile && (
             <div className="prev-table">
               <div className="prev-thead">
@@ -776,10 +766,10 @@ const Previas = () => {
                   <div className="prev-loading">
                     <div className="prev-spinner"></div>
                   </div>
-                ) : previas.length === 0 ? (
+                ) : basePorTab.length === 0 ? (
                   <div className="prev-no-data">
                     <div className="prev-no-data-content">
-                      <p>No hay previas registradas</p>
+                      <p>{tab === 'inscriptos' ? 'No hay inscriptos aún' : 'No hay previas registradas'}</p>
                     </div>
                   </div>
                 ) : previasFiltradas.length === 0 ? (
@@ -811,7 +801,7 @@ const Previas = () => {
             </div>
           )}
 
-          {/* TARJETAS (solo mobile) */}
+          {/* TARJETAS (mobile) */}
           {isMobile && (
             <div
               className={`prev-cards ${animacionActiva && previasFiltradas.length <= MAX_CASCADE_ITEMS ? 'prev-cascade-anim' : ''}`}
@@ -831,10 +821,10 @@ const Previas = () => {
                     <p>Cargando previas...</p>
                   </div>
                 </div>
-              ) : previas.length === 0 ? (
+              ) : basePorTab.length === 0 ? (
                 <div className="prev-no-data prev-no-data-mobile">
                   <div className="prev-no-data-content">
-                    <p>No hay previas registradas</p>
+                    <p>{tab === 'inscriptos' ? 'No hay inscriptos aún' : 'No hay previas registradas'}</p>
                   </div>
                 </div>
               ) : previasFiltradas.length === 0 ? (
@@ -879,6 +869,10 @@ const Previas = () => {
                           <span className="prev-card-value">{p.materia_curso_division}</span>
                         </div>
                         <div className="prev-card-row">
+                          <span className="prev-card-label">Inscripto</span>
+                          <span className="prev-card-value">{Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No'}</span>
+                        </div>
+                        <div className="prev-card-row">
                           <span className="prev-card-label">Fecha Carga</span>
                           <span className="prev-card-value">{formatearFechaISO(p.fecha_carga)}</span>
                         </div>
@@ -896,7 +890,8 @@ const Previas = () => {
                                 `${p.alumno} • DNI ${p.dni}\n` +
                                 `Materia: ${p.materia_nombre}\n` +
                                 `Condición: ${p.condicion_nombre}\n` +
-                                `Curso/División: ${p.materia_curso_division}`
+                                `Curso/División: ${p.materia_curso_division}\n` +
+                                `Inscripto: ${Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No'}`
                             })
                           }
                           aria-label="Información"
@@ -919,9 +914,8 @@ const Previas = () => {
             onClick={() => {
               setFiltros({
                 busqueda: '',
+                cursoSeleccionado: '',
                 divisionSeleccionada: '',
-                anioSeleccionado: null,
-                materiaSeleccionada: '',
                 filtroActivo: null,
               });
               localStorage.removeItem('filtros_previas');

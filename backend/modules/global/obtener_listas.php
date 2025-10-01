@@ -52,9 +52,10 @@ try {
         ];
     }
 
-    // CURSOS
+    // CURSOS - EXCLUYENDO id_curso = 8
     $sql = "SELECT id_curso AS id, nombre_curso AS nombre
             FROM mesas_examen.curso
+            WHERE id_curso != 8
             ORDER BY nombre_curso ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
         $listas['cursos'][] = [

@@ -13,10 +13,12 @@ try {
     }
 
     // Filtros opcionales
-    $q   = isset($_GET['q'])   ? trim((string)$_GET['q'])   : '';
-    $dni = isset($_GET['dni']) ? trim((string)$_GET['dni']) : '';
-    $id  = isset($_GET['id'])  ? (int)$_GET['id'] : 0;
+    $q    = isset($_GET['q'])    ? trim((string)$_GET['q'])    : '';
+    $dni  = isset($_GET['dni'])  ? trim((string)$_GET['dni'])  : '';
+    $id   = isset($_GET['id'])   ? (int)$_GET['id']            : 0;
+    $solo = isset($_GET['solo']) ? trim((string)$_GET['solo']) : ''; // '', 'inscriptos', 'pendientes'
 
+    // Base query
     $sql = "
         SELECT
             p.id_previa,
@@ -26,18 +28,31 @@ try {
             p.fecha_carga,
             p.id_materia,
             p.id_condicion,
+            COALESCE(p.inscripcion, 0) AS inscripcion,
 
             -- Nombres mostrables con alias que espera el frontend
-            m.materia                                 AS materia_nombre,
-            c.condicion                               AS condicion_nombre,
-            cur_materia.nombre_curso                  AS materia_curso_nombre,
-            div_materia.nombre_division               AS materia_division_nombre,
-            CONCAT(cur_materia.nombre_curso, '° ', div_materia.nombre_division) AS materia_curso_division
-        FROM previas p
-        LEFT JOIN materias   m            ON m.id_materia            = p.id_materia
-        LEFT JOIN condicion  c            ON c.id_condicion          = p.id_condicion
-        LEFT JOIN curso      cur_materia  ON cur_materia.id_curso    = p.materia_id_curso
-        LEFT JOIN division   div_materia  ON div_materia.id_division = p.materia_id_division
+            m.materia                                   AS materia_nombre,
+            c.condicion                                 AS condicion_nombre,
+
+            -- Curso/división de la MATERIA
+            cur_materia.nombre_curso                    AS materia_curso_nombre,
+            div_materia.nombre_division                 AS materia_division_nombre,
+            CONCAT(cur_materia.nombre_curso, '° ', div_materia.nombre_division) AS materia_curso_division,
+
+            -- Curso/división del ALUMNO (cursando)
+            cur_cursando.nombre_curso                   AS cursando_curso_nombre,
+            div_cursando.nombre_division                AS cursando_division_nombre
+
+        FROM mesas_examen.previas   p
+        LEFT JOIN mesas_examen.materias   m           ON m.id_materia            = p.id_materia
+        LEFT JOIN mesas_examen.condicion  c           ON c.id_condicion          = p.id_condicion
+
+        LEFT JOIN mesas_examen.curso      cur_materia ON cur_materia.id_curso    = p.materia_id_curso
+        LEFT JOIN mesas_examen.division   div_materia ON div_materia.id_division = p.materia_id_division
+
+        LEFT JOIN mesas_examen.curso      cur_cursando ON cur_cursando.id_curso    = p.cursando_id_curso
+        LEFT JOIN mesas_examen.division   div_cursando ON div_cursando.id_division = p.cursando_id_division
+
         /**WHERE**/
         ORDER BY p.fecha_carga DESC, p.alumno ASC
     ";
@@ -45,6 +60,7 @@ try {
     $where  = [];
     $params = [];
 
+    // Búsquedas específicas
     if ($id > 0) {
         $where[] = "p.id_previa = :id";
         $params[':id'] = $id;
@@ -54,6 +70,13 @@ try {
     } elseif ($q !== '') {
         $where[] = "p.alumno LIKE :q";
         $params[':q'] = "%{$q}%";
+    }
+
+    // Filtro por pestaña
+    if ($solo === 'inscriptos') {
+        $where[] = "COALESCE(p.inscripcion,0) = 1";
+    } elseif ($solo === 'pendientes') {
+        $where[] = "COALESCE(p.inscripcion,0) = 0";
     }
 
     $sql = str_replace('/**WHERE**/', empty($where) ? '' : 'WHERE ' . implode(' AND ', $where), $sql);
@@ -67,7 +90,7 @@ try {
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
-        'exito' => false,
+        'exito'   => false,
         'mensaje' => 'Error al obtener las previas: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 }
