@@ -46,10 +46,7 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar }) => {
         <div className="hero-inner">
           <div className="hero-top">
             <img src={escudo} alt="Escudo IPET 50" className="hero-logo" />
-            <h1 className="hero-title">
-              ¡Bienvenido{a?.nombre ? "," : ""} <br />
-              {a?.nombre || "alumno"}!
-            </h1>
+            <h1 className="hero-title">¡Bienvenido!</h1>
             <p className="hero-sub">Revisá tus datos de inscripción.</p>
           </div>
 
@@ -65,24 +62,26 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar }) => {
               <input className="hf-input" value={a?.dni ?? ""} readOnly />
             </label>
 
-            <label className="hf-field">
-              <span className="hf-label">Año actual</span>
-              <input className="hf-input" value={a?.anio_actual ?? ""} readOnly />
-            </label>
+            {/* Fila con tres columnas: Año actual · Curso · División */}
+            <div className="hf-row-3">
+              <label className="hf-field">
+                <span className="hf-label ">Año actual</span>
+                <input className="hf-input ACD-field" value={a?.anio_actual ?? ""} readOnly />
+              </label>
 
-            <div className="hf-row">
               <label className="hf-field">
                 <span className="hf-label">Curso</span>
                 <input
-                  className="hf-input"
+                  className="hf-input ACD-field"
                   value={a?.cursando?.curso ?? ""}
                   readOnly
                 />
               </label>
+
               <label className="hf-field">
                 <span className="hf-label">División</span>
                 <input
-                  className="hf-input"
+                  className="hf-input ACD-field"
                   value={a?.cursando?.division ?? ""}
                   readOnly
                 />
@@ -258,12 +257,20 @@ const Formulario = () => {
         />
       ) : (
         <div className="auth-card">
-          {/* Panel izquierdo (hero) */}
-          <aside className="auth-hero">
+          {/* Panel izquierdo (hero) - LOGIN */}
+          <aside className="auth-hero is-login">
             <div className="hero-inner">
-              <img src={escudo} alt="Escudo IPET 50" className="hero-logo" />
-              <h1 className="hero-title">¡Bienvenido<br />de nuevo!</h1>
-              <p className="hero-sub">Ingresá con tu Gmail y DNI para continuar.</p>
+              <div className="her-container">
+              <h1 className="hero-title">Mesas de Examen · IPET 50</h1>
+              <p className="hero-sub">
+                Ingresá tu Gmail y DNI para consultar e inscribirte.
+              </p>
+              </div>
+                            <img
+                src={escudo}
+                alt="Escudo IPET 50"
+                className="hero-logo hero-logo--big"
+              />
             </div>
           </aside>
 
