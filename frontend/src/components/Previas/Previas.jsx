@@ -31,6 +31,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import Toast from '../Global/Toast';
 import InscribirModal from './InscribirModal';
+import ModalInfoPrevia from './modales/ModalInfoPrevia';
 import '../Global/roots.css';
 import './Previas.css';
 
@@ -123,6 +124,12 @@ const Previas = () => {
     item: null,
     loading: false,
     error: '',
+  });
+
+  // ➜ Modal INFO PREVIA
+  const [modalInfo, setModalInfo] = useState({
+    open: false,
+    item: null,
   });
 
   // Listas básicas (desde backend)
@@ -284,7 +291,7 @@ const Previas = () => {
             _alumno: normalizar(p?.alumno ?? ''),
             _dni: String(p?.dni ?? '').toLowerCase(),
             _materia: normalizar(p?.materia_nombre ?? ''),
-            materia_curso_division: `${p.materia_curso_nombre || ''} / ${p.materia_division_nombre || ''}`.trim()
+            materia_curso_division: `${p.materia_curso_nombre || ''} ${p.materia_division_nombre || ''}`.trim()
           }));
           setPrevias(procesados);
           setPreviasDB(procesados);
@@ -527,6 +534,14 @@ const Previas = () => {
     setModalIns({ open: false, item: null, loading: false, error: '' });
   }, [modalIns.loading]);
 
+  // ➜ Modal Info (abrir/cerrar)
+  const abrirModalInfo = useCallback((p) => {
+    setModalInfo({ open: true, item: p });
+  }, []);
+  const cerrarModalInfo = useCallback(() => {
+    setModalInfo({ open: false, item: null });
+  }, []);
+
   // Exportar a Excel lo visible
   const exportarExcel = useCallback(() => {
     const puede = (hayFiltros || filtroActivo === 'todos') && previasFiltradas.length > 0 && !cargando;
@@ -546,7 +561,7 @@ const Previas = () => {
       'Curso Materia': p?.materia_curso_nombre ?? '',
       'División Materia': p?.materia_division_nombre ?? '',
       'Condición': p?.condicion_nombre ?? '',
-      'Inscripto': Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No',
+      'Inscripto': Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE',
       'Fecha carga': formatearFechaISO(p?.fecha_carga ?? '')
     }));
 
@@ -579,12 +594,16 @@ const Previas = () => {
 
   /* ================================
      Fila virtualizada (desktop)
+     ➜ Columna “Inscripción” separada y
+       columna final solo “Acciones”.
   ================================= */
   const Row = React.memo(({ index, style, data }) => {
     const p = data[index];
     const esFilaPar = index % 2 === 0;
     const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
+
+    const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
 
     return (
       <div
@@ -600,31 +619,25 @@ const Previas = () => {
         <div className="prev-column prev-column-dni" title={p.dni}>{p.dni}</div>
         <div className="prev-column prev-column-materia" title={p.materia_nombre}>{p.materia_nombre}</div>
         <div className="prev-column prev-column-condicion" title={p.condicion_nombre}>{p.condicion_nombre}</div>
+
+        {/* Curso y división ahora sin “/”, juntos */}
         <div className="prev-column prev-column-curso-division" title={p.materia_curso_division}>
           {p.materia_curso_division}
         </div>
+
+        {/* Columna “Inscripción” */}
+        <div className={`prev-column prev-column-inscripcion ${estado === 'INSCRIPTO' ? 'is-ok' : 'is-pend'}`}>
+          {estado}
+        </div>
+
+        {/* Solo Acciones */}
         <div className="prev-column prev-icons-column">
           <div className="prev-icons-container">
-            <span className={`prev-badge ${Number(p?.inscripcion ?? 0) === 1 ? 'prev-badge-ok' : 'prev-badge-pend'}`}>
-              {Number(p?.inscripcion ?? 0) === 1 ? 'Inscript.' : 'Pend.'}
-            </span>
-
-            {/* Info */}
+            {/* Info -> abre modal */}
             <button
               className="prev-iconchip is-info"
               title="Ver información"
-              onClick={() =>
-                setToast({
-                  mostrar: true,
-                  tipo: 'info',
-                  mensaje:
-                    `${p.alumno} • DNI ${p.dni}\n` +
-                    `Materia: ${p.materia_nombre}\n` +
-                    `Condición: ${p.condicion_nombre}\n` +
-                    `Curso/División: ${p.materia_curso_division}\n` +
-                    `Inscripto: ${Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No'}`
-                })
-              }
+              onClick={() => abrirModalInfo(p)}
               aria-label="Ver información"
             >
               <FaInfoCircle />
@@ -640,8 +653,8 @@ const Previas = () => {
               <FaEdit />
             </button>
 
-            {/* ➜ Inscribir (solo si está pendiente) */}
-            {Number(p?.inscripcion ?? 0) === 0 && (
+            {/* Inscribir (solo si está pendiente) */}
+            {estado === 'PENDIENTE' && (
               <button
                 className="prev-iconchip is-affirm"
                 title="Inscribir manualmente"
@@ -727,7 +740,7 @@ const Previas = () => {
           </div>
         )}
 
-        {/* ➜ Modal Inscribir */}
+        {/* Modal Inscribir */}
         <InscribirModal
           open={modalIns.open}
           item={modalIns.item}
@@ -735,6 +748,13 @@ const Previas = () => {
           error={modalIns.error}
           onConfirm={confirmarInscripcion}
           onCancel={cancelarInscripcion}
+        />
+
+        {/* Modal Info Previa */}
+        <ModalInfoPrevia
+          open={modalInfo.open}
+          previa={modalInfo.item}
+          onClose={cerrarModalInfo}
         />
 
         {/* Header superior */}
@@ -942,7 +962,8 @@ const Previas = () => {
                 <div className="prev-th prev-th-dni">DNI</div>
                 <div className="prev-th prev-th-materia">Materia</div>
                 <div className="prev-th prev-th-condicion">Condición</div>
-                <div className="prev-th prev-th-curso-division">Curso / División (Materia)</div>
+                <div className="prev-th prev-th-curso-division">Curso y División (Materia)</div>
+                <div className="prev-th prev-th-inscripcion">Inscripción</div>
                 <div className="prev-th prev-icons-column">Acciones</div>
               </div>
 
@@ -1031,6 +1052,7 @@ const Previas = () => {
                 previasFiltradas.map((p, index) => {
                   const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
                   const preMask = preCascada && index < MAX_CASCADE_ITEMS;
+                  const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
                   return (
                     <div
                       key={p.id_previa || `card-${index}`}
@@ -1063,8 +1085,8 @@ const Previas = () => {
                           <span className="prev-card-value">{p.materia_curso_division}</span>
                         </div>
                         <div className="prev-card-row">
-                          <span className="prev-card-label">Inscripto</span>
-                          <span className="prev-card-value">{Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No'}</span>
+                          <span className="prev-card-label">Inscripción</span>
+                          <span className={`prev-card-value ${estado === 'INSCRIPTO' ? 'is-ok' : 'is-pend'}`}>{estado}</span>
                         </div>
                         <div className="prev-card-row">
                           <span className="prev-card-label">Fecha Carga</span>
@@ -1076,18 +1098,7 @@ const Previas = () => {
                         <button
                           className="prev-action-btn prev-iconchip is-info"
                           title="Información"
-                          onClick={() =>
-                            setToast({
-                              mostrar: true,
-                              tipo: 'info',
-                              mensaje:
-                                `${p.alumno} • DNI ${p.dni}\n` +
-                                `Materia: ${p.materia_nombre}\n` +
-                                `Condición: ${p.condicion_nombre}\n` +
-                                `Curso/División: ${p.materia_curso_division}\n` +
-                                `Inscripto: ${Number(p?.inscripcion ?? 0) === 1 ? 'Sí' : 'No'}`
-                            })
-                          }
+                          onClick={() => abrirModalInfo(p)}
                           aria-label="Información"
                         >
                           <FaInfoCircle />
@@ -1103,8 +1114,8 @@ const Previas = () => {
                           <FaEdit />
                         </button>
 
-                        {/* ➜ Inscribir si está pendiente */}
-                        {Number(p?.inscripcion ?? 0) === 0 && (
+                        {/* Inscribir si está pendiente */}
+                        {estado === 'PENDIENTE' && (
                           <button
                             className="prev-action-btn prev-iconchip is-affirm"
                             title="Inscribir manualmente"
