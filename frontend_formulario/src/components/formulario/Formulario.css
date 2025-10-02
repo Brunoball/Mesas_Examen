@@ -75,7 +75,6 @@
   inset: 0;
   width: 100vw;
   height: 100dvh;
-
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -105,7 +104,7 @@
   overflow: hidden;
 }
 
-/* IMPORTANTÍSIMO: permitir que los hijos del grid se encojan */
+/* Importante: que hijos del grid puedan encogerse */
 .auth-hero,
 .auth-body {
   min-width: 0;
@@ -123,40 +122,42 @@
   isolation: isolate;
   background: var(--reg-primary);
 }
+
 .auth-hero::before,
 .auth-hero::after {
-  content:"";
-  position:absolute;
-  inset:auto;
+  content: "";
+  position: absolute;
+  inset: auto;
   border-radius: 999px;
-  pointer-events:none;
-  opacity:.18;
+  pointer-events: none;
+  opacity: .18;
 }
-.auth-hero::before{
+.auth-hero::before {
   width: 520px; height: 520px;
-  top:-140px; right:-120px;
+  top: -140px; right: -120px;
   background: #fff;
   filter: blur(90px);
 }
-.auth-hero::after{
+.auth-hero::after {
   width: 420px; height: 420px;
-  bottom:-120px; left:-100px;
+  bottom: -120px; left: -100px;
   background: #fff;
   filter: blur(80px);
 }
 
 .hero-inner{
   width: 100%;
-  max-width: 420px; /* antes 160px: quedaba muy angosto */
+  max-width: 420px;
   display: grid;
   gap: 18px;
   align-items: start;
   z-index: 1;
 }
-.hero-top { display: grid; gap: 12px; }
+.hero-top { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .hero-logo{
-  width: 32px;
-  height: 32px;
+  object-fit: contain;
+  width: 52px;
+  height: 52px;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,.25));
 }
 .hero-title{
@@ -180,9 +181,8 @@
   background: rgba(255,255,255,.08);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.22);
   backdrop-filter: blur(2px);
-  min-width: 0; /* que no empuje el ancho */
+  min-width: 0;
 }
-
 .hf-field{ display: grid; gap: 6px; min-width: 0; }
 .hf-label{
   font-size: 12px;
@@ -213,20 +213,19 @@
   opacity: .9;
 }
 
-/* Fila de 3 columnas (Año / Curso / División) en GRID real */
+/* Fila de 3 columnas (Año / Curso / División) */
 .hf-row-3{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   min-width: 0;
 }
-
-/* Inputs de esa fila: ocupar el ancho, sin límite raro */
 .ACD-field{
   width: 100%;
   max-width: none;
 }
 
+/* Botones héroe */
 .hero-actions{
   display: flex;
   gap: 10px;
@@ -256,7 +255,6 @@
   gap: 18px;
   background: #fff;
 }
-
 .auth-header{ margin-bottom: 4px; }
 .auth-title{
   margin: 0 0 6px 0;
@@ -294,7 +292,6 @@
   border-color: var(--reg-primary-light);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--reg-primary) 25%, transparent);
 }
-
 .form-extra{
   margin-top: 2px;
   display: flex;
@@ -326,15 +323,13 @@
    ========================= */
 .materias-grid{
   display: grid;
-  grid-template-columns: 1fr;     /* apiladas por defecto */
+  grid-template-columns: 1fr;
   gap: 12px;
-  max-width: 520px;               /* límite de ancho para lectura */
-  margin: 8px  0;             /* centrado */
+  max-width: 520px;
+  margin: 8px 0;
   padding: 2px;
 }
 
-
-/* Tarjeta */
 .materia-card{
   --mc: var(--reg-primary);
   --mc-bg: color-mix(in oklab, var(--mc) 14%, #fff);
@@ -370,9 +365,13 @@
   accent-color: var(--mc);
 }
 .materia-card .nombre{
+  width: 100%;
   font-weight: 800;
   color: var(--ink-900);
   line-height: 1.2;
+  display: flex;
+  justify-content: space-between;
+
 }
 .materia-card .sub{
   color: var(--ink-500);
@@ -403,7 +402,7 @@
 .materias-grid > .materia-card:nth-child(10n + 9){ --mc:#7C3AED; }
 .materias-grid > .materia-card:nth-child(10n + 10){ --mc:#CA8A04; }
 
-/* Acciones */
+/* Acciones de confirmación */
 .actions{
   margin-top: 14px;
   display: flex;
@@ -440,32 +439,26 @@
     grid-template-columns: 1fr; /* apilar campos en mobile */
   }
 }
-/* --- 1) "sub" debajo del nombre del alumno --- */
-/* Ya estás usando .hero-sub justo después del .hero-title; forzamos bloque y espaciado limpio */
+
+/* --- 1) “sub” debajo del nombre del alumno --- */
 .hero-title { margin: 0; }
 .hero-sub {
-  display: block;
-  margin: 6px 0 0 0; /* separadito del nombre */
+  width: 100%;
+  margin: 6px 0 0 0;
   line-height: 1.2;
 }
 
-/* Por si te referías al subtexto de cada materia (curso/div) */
+/* Subtexto de cada materia (curso/div) */
 .materia-card .sub{
-  display: block;         /* asegura ir debajo */
+  display: block;
   margin-top: 2px;
   font-size: 12px;
   color: var(--ink-500);
   line-height: 1.15;
 }
 
-/* --- 2) Estilo del checklist (checkbox) en las tarjetas --- */
-/* Ocultamos el checkbox nativo y dibujamos uno custom accesible */
-.materia-card {
-  position: relative;
-  padding-left: 44px; /* lugar para el checkbox custom */
-}
-
-/* El input real queda clickeable pero visualmente oculto */
+/* --- 2) Estilo del checklist custom en tarjetas --- */
+.materia-card { position: relative; padding-left: 44px; }
 .materia-card input[type="checkbox"]{
   position: absolute;
   left: 12px;
@@ -473,13 +466,11 @@
   transform: translateY(-50%);
   width: 22px;
   height: 22px;
-  opacity: 0;          /* oculto pero presente para accesibilidad */
+  opacity: 0;
   margin: 0;
-  z-index: 2;          /* por encima del pseudo para recibir foco/click */
+  z-index: 2;
   cursor: pointer;
 }
-
-/* Dibujamos la “caja” del checkbox */
 .materia-card::after{
   content: "";
   position: absolute;
@@ -494,15 +485,11 @@
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--mc) 25%, transparent);
   transition: var(--reg-transition);
 }
-
-/* Estado hover: resalta un poco */
 .materia-card:hover::after{
   box-shadow:
     inset 0 0 0 1px color-mix(in oklab, var(--mc) 40%, transparent),
     0 2px 6px rgba(0,0,0,.05);
 }
-
-/* Estado checked: fondo pintado + tilde */
 .materia-card.selected::after{
   background: var(--mc);
   border-color: var(--mc);
@@ -510,12 +497,10 @@
     inset 0 0 0 1px color-mix(in oklab, #fff 55%, transparent),
     0 2px 8px color-mix(in oklab, var(--mc) 30%, transparent);
 }
-
-/* Dibujamos el tilde cuando está seleccionada */
 .materia-card.selected::before{
   content: "";
   position: absolute;
-  left: 20px;              /* centrado dentro del cuadrado */
+  left: 20px;
   top: calc(50% - 1px);
   transform: translateY(-50%) rotate(45deg);
   width: 6px;
@@ -524,73 +509,52 @@
   border-bottom: 3px solid #fff;
   z-index: 3;
 }
-
-/* Foco accesible (cuando el input recibe focus via teclado) */
 .materia-card input[type="checkbox"]:focus-visible ~ .nombre,
 .materia-card input[type="checkbox"]:focus-visible ~ .sub{
   outline: none;
 }
-.materia-card input[type="checkbox"]:focus-visible + .nombre,
-
-.materia-card input[type="checkbox"]:focus-visible{
-  outline: none;
-}
+.materia-card input[type="checkbox"]:focus-visible{ outline: none; }
 .materia-card:has(input[type="checkbox"]:focus-visible)::after{
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--mc) 35%, transparent);
 }
 
-/* Un poco más de jerarquía tipográfica */
-.materia-card .nombre{
-  font-weight: 800;
-  color: var(--ink-900);
-  line-height: 1.2;
-}
-
-/* --- 3) Alinear "Confirmar inscripción" con "Volver" (misma altura) --- */
-/* Convertimos ambos paneles en columnas flex para “pegar” las acciones abajo */
+/* --- 3) Alinear “Confirmar inscripción” con “Volver” (misma altura) --- */
 .auth-hero{
-  display: flex;            /* antes grid */
+  display: flex;
   flex-direction: column;
 }
 .hero-inner{
-  display: flex;            /* antes grid */
+  display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 18px;
   width: 100%;
   max-width: 420px;
-  flex: 1 1 auto;           /* que ocupe alto disponible */
+  flex: 1 1 auto;
 }
 .hero-actions{
-  margin-top: auto;         /* se va al fondo de la columna */
+  margin-top: auto;
   display: flex;
   gap: 10px;
 }
-
 .auth-body{
-  display: flex;            /* antes: grid */
+  display: flex;
   flex-direction: column;
   align-items: stretch;
   padding: 28px;
   background: #fff;
 }
-
-/* Deja que la grilla de materias crezca y empuje las acciones al fondo */
-.materias-grid{          /* ocupa alto y deja acciones al pie */
-  overflow: auto;           /* por si hay muchas tarjetas */
+.materias-grid{
+  overflow: auto;
 }
-
-/* Las acciones de la derecha bajan al fondo, alineándose con las de la izquierda */
 .actions{
-  margin-top: auto;         /* se posiciona abajo */
+  margin-top: auto;
   display: flex;
   gap: 10px;
   justify-content: flex-end;
 }
-
-/* Igualamos alturas visuales de botones */
 .btn-hero-secondary{
-  height: 46px;             /* antes 38px */
+  height: 46px;
   padding: 0 14px;
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,.5);
@@ -602,67 +566,46 @@
 .btn-hero-secondary:hover{
   background: rgba(255,255,255,.12);
 }
-
-/* Aseguramos que el primario también 46px (ya lo tenías así) */
 .btn-primary{
-  height: 46px;             /* antes 42px */
+  height: 46px;
   padding: 0 16px;
   border-radius: 12px;
   font-weight: 800;
 }
-
-/* En mobile apilado, mantenemos las acciones al pie de cada columna */
 @media (max-width: 860px){
-  .auth-card{
-    grid-template-columns: 1fr;
-  }
-  .auth-hero{
-    min-height: 220px;
-  }
-  .materias-grid{
-    max-height: 40vh; /* para que quepan acciones abajo si hay muchas materias */
-  }
-}
-/* ===== Login: logo grande y con borde blanco redondo ===== */
-.auth-hero.is-login .hero-inner{
-  align-items: flex-start;           /* centra logo y textos en el login */
-  text-align: center;
-  max-width: 520px;              /* un poco más ancho en login */
+  .auth-card{ grid-template-columns: 1fr; }
+  .auth-hero{ min-height: 220px; }
+  .materias-grid{ max-height: 40vh; }
 }
 
+/* ===== Login: logo grande (base) ===== */
 .hero-logo--big{
   object-fit: contain;
-  width: 88px;                  /* tamaño grande */
-  height: 88px;
-  border-radius: 999px;          /* redondo */      /* borde blanco */
-  padding: 10px;                 /* halo interno */
-  background: rgba(255,255,255,.10); /* leve vidrio detrás del escudo */
-  box-shadow:
-    0 8px 24px rgba(0,0,0,.2),
-    inset 0 0 0 1px rgba(255,255,255,.25);
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow:0 8px 24px rgba(0, 0, 0, .2), inset 0 0 0 1px rgb(255 255 255 / 0%);
 }
-
-/* Afinamos títulos del login para que luzcan con el logo grande */
 .auth-hero.is-login .hero-title{
   font-size: clamp(22px, 3vw, 30px);
   margin-top: 10px;
 }
-
 .auth-hero.is-login .hero-sub{
   opacity: .95;
   margin-top: 6px;
 }
 
+/* Estados de tarjeta inscripta */
 .materia-card.inscripto { opacity: .55; filter: grayscale(0.8); cursor: not-allowed; }
 .badge-inscripto { margin-left:.5rem; font-size:.72rem; padding:.08rem .4rem; border-radius:.5rem; border:1px solid currentColor; }
-
 
 /* Ventana abierta/cerrada pill */
 .ventana-pill {
   display: inline-block;
   margin-top: .5rem;
-  padding: .35rem .6rem;
-  border-radius: 999px;
+  padding:  .6rem;
+  border-radius: 12px 14px;
   font-size: .9rem;
   line-height: 1;
   border: 1px solid transparent;
@@ -678,7 +621,7 @@
   border-color: #f5c6c1;
 }
 
-/* Grid deshabilitada si cerrada (solo aspecto visual extra) */
+/* Grid deshabilitada si cerrada */
 .materias-grid.is-disabled {
   opacity: .7;
   pointer-events: none;
@@ -711,3 +654,319 @@
   animation: spin 1s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== Ventana de inscripción (look claro con variables de :root) ===== */
+.closed-box{
+  --accent: var(--reg-primary, #B71C1C);
+  --accent-light: var(--reg-primary-light, #E53935);
+  --ink-900: var(--reg-gray-900, #0F172A);
+  --ink-700: var(--reg-gray-700, #334155);
+  --bd: var(--reg-gray-200, #E2E8F0);
+  --bg: #fff;
+
+  padding: 1rem 1rem 1.1rem;
+  border: 1px solid var(--bd);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, #fff, #fff) padding-box,
+    radial-gradient(1000px 160px at 0% 0%,
+      color-mix(in oklab, var(--accent-light) 8%, transparent),
+      transparent
+    ) border-box;
+  box-shadow: 0 6px 18px rgba(0,0,0,.05);
+}
+.closed-box > p:first-child{
+  margin: 0 0 .6rem 0;
+  font-weight: 800;
+  color: var(--ink-900);
+  letter-spacing: .2px;
+}
+.closed-list{
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .6rem;
+}
+.closed-list li{
+  position: relative;
+  display: grid;
+  gap: .25rem;
+  padding: .75rem .9rem .75rem 2.6rem;
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  background: var(--reg-gray-100, #F1F5F9);
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  transition: transform .06s, box-shadow .2s, border-color .2s, background-color .2s;
+}
+.closed-list li:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,.06);
+  border-color: color-mix(in oklab, var(--accent) 18%, var(--bd));
+  background: color-mix(in oklab, var(--reg-gray-100) 70%, #fff);
+}
+.closed-list li::before{
+  content: "📅";
+  position: absolute;
+  left: .8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.05rem;
+  line-height: 1;
+  opacity: .9;
+}
+.closed-list li strong{
+  display: block;
+  font-size: .78rem;
+  line-height: 1.1;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  color: var(--ink-700);
+}
+.closed-list li{
+  --pill-bg: color-mix(in oklab, var(--accent-light) 10%, #fff);
+  --pill-bd: color-mix(in oklab, var(--accent-light) 26%, #fff);
+  color: var(--reg-gray-700);
+  font-weight: 700;
+}
+.closed-list li > :not(strong){
+  display: inline-block;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-bd);
+  border-radius: 999px;
+  padding: .22rem .5rem;
+  line-height: 1.05;
+}
+
+/* =========================
+   AJUSTE DE LOGIN PEDIDO:
+   LOGO ARRIBA Y BLOQUE CENTRADO VERTICAL
+   ========================= */
+.auth-hero.is-login {
+  display: flex;            /* asegura flex en el panel rojo */
+  flex-direction: column;
+}
+.auth-hero.is-login .hero-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;  /* centra vertical */
+  align-items: center;      /* centra horizontal */
+  gap: 10px;
+  height: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: center;
+}
+/* Orden: primero el logo, luego textos */
+.auth-hero.is-login .hero-inner .hero-logo--big { order: 1; }
+.auth-hero.is-login .hero-inner .her-container   { order: 2; }
+/* Afinado de tamaños/márgenes */
+.auth-hero.is-login .hero-logo--big { margin-bottom: 6px; }
+.auth-hero.is-login .hero-title{ font-size: clamp(22px, 3vw, 30px); margin: 0; }
+.auth-hero.is-login .hero-sub{ margin-top: 4px; opacity: .95; }
+
+@media (max-width: 860px){
+  .auth-hero.is-login .hero-inner{ padding-block: 12px; }
+}
+/* =========================
+   Checkbox "Recordarme" estilizado
+   (no requiere cambiar tu JSX actual)
+   ========================= */
+.remember{
+  --cb-size: 20px;                 /* tamaño del cuadrado */
+  --cb-radius: 6px;                /* radio del cuadrado */
+  --cb-bd: var(--border, #E2E8F0); /* color borde base */
+  --cb-ink: var(--ink-700, #334155);
+  --cb-accent: var(--reg-primary, #B71C1C);        /* color activo */
+  --cb-accent-ghost: color-mix(in oklab, var(--cb-accent) 20%, transparent);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ocultamos visualmente el checkbox nativo pero sigue siendo accesible */
+.remember input{
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: var(--cb-size);
+  height: var(--cb-size);
+  transform: translateY(-50%);
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* El texto */
+.remember span{
+  color: var(--ink-500, #64748B);
+  padding-left: calc(var(--cb-size) + 8px); /* deja lugar al “cuadrado” */
+  line-height: 1.1;
+}
+
+/* Dibujamos el cuadrado del checkbox en el ::before del span */
+.remember span::before{
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: var(--cb-size);
+  height: var(--cb-size);
+  transform: translateY(-50%);
+  border: 2px solid var(--cb-bd);
+  border-radius: var(--cb-radius);
+  background: #fff;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cb-bd) 60%, transparent);
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease, transform .06s ease;
+}
+
+/* Check (tilde) */
+.remember span::after{
+  content: "";
+  position: absolute;
+  left: 5px;                        /* centrado óptico del tilde */
+  top: 50%;
+  width: 6px;
+  height: 12px;
+  transform: translateY(-58%) rotate(45deg) scale(0.9);
+  border-right: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  transition: border-color .2s ease, transform .15s ease;
+}
+
+/* Hover general */
+.remember:hover span::before{
+  border-color: color-mix(in oklab, var(--cb-bd) 40%, var(--cb-accent));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--cb-bd) 70%, transparent),
+    0 2px 6px rgba(0,0,0,.04);
+}
+
+/* Estado FOCUS (accesible con teclado) */
+.remember:has(input:focus-visible) span::before{
+  box-shadow: 0 0 0 3px var(--cb-accent-ghost);
+  border-color: var(--cb-accent);
+}
+
+/* Estado CHECKED */
+.remember input:checked + span{
+  color: var(--cb-ink);
+}
+.remember input:checked + span::before{
+  background: var(--cb-accent);
+  border-color: var(--cb-accent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, #fff 55%, transparent),
+    0 2px 10px color-mix(in oklab, var(--cb-accent) 25%, transparent);
+}
+.remember input:checked + span::after{
+  transform: translateY(-58%) rotate(45deg) scale(1); /* pequeño pop */
+}
+
+/* Estado DISABLED (por si en algún momento lo usás) */
+.remember input:disabled + span{
+  opacity: .6;
+  cursor: not-allowed;
+}
+.remember input:disabled + span::before{
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  box-shadow: none;
+}
+
+/* Respeta preferencias de movimiento reducido */
+@media (prefers-reduced-motion: reduce){
+  .remember span::before,
+  .remember span::after{
+    transition: none;
+  }
+}
+/* =========================
+   Tipografía minimal (scope local)
+   ========================= */
+.auth-page, .auth-card {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: .005em;
+  text-rendering: optimizeLegibility;
+}
+
+/* Pesos y limpieza en títulos y etiquetas (scopeado) */
+.auth-title{ font-weight: 800; letter-spacing: 0; }
+.auth-sub, .field-label, .hf-label{ font-weight: 600; color: color-mix(in oklab, var(--ink-700) 80%, #0000); }
+.field-input, .hf-input, .closed-list li{ font-variant-numeric: tabular-nums; }
+
+/* ===========================================
+   Iconos de calendario con color --reg-primary
+   (sólo en la caja de ventana cerrada/abierta)
+   =========================================== */
+.closed-list li{
+  padding-left: 3.2rem; /* espacio para el ícono */
+}
+
+.closed-list li::before{
+  content: "";
+  position: absolute;
+  left: .9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  background: var(--reg-primary);    /* << usa tu color de tema */
+  opacity: .95;
+
+  /* Calendario SVG como máscara para poder teñirlo */
+  -webkit-mask: url("data:image/svg+xml;utf8,\
+  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>\
+    <rect x='3' y='4' width='18' height='17' rx='3' ry='3' fill='%23000'/>\
+    <rect x='3' y='8' width='18' height='1.8' fill='%23fff'/>\
+    <rect x='7' y='2' width='2' height='4' rx='1' fill='%23000'/>\
+    <rect x='15' y='2' width='2' height='4' rx='1' fill='%23000'/>\
+    <rect x='6.5' y='12' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='10.5' y='12' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='14.5' y='12' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='6.5' y='16' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='10.5' y='16' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='14.5' y='16' width='3' height='3' rx='0.6' fill='%23fff'/>\
+  </svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,\
+  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>\
+    <rect x='3' y='4' width='18' height='17' rx='3' ry='3' fill='%23000'/>\
+    <rect x='3' y='8' width='18' height='1.8' fill='%23fff'/>\
+    <rect x='7' y='2' width='2' height='4' rx='1' fill='%23000'/>\
+    <rect x='15' y='2' width='2' height='4' rx='1' fill='%23000'/>\
+    <rect x='6.5' y='12' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='10.5' y='12' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='14.5' y='12' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='6.5' y='16' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='10.5' y='16' width='3' height='3' rx='0.6' fill='%23fff'/>\
+    <rect x='14.5' y='16' width='3' height='3' rx='0.6' fill='%23fff'/>\
+  </svg>") center / contain no-repeat;
+}
+
+.closed-list li:hover::before{
+  background: color-mix(in oklab, var(--reg-primary) 88%, #ffffff);
+}
+
+/* Etiquetas DESDE/HASTA con tracking sutil (scopeado) */
+.closed-list li strong{
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--ink-700) 90%, #0000);
+}
+
+/* Pastillas con tipografía limpia (scopeado) */
+.closed-list li > :not(strong){
+  font-weight: 600;
+  border-radius: 10px;
+  padding: .28rem .6rem;
+}

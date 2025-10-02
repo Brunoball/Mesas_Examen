@@ -522,6 +522,9 @@ const Formulario = () => {
           {/* Panel izquierdo (hero) - LOGIN */}
           <aside className="auth-hero is-login">
             <div className="hero-inner">
+              {/* Nota: mantenemos este orden (textos luego logo).
+                  El CSS ya reordena visualmente para que el logo quede arriba
+                  y el bloque entero se centre verticalmente. */}
               <div className="her-container">
                 <h1 className="hero-title">{ventana?.titulo || "Mesas de Examen · IPET 50"}</h1>
                 <p className="hero-sub">
