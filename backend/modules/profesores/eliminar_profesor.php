@@ -33,7 +33,7 @@ try {
     }
 
     // Verificamos existencia
-    $st = $pdo->prepare("SELECT 1 FROM mesas_examen.docentes WHERE id_docente = :id");
+    $st = $pdo->prepare("SELECT 1 FROM docentes WHERE id_docente = :id");
     $st->execute([':id' => $id]);
     if (!$st->fetchColumn()) {
         http_response_code(404);
@@ -42,7 +42,7 @@ try {
     }
 
     // Borrado definitivo
-    $del = $pdo->prepare("DELETE FROM mesas_examen.docentes WHERE id_docente = :id");
+    $del = $pdo->prepare("DELETE FROM docentes WHERE id_docente = :id");
     $del->execute([':id' => $id]);
 
     echo json_encode(['exito' => true, 'mensaje' => 'Profesor eliminado']);

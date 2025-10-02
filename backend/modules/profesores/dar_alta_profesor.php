@@ -63,7 +63,7 @@ try {
     // Verificar existencia
     $sel = $pdo->prepare("
         SELECT id_docente, activo
-        FROM mesas_examen.docentes
+        FROM docentes
         WHERE id_docente = :id
         LIMIT 1
     ");
@@ -76,9 +76,9 @@ try {
     }
 
     // Actualizar estado: activo = 1, limpiar motivo y setear fecha_carga EXACTA
-    // Usamos STR_TO_DATE para garantizar que MySQL lo guarde como DATE sin interpretaciones de TZ
+    // Usamos STR_TO_DATE para garantizar que MySQL lo guarde como DATE
     $upd = $pdo->prepare("
-        UPDATE mesas_examen.docentes
+        UPDATE docentes
         SET activo = 1,
             motivo = '',
             fecha_carga = STR_TO_DATE(:fecha, '%Y-%m-%d')

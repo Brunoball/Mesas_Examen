@@ -20,12 +20,17 @@ import {
   FaTimes,
   FaUsers,
   FaFilter,
-  FaChevronDown
+  FaChevronDown,
+  FaTrash,
+  FaPlus,
+  FaEdit,
+  FaCheckCircle, // ⬅️ para botón Inscribir
 } from 'react-icons/fa';
 
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import Toast from '../Global/Toast';
+import InscribirModal from './InscribirModal';
 import '../Global/roots.css';
 import './Previas.css';
 
@@ -76,7 +81,7 @@ function useIsMobile(breakpoint = 768) {
 ================================ */
 const Previas = () => {
   const [previas, setPrevias] = useState([]);
-  const [previasDB, setPreviasDB] = useState([]); // (se mantiene por si lo necesitás a futuro)
+  const [previasDB, setPreviasDB] = useState([]);
   const [cargando, setCargando] = useState(false);
 
   const [tab, setTab] = useState('todos'); // 'todos' | 'inscriptos'
@@ -103,10 +108,27 @@ const Previas = () => {
     division: false,
   });
 
+  // Modal genérico (eliminar / desinscribir)
+  const [modal, setModal] = useState({
+    open: false,
+    mode: null, // 'eliminar' | 'desinscribir'
+    item: null,
+    loading: false,
+    error: '',
+  });
+
+  // ➜ Modal para INSCRIBIR
+  const [modalIns, setModalIns] = useState({
+    open: false,
+    item: null,
+    loading: false,
+    error: '',
+  });
+
   // Listas básicas (desde backend)
   const [listas, setListas] = useState({ cursos: [], divisiones: [] });
 
-  // Filtros (eliminados: anioSeleccionado y materiaSeleccionada)
+  // Filtros
   const [filtros, setFiltros] = useState(() => {
     const saved = localStorage.getItem('filtros_previas');
     if (saved) {
@@ -143,15 +165,15 @@ const Previas = () => {
     (divisionSeleccionada && divisionSeleccionada !== '')
   );
 
-  // Tab base dataset (Todos vs Inscriptos)
+  // Base por pestaña
   const basePorTab = useMemo(() => {
     if (tab === 'inscriptos') {
       return previas.filter((p) => Number(p?.inscripcion ?? 0) === 1);
     }
-    return previas; // todos
+    return previas;
   }, [tab, previas]);
 
-  // Búsqueda y filtros sobre la base según pestaña
+  // Filtrado + búsqueda
   const previasFiltradas = useMemo(() => {
     let resultados = basePorTab;
 
@@ -294,7 +316,6 @@ const Previas = () => {
         });
       } catch (e) {
         console.error('Error cargando listas:', e);
-        // No bloqueo la UI; solo dejo las listas vacías
       }
     };
     fetchListas();
@@ -416,7 +437,97 @@ const Previas = () => {
     }));
   }, []);
 
-  // Exportar a Excel lo visible (según pestaña)
+  // Abrir modal acción (eliminar / desinscribir)
+  const abrirModalAccion = useCallback((p) => {
+    const mode = (tab === 'inscriptos') ? 'desinscribir' : 'eliminar';
+    setModal({ open: true, mode, item: p, loading: false, error: '' });
+  }, [tab]);
+
+  // Confirmar acción (eliminar / desinscribir)
+  const confirmarAccion = useCallback(async () => {
+    if (!modal.item || !modal.mode) return;
+    try {
+      setModal((m) => ({ ...m, loading: true, error: '' }));
+
+      const action = modal.mode === 'desinscribir'
+        ? 'previa_desinscribir'
+        : 'previa_eliminar';
+
+      const res = await fetch(`${BASE_URL}/api.php?action=${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_previa: modal.item.id_previa }),
+      });
+      const json = await res.json();
+
+      if (!json?.exito) throw new Error(json?.mensaje || 'Operación no realizada');
+
+      if (modal.mode === 'eliminar') {
+        setPrevias((arr) => arr.filter(x => Number(x.id_previa) !== Number(modal.item.id_previa)));
+        mostrarToast('Registro eliminado correctamente', 'exito');
+      } else {
+        setPrevias((arr) =>
+          arr.map(x =>
+            Number(x.id_previa) === Number(modal.item.id_previa)
+              ? { ...x, inscripcion: 0 }
+              : x
+          )
+        );
+        mostrarToast('Se marcó como NO inscripto', 'exito');
+      }
+
+      setModal({ open: false, mode: null, item: null, loading: false, error: '' });
+    } catch (e) {
+      setModal((m) => ({ ...m, loading: false, error: e.message || 'Error desconocido' }));
+    }
+  }, [BASE_URL, modal, mostrarToast]);
+
+  const cancelarModal = useCallback(() => {
+    if (modal.loading) return;
+    setModal({ open: false, mode: null, item: null, loading: false, error: '' });
+  }, [modal.loading]);
+
+  // ➜ Abrir modal INSCRIBIR
+  const abrirModalInscribir = useCallback((p) => {
+    setModalIns({ open: true, item: p, loading: false, error: '' });
+  }, []);
+
+  // ➜ Confirmar INSCRIPCIÓN
+  const confirmarInscripcion = useCallback(async () => {
+    if (!modalIns.item) return;
+    try {
+      setModalIns((m) => ({ ...m, loading: true, error: '' }));
+
+      const res = await fetch(`${BASE_URL}/api.php?action=previa_inscribir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_previa: modalIns.item.id_previa }),
+      });
+      const json = await res.json();
+      if (!json?.exito) throw new Error(json?.mensaje || 'No se pudo inscribir');
+
+      // Actualiza la fila en memoria
+      setPrevias((arr) =>
+        arr.map(x =>
+          Number(x.id_previa) === Number(modalIns.item.id_previa)
+            ? { ...x, inscripcion: 1 }
+            : x
+        )
+      );
+
+      setModalIns({ open: false, item: null, loading: false, error: '' });
+      mostrarToast('Alumno inscripto correctamente', 'exito');
+    } catch (e) {
+      setModalIns((m) => ({ ...m, loading: false, error: e.message || 'Error desconocido' }));
+    }
+  }, [BASE_URL, modalIns.item, mostrarToast]);
+
+  const cancelarInscripcion = useCallback(() => {
+    if (modalIns.loading) return;
+    setModalIns({ open: false, item: null, loading: false, error: '' });
+  }, [modalIns.loading]);
+
+  // Exportar a Excel lo visible
   const exportarExcel = useCallback(() => {
     const puede = (hayFiltros || filtroActivo === 'todos') && previasFiltradas.length > 0 && !cargando;
     if (!puede) {
@@ -497,6 +608,8 @@ const Previas = () => {
             <span className={`prev-badge ${Number(p?.inscripcion ?? 0) === 1 ? 'prev-badge-ok' : 'prev-badge-pend'}`}>
               {Number(p?.inscripcion ?? 0) === 1 ? 'Inscript.' : 'Pend.'}
             </span>
+
+            {/* Info */}
             <button
               className="prev-iconchip is-info"
               title="Ver información"
@@ -516,6 +629,38 @@ const Previas = () => {
             >
               <FaInfoCircle />
             </button>
+
+            {/* Editar */}
+            <button
+              className="prev-iconchip is-warn"
+              title="Editar"
+              onClick={() => navigate(`/previas/editar/${p.id_previa}`)}
+              aria-label="Editar"
+            >
+              <FaEdit />
+            </button>
+
+            {/* ➜ Inscribir (solo si está pendiente) */}
+            {Number(p?.inscripcion ?? 0) === 0 && (
+              <button
+                className="prev-iconchip is-affirm"
+                title="Inscribir manualmente"
+                onClick={() => abrirModalInscribir(p)}
+                aria-label="Inscribir"
+              >
+                <FaCheckCircle />
+              </button>
+            )}
+
+            {/* Eliminar / Desinscribir */}
+            <button
+              className="prev-iconchip is-danger"
+              title={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
+              onClick={() => abrirModalAccion(p)}
+              aria-label={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
+            >
+              <FaTrash />
+            </button>
           </div>
         </div>
       </div>
@@ -525,11 +670,7 @@ const Previas = () => {
   /* ================================
      Render
   ================================= */
-  const hayChips = !!(
-    busqueda ||
-    cursoSeleccionado ||
-    divisionSeleccionada
-  );
+  const hayChips = !!(busqueda || cursoSeleccionado || divisionSeleccionada);
 
   return (
     <div className="prev-container">
@@ -542,6 +683,59 @@ const Previas = () => {
             duracion={3000}
           />
         )}
+
+        {/* Modal Confirmación (eliminar / desinscribir) */}
+        {modal.open && (
+          <div className="prev-modal-backdrop" role="dialog" aria-modal="true">
+            <div className="prev-modal">
+              <div className="prev-modal-header">
+                <h3>
+                  {modal.mode === 'desinscribir' ? 'Marcar como NO inscripto' : 'Eliminar registro'}
+                </h3>
+              </div>
+              <div className="prev-modal-body">
+                <p>
+                  {modal.mode === 'desinscribir'
+                    ? '¿Confirmás pasar este alumno a NO inscripto?'
+                    : '¿Confirmás eliminar definitivamente este registro?'}
+                </p>
+                {modal.item && (
+                  <div className="prev-modal-item">
+                    <strong>{modal.item.alumno}</strong> — DNI {modal.item.dni}<br />
+                    Materia: {modal.item.materia_nombre}
+                  </div>
+                )}
+                {modal.error && <div className="prev-modal-error">{modal.error}</div>}
+              </div>
+              <div className="prev-modal-actions">
+                <button
+                  className="prev-btn prev-hover prev-btn-cancel"
+                  onClick={cancelarModal}
+                  disabled={modal.loading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className={`prev-btn prev-hover ${modal.mode === 'desinscribir' ? 'prev-btn-warn' : 'prev-btn-danger'}`}
+                  onClick={confirmarAccion}
+                  disabled={modal.loading}
+                >
+                  {modal.loading ? 'Procesando...' : (modal.mode === 'desinscribir' ? 'Confirmar' : 'Eliminar')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ➜ Modal Inscribir */}
+        <InscribirModal
+          open={modalIns.open}
+          item={modalIns.item}
+          loading={modalIns.loading}
+          error={modalIns.error}
+          onConfirm={confirmarInscripcion}
+          onCancel={cancelarInscripcion}
+        />
 
         {/* Header superior */}
         <div className="prev-headerbar">
@@ -603,7 +797,7 @@ const Previas = () => {
 
             {mostrarFiltros && (
               <div className="prev-filtros-menu" role="menu">
-                {/* CURSO (cursando) — listas_basicas */}
+                {/* CURSO (cursando) */}
                 <div className="prev-filtros-group">
                   <button
                     type="button"
@@ -635,7 +829,7 @@ const Previas = () => {
                   </div>
                 </div>
 
-                {/* DIVISIÓN (cursando) — listas_basicas */}
+                {/* DIVISIÓN (cursando) */}
                 <div className="prev-filtros-group">
                   <button
                     type="button"
@@ -667,7 +861,7 @@ const Previas = () => {
                   </div>
                 </div>
 
-                {/* Mostrar Todos (dentro de la pestaña actual) */}
+                {/* Mostrar Todos */}
                 <div
                   className="prev-filtros-menu-item prev-mostrar-todas"
                   onClick={() => {
@@ -700,7 +894,7 @@ const Previas = () => {
               </div>
 
               {/* Chips */}
-              {hayChips && (
+              {hayFiltros && (
                 <div className="prev-chips">
                   {busqueda && (
                     <div className="prev-chip" title="Filtro activo">
@@ -898,6 +1092,38 @@ const Previas = () => {
                         >
                           <FaInfoCircle />
                         </button>
+
+                        {/* Editar */}
+                        <button
+                          className="prev-action-btn prev-iconchip is-warn"
+                          title="Editar"
+                          onClick={() => navigate(`/previas/editar/${p.id_previa}`)}
+                          aria-label="Editar"
+                        >
+                          <FaEdit />
+                        </button>
+
+                        {/* ➜ Inscribir si está pendiente */}
+                        {Number(p?.inscripcion ?? 0) === 0 && (
+                          <button
+                            className="prev-action-btn prev-iconchip is-affirm"
+                            title="Inscribir manualmente"
+                            onClick={() => abrirModalInscribir(p)}
+                            aria-label="Inscribir"
+                          >
+                            <FaCheckCircle />
+                          </button>
+                        )}
+
+                        {/* Eliminar / Desinscribir */}
+                        <button
+                          className="prev-action-btn prev-iconchip is-danger"
+                          title={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
+                          onClick={() => abrirModalAccion(p)}
+                          aria-label={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
+                        >
+                          <FaTrash />
+                        </button>
                       </div>
                     </div>
                   );
@@ -938,6 +1164,16 @@ const Previas = () => {
             >
               <FaFileExcel className="prev-btn-icon" />
               <p>Exportar a Excel</p>
+            </button>
+
+            <button
+              className="prev-btn prev-hover prev-btn-add"
+              onClick={() => navigate('/previas/agregar')}
+              aria-label="Agregar Previa"
+              title="Agregar Previa"
+            >
+              <FaPlus className="prev-btn-icon" />
+              <p>Agregar Previa</p>
             </button>
 
             <button

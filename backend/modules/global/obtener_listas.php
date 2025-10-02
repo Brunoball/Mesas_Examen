@@ -21,7 +21,7 @@ try {
 
     // AREAS
     $sql = "SELECT id_area AS id, area AS nombre
-            FROM mesas_examen.areas
+            FROM areas
             ORDER BY area ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
         $listas['areas'][] = [
@@ -32,7 +32,7 @@ try {
 
     // CARGOS
     $sql = "SELECT id_cargo AS id, cargo AS nombre
-            FROM mesas_examen.cargos
+            FROM cargos
             ORDER BY cargo ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
         $listas['cargos'][] = [
@@ -43,7 +43,7 @@ try {
 
     // CONDICIONES
     $sql = "SELECT id_condicion AS id, condicion AS nombre
-            FROM mesas_examen.condicion
+            FROM condicion
             ORDER BY condicion ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
         $listas['condiciones'][] = [
@@ -54,7 +54,7 @@ try {
 
     // CURSOS - EXCLUYENDO id_curso = 8
     $sql = "SELECT id_curso AS id, nombre_curso AS nombre
-            FROM mesas_examen.curso
+            FROM curso
             WHERE id_curso != 8
             ORDER BY nombre_curso ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
@@ -66,7 +66,7 @@ try {
 
     // DIVISIONES
     $sql = "SELECT id_division AS id, nombre_division AS nombre
-            FROM mesas_examen.division
+            FROM division
             ORDER BY nombre_division ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
         $listas['divisiones'][] = [
@@ -77,7 +77,7 @@ try {
 
     // TURNOS 🔹 nuevo bloque
     $sql = "SELECT id_turno AS id, turno AS nombre
-            FROM mesas_examen.turnos
+            FROM turnos
             ORDER BY turno ASC";
     foreach ($pdo->query($sql, PDO::FETCH_ASSOC) as $row) {
         $listas['turnos'][] = [

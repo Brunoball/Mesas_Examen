@@ -1,3 +1,4 @@
+// src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
@@ -13,8 +14,10 @@ import ProfesorBaja from './components/Profesores/ProfesorBaja';
 
 // 📚 Previas
 import Previas from './components/Previas/Previas';
+import AgregarPrevia from './components/Previas/AgregarPrevia';
+import EditarPrevia from './components/Previas/EditarPrevia'; // ⬅️ NUEVO
 
-// 🏛️ Cátedras (NUEVO)
+// 🏛️ Cátedras
 import Catedras from './components/Catedras/Catedras';
 
 function App() {
@@ -23,8 +26,8 @@ function App() {
       <Routes>
         {/* Públicas */}
         <Route path="/" element={<Inicio />} />
-        {/* Si Registro debe ser público, cambiá RutaProtegida por element={<Registro />} */}
-        <Route path="/registro" element={<RutaProtegida componente={<Registro />} />} />
+        {/* Si Registro debe ser público, dejalo así; si no, envolvelo con RutaProtegida */}
+        <Route path="/registro" element={<Registro />} />
 
         {/* Panel principal */}
         <Route path="/panel" element={<RutaProtegida componente={<Principal />} />} />
@@ -37,6 +40,8 @@ function App() {
 
         {/* Previas */}
         <Route path="/previas" element={<RutaProtegida componente={<Previas />} />} />
+        <Route path="/previas/agregar" element={<RutaProtegida componente={<AgregarPrevia />} />} />
+        <Route path="/previas/editar/:id_previa" element={<RutaProtegida componente={<EditarPrevia />} />} /> {/* ⬅️ NUEVO */}
 
         {/* Cátedras (acceso como Previas/Alumnos) */}
         <Route path="/catedras" element={<RutaProtegida componente={<Catedras />} />} />
@@ -49,8 +54,11 @@ function App() {
 }
 
 function getUsuario() {
-  try { return JSON.parse(localStorage.getItem('usuario')); }
-  catch { return null; }
+  try {
+    return JSON.parse(localStorage.getItem('usuario'));
+  } catch {
+    return null;
+  }
 }
 
 function RutaProtegida({ componente }) {

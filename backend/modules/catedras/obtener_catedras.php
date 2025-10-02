@@ -35,8 +35,8 @@ try {
         $params[':busq'] = '%' . $q . '%';
     }
 
-    // IMPORTANTE:
-    // En tu tabla catedras NO existe "carga_horaria" (ver DESCRIBE que pasaste).
+    // NOTA:
+    // En tu tabla catedras NO existe "carga_horaria".
     // Para no romper, devolvemos NULL como "carga".
     $sql = "
         SELECT
@@ -50,11 +50,11 @@ try {
             c.id_docente,
             dct.docente,
             NULL AS carga
-        FROM mesas_examen.catedras AS c
-        INNER JOIN mesas_examen.curso     AS cu  ON cu.id_curso     = c.id_curso
-        INNER JOIN mesas_examen.division  AS dv  ON dv.id_division  = c.id_division
-        INNER JOIN mesas_examen.materias  AS m   ON m.id_materia    = c.id_materia
-        LEFT  JOIN mesas_examen.docentes  AS dct ON dct.id_docente  = c.id_docente
+        FROM catedras AS c
+        INNER JOIN curso     AS cu  ON cu.id_curso     = c.id_curso
+        INNER JOIN division  AS dv  ON dv.id_division  = c.id_division
+        INNER JOIN materias  AS m   ON m.id_materia    = c.id_materia
+        LEFT  JOIN docentes  AS dct ON dct.id_docente  = c.id_docente
         " . (count($where) ? "WHERE " . implode(' AND ', $where) : "") . "
         ORDER BY cu.nombre_curso, dv.nombre_division, m.materia
     ";

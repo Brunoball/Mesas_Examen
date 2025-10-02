@@ -19,6 +19,11 @@ try {
     $solo = isset($_GET['solo']) ? trim((string)$_GET['solo']) : ''; // '', 'inscriptos', 'pendientes'
 
     // Base query
+    // 👉 Incluimos los IDs crudos que el frontend necesita (alias EXACTOS):
+    //     - p.cursando_id_curso          AS cursando_id_curso
+    //     - p.cursando_id_division       AS cursando_id_division
+    //     - p.materia_id_curso           AS materia_id_curso
+    //     - p.materia_id_division        AS materia_id_division
     $sql = "
         SELECT
             p.id_previa,
@@ -30,28 +35,34 @@ try {
             p.id_condicion,
             COALESCE(p.inscripcion, 0) AS inscripcion,
 
-            -- Nombres mostrables con alias que espera el frontend
+            -- IDs crudos para el formulario de edición
+            p.cursando_id_curso    AS cursando_id_curso,
+            p.cursando_id_division AS cursando_id_division,
+            p.materia_id_curso     AS materia_id_curso,
+            p.materia_id_division  AS materia_id_division,
+
+            -- Nombres mostrables (por si los querés en listados)
             m.materia                                   AS materia_nombre,
             c.condicion                                 AS condicion_nombre,
 
-            -- Curso/división de la MATERIA
+            -- Curso/división de la MATERIA (solo nombres)
             cur_materia.nombre_curso                    AS materia_curso_nombre,
             div_materia.nombre_division                 AS materia_division_nombre,
             CONCAT(cur_materia.nombre_curso, '° ', div_materia.nombre_division) AS materia_curso_division,
 
-            -- Curso/división del ALUMNO (cursando)
+            -- Curso/división del ALUMNO (cursando) (solo nombres)
             cur_cursando.nombre_curso                   AS cursando_curso_nombre,
             div_cursando.nombre_division                AS cursando_division_nombre
 
-        FROM mesas_examen.previas   p
-        LEFT JOIN mesas_examen.materias   m           ON m.id_materia            = p.id_materia
-        LEFT JOIN mesas_examen.condicion  c           ON c.id_condicion          = p.id_condicion
+        FROM previas   p
+        LEFT JOIN materias   m           ON m.id_materia            = p.id_materia
+        LEFT JOIN condicion  c           ON c.id_condicion          = p.id_condicion
 
-        LEFT JOIN mesas_examen.curso      cur_materia ON cur_materia.id_curso    = p.materia_id_curso
-        LEFT JOIN mesas_examen.division   div_materia ON div_materia.id_division = p.materia_id_division
+        LEFT JOIN curso      cur_materia  ON cur_materia.id_curso     = p.materia_id_curso
+        LEFT JOIN division   div_materia  ON div_materia.id_division  = p.materia_id_division
 
-        LEFT JOIN mesas_examen.curso      cur_cursando ON cur_cursando.id_curso    = p.cursando_id_curso
-        LEFT JOIN mesas_examen.division   div_cursando ON div_cursando.id_division = p.cursando_id_division
+        LEFT JOIN curso      cur_cursando ON cur_cursando.id_curso    = p.cursando_id_curso
+        LEFT JOIN division   div_cursando ON div_cursando.id_division = p.cursando_id_division
 
         /**WHERE**/
         ORDER BY p.fecha_carga DESC, p.alumno ASC

@@ -19,7 +19,7 @@ try {
             d.docente,                  -- 'APELLIDO, NOMBRE'
             d.fecha_carga AS fecha_baja,
             d.motivo
-        FROM mesas_examen.docentes d
+        FROM docentes d
         WHERE d.activo = 0
         ORDER BY d.docente ASC
     ";

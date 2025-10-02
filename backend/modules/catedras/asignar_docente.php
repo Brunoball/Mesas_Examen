@@ -18,7 +18,7 @@ try {
         exit;
     }
 
-    $raw = file_get_contents('php://input') ?: '';
+    $raw  = file_get_contents('php://input') ?: '';
     $data = json_decode($raw, true);
     if (!is_array($data)) {
         http_response_code(400);
@@ -36,8 +36,8 @@ try {
         exit;
     }
 
-    // Validar existencia cátedra
-    $st = $pdo->prepare("SELECT c.id_catedra FROM mesas_examen.catedras AS c WHERE c.id_catedra = :id");
+    // Validar existencia de la cátedra (sin prefijo de base)
+    $st = $pdo->prepare("SELECT id_catedra FROM catedras WHERE id_catedra = :id");
     $st->execute([':id' => $idCatedra]);
     if (!$st->fetch(PDO::FETCH_ASSOC)) {
         http_response_code(404);
@@ -45,9 +45,9 @@ try {
         exit;
     }
 
-    // Si se envía id_docente, validar existencia
+    // Si se envía id_docente, validar existencia (sin prefijo de base)
     if ($idDocente !== null) {
-        $sd = $pdo->prepare("SELECT d.id_docente FROM mesas_examen.docentes AS d WHERE d.id_docente = :id");
+        $sd = $pdo->prepare("SELECT id_docente FROM docentes WHERE id_docente = :id");
         $sd->execute([':id' => $idDocente]);
         if (!$sd->fetch(PDO::FETCH_ASSOC)) {
             http_response_code(404);
@@ -57,8 +57,9 @@ try {
     }
 
     // Actualizar asignación (permite null para quitar docente si quisieras)
-    $sql = "UPDATE mesas_examen.catedras SET id_docente = :id_docente WHERE id_catedra = :id_catedra";
-    $up = $pdo->prepare($sql);
+    $sql = "UPDATE catedras SET id_docente = :id_docente WHERE id_catedra = :id_catedra";
+    $up  = $pdo->prepare($sql);
+
     if ($idDocente === null) {
         $up->bindValue(':id_docente', null, PDO::PARAM_NULL);
     } else {

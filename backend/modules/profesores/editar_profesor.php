@@ -20,7 +20,7 @@ try {
             exit;
         }
 
-        // Traer profesor con turnos/fechas y fecha_carga
+        // Traer profesor con turnos/fechas y fecha_carga (sin prefijo de BD)
         $sqlP = "
             SELECT
                 d.id_docente   AS id_profesor,
@@ -37,10 +37,10 @@ try {
                 d.fecha_no,
 
                 d.fecha_carga
-            FROM mesas_examen.docentes d
-            LEFT JOIN mesas_examen.cargos  c  ON c.id_cargo  = d.id_cargo
-            LEFT JOIN mesas_examen.turnos  ts ON ts.id_turno = d.id_turno_si
-            LEFT JOIN mesas_examen.turnos  tn ON tn.id_turno = d.id_turno_no
+            FROM docentes d
+            LEFT JOIN cargos  c  ON c.id_cargo  = d.id_cargo
+            LEFT JOIN turnos  ts ON ts.id_turno = d.id_turno_si
+            LEFT JOIN turnos  tn ON tn.id_turno = d.id_turno_no
             WHERE d.id_docente = :id
             LIMIT 1
         ";
@@ -54,10 +54,10 @@ try {
         }
 
         // Listas
-        $sqlC = "SELECT id_cargo, cargo FROM mesas_examen.cargos ORDER BY cargo ASC";
+        $sqlC = "SELECT id_cargo, cargo FROM cargos ORDER BY cargo ASC";
         $cargos = $pdo->query($sqlC)->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-        $sqlT = "SELECT id_turno, turno FROM mesas_examen.turnos ORDER BY turno ASC";
+        $sqlT = "SELECT id_turno, turno FROM turnos ORDER BY turno ASC";
         $turnos = $pdo->query($sqlT)->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         echo json_encode([
@@ -133,14 +133,14 @@ try {
             exit;
         }
 
-        // (Opcional) validar que los turnos existan si vienen informados
+        // (Opcional) validar que los turnos existan si vienen informados (sin prefijo de BD)
         if ($id_turno_si !== null) {
-            $chk = $pdo->prepare("SELECT 1 FROM mesas_examen.turnos WHERE id_turno = ?");
+            $chk = $pdo->prepare("SELECT 1 FROM turnos WHERE id_turno = ?");
             $chk->execute([$id_turno_si]);
             if (!$chk->fetchColumn()) $id_turno_si = null;
         }
         if ($id_turno_no !== null) {
-            $chk = $pdo->prepare("SELECT 1 FROM mesas_examen.turnos WHERE id_turno = ?");
+            $chk = $pdo->prepare("SELECT 1 FROM turnos WHERE id_turno = ?");
             $chk->execute([$id_turno_no]);
             if (!$chk->fetchColumn()) $id_turno_no = null;
         }
@@ -150,7 +150,7 @@ try {
         if ($nombre !== '') $docente .= ', ' . $nombre;
 
         $sqlU = "
-            UPDATE mesas_examen.docentes
+            UPDATE docentes
                SET docente     = :docente,
                    id_cargo    = :id_cargo,
                    id_turno_si = :id_turno_si,

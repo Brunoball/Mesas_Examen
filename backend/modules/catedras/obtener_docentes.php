@@ -20,7 +20,7 @@ try {
             d.id_cargo,
             d.activo,
             DATE_FORMAT(d.fecha_carga, '%Y-%m-%d') AS fecha_carga
-        FROM mesas_examen.docentes AS d
+        FROM docentes AS d
         " . ($soloActivos === 1 ? "WHERE d.activo = 1" : "") . "
         ORDER BY d.docente ASC
     ";
@@ -32,5 +32,8 @@ try {
 
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode(['exito' => false, 'mensaje' => 'Error al obtener docentes: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        'exito'   => false,
+        'mensaje' => 'Error al obtener docentes: ' . $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
 }

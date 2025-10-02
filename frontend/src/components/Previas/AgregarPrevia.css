@@ -1,0 +1,279 @@
+/* =========================================================
+   Agregar Previa — Diseño alineado con Agregar Alumno
+   (gradiente en header, card clara, labels flotantes,
+   botones primarios rojos, responsive)
+   ========================================================= */
+
+/* ==============================
+   Contenedor y caja
+============================== */
+.prev-add-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  /* Usamos mismos tokens que en roots.css */
+  background: linear-gradient(
+    135deg,
+    var(--gray-100, #f1f5f9) 30%,
+    var(--primary-500, #64748b) 70%
+  );
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1));
+  overflow: hidden;
+}
+
+.prev-add-box {
+  position: relative;
+  width: 90%;
+  max-width: 1100px;
+  background: var(--surface-color, #ffffff);
+  border-radius: var(--border-radius-lg, 12px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-primary, #0f172a);
+  box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.15);
+  margin: 4vh 0;
+}
+
+/* ==============================
+   Header (gradiente)
+============================== */
+.prev-add-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 2rem 1rem;
+  background: var(--gradient-primary, linear-gradient(135deg, #64748b, #334155));
+  color: var(--text-on-primary, #fff);
+  border-radius: var(--border-radius-lg, 12px) var(--border-radius-lg, 12px) 0 0;
+}
+
+.prev-add-icon-title {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.prev-add-icon { font-size: 1.6rem; }
+.prev-add-icon-title h1 { margin: 0; font-weight: 700; }
+.prev-add-icon-title p { margin: 0; opacity: .95; }
+
+.prev-add-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem 1rem;
+  border-radius: var(--border-radius, 8px);
+  background: rgb(255 255 255 / 0.12);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  color: var(--text-on-primary, #fff);
+  cursor: pointer;
+  transition: var(--transition-smooth, all .25s cubic-bezier(.4,0,.2,1));
+}
+.prev-add-back-btn:hover { background: rgb(255 255 255 / 0.22); }
+
+/* ==============================
+   Wrapper del formulario
+============================== */
+.prev-add-form-wrapper {
+  padding: 16px 18px 22px;
+}
+
+/* Alerts (éxito / error) alineadas al nuevo theme */
+.prev-add-alert {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+}
+.prev-add-alert.error {
+  background: rgba(255, 67, 67, 0.10);
+  border: 1px solid rgba(255, 67, 67, 0.45);
+  color: #b91c1c;
+}
+.prev-add-alert.success {
+  background: rgba(36, 197, 110, 0.10);
+  border: 1px solid rgba(36, 197, 110, 0.45);
+  color: #065f46;
+}
+
+/* ==============================
+   Form base
+============================== */
+.prev-add-form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grid 3 → 2 → 1 */
+.prev-add-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 16px;
+  margin-top: 4px;
+}
+
+@media (max-width: 1100px) {
+  .prev-add-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .prev-add-grid { grid-template-columns: 1fr; }
+}
+
+/* ==============================
+   Inputs + labels flotantes
+============================== */
+.prev-input-wrapper { position: relative; width: 100%; }
+
+.prev-label {
+  position: absolute;
+  top: .8rem; left: .9rem;
+  font-size: .9rem;
+  color: var(--text-secondary, #475569);
+  pointer-events: none;
+  transition: var(--transition-smooth, all .25s cubic-bezier(.4,0,.2,1));
+  display: flex; align-items: center;
+  background: transparent;
+  z-index: 2;
+}
+
+.prev-input {
+  width: 100%;
+  padding: .85rem 1rem;
+  font-size: .95rem;
+  border-radius: var(--border-radius, 8px);
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: rgb(255 255 255 / 0.96);
+  transition: var(--transition-smooth, all .25s cubic-bezier(.4,0,.2,1));
+  color: var(--text-primary, #0f172a);
+}
+.prev-input:focus {
+  outline: none;
+  border-color: var(--border-focus, #3b82f6);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.25);
+  background: #fff;
+}
+
+.prev-input-highlight {
+  position: absolute; bottom: 0; left: 0;
+  width: 0; height: 2px;
+  background: var(--gradient-accent, linear-gradient(90deg, #64748b, #334155));
+  transition: var(--transition-smooth, all .25s cubic-bezier(.4,0,.2,1));
+}
+.prev-input:focus ~ .prev-input-highlight { width: 100%; }
+
+/* Label flota cuando hay valor o foco */
+.prev-input-wrapper.has-value .prev-label,
+.prev-input:focus ~ .prev-label {
+  transform: translateY(-1.35rem) scale(.85);
+  background: linear-gradient(135deg, rgb(255 255 255 / .98) 0%, rgb(248 250 252 / .98) 100%);
+  color: var(--primary-color, #334155);
+  font-weight: 600;
+  padding: 0 .4rem;
+  left: .75rem;
+}
+
+/* Selects y controles "siempre activos" (chip arriba) */
+.prev-input-wrapper.always-active .prev-label {
+  transform: translateY(-1.35rem) scale(.85);
+  background: linear-gradient(135deg, rgb(255 255 255 / .98) 0%, rgb(248 250 252 / .98) 100%);
+  color: var(--primary-color, #334155);
+  font-weight: 700;
+  padding: 0 .4rem;
+  left: .75rem;
+  z-index: 3;
+}
+.prev-input-wrapper select.prev-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right .75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
+  color: var(--text-primary, #0f172a);
+}
+
+/* ==============================
+   Botonera inferior (idéntica lógica)
+============================== */
+.prev-add-buttons {
+  display: flex;
+  justify-content: space-between;
+  padding: .75rem 2rem 1rem;
+  gap: .75rem;
+}
+
+.prev-add-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: .5rem; padding: .75rem 1.5rem; font-size: .95rem; font-weight: 700;
+  border-radius: var(--border-radius, 8px); cursor: pointer; transition: var(--transition-smooth, all .25s cubic-bezier(.4,0,.2,1));
+  border: 1px solid var(--danger-600, #dc2626);
+  background: var(--danger-600, #dc2626);
+  color: #fff;
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1));
+}
+.prev-add-button:hover:not(:disabled) {
+  background: #fff;
+  color: var(--danger-600, #dc2626);
+  border-color: var(--danger-600, #dc2626);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+}
+.prev-add-button:disabled {
+  opacity: .75; cursor: not-allowed;
+  background: var(--danger-400, #f87171);
+  border-color: var(--danger-400, #f87171);
+}
+
+.prev-add-button--back {
+  background: var(--surface-secondary, #f1f5f9);
+  color: var(--text-primary, #0f172a);
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+.prev-add-button--back:hover { background: var(--gray-200, #e2e8f0); }
+
+/* ==============================
+   Responsive
+============================== */
+@media (max-width: 992px) {
+  .prev-add-container {
+    width: 100vw;
+    min-height: 100vh;
+    border-radius: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .prev-add-box { width: 100%; border-radius: 0; }
+  .prev-add-form-wrapper { padding: .75rem 1rem 1.25rem; }
+  .prev-add-buttons { padding: .5rem 1rem 1rem; }
+}
+@media (max-width: 768px) {
+  .prev-add-header { padding: 2rem; border-radius: 0; }
+  .prev-add-icon { font-size: 1.5rem; }
+  .prev-add-icon-title h1 { font-size: 1.1rem; }
+  .prev-add-icon-title p { display: none; }
+  .prev-add-buttons { position: static; gap: .75rem; }
+  .prev-add-button { flex: 1 1 auto; min-height: 42px; }
+}
+@media (max-width: 576px) {
+  .prev-add-header { padding: 2rem; }
+  .prev-add-back-btn { padding: .45rem .75rem; font-size: .9rem; }
+  .prev-add-buttons { padding: .6rem .75rem 1rem; }
+  .prev-add-button { width: 100%; }
+}
+@media (max-width: 380px) {
+  .prev-add-icon-title h1 { font-size: 1.05rem; }
+  .prev-add-button { padding: .65rem .75rem; font-size: .9rem; }
+}
+
+/* (opcional) scrollbar suave dentro del form si algún contenedor hace overflow */
+.prev-add-form-wrapper ::-webkit-scrollbar { height: 10px; width: 10px; }
+.prev-add-form-wrapper ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.18); border-radius: 10px;
+}
+.prev-add-form-wrapper ::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.06); border-radius: 10px;
+}

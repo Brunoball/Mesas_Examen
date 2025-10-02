@@ -63,14 +63,14 @@ try {
             d.activo,
             d.motivo
 
-        FROM mesas_examen.docentes d
-        LEFT JOIN mesas_examen.cargos    c  ON c.id_cargo    = d.id_cargo
-        LEFT JOIN mesas_examen.turnos    ts ON ts.id_turno   = d.id_turno_si
-        LEFT JOIN mesas_examen.turnos    tn ON tn.id_turno   = d.id_turno_no
-        LEFT JOIN mesas_examen.catedras  ct ON ct.id_docente = d.id_docente
-        LEFT JOIN mesas_examen.materias  m  ON m.id_materia  = ct.id_materia
-        LEFT JOIN mesas_examen.curso     cu ON cu.id_curso   = ct.id_curso
-        LEFT JOIN mesas_examen.division  dv ON dv.id_division= ct.id_division
+        FROM docentes d
+        LEFT JOIN cargos    c  ON c.id_cargo    = d.id_cargo
+        LEFT JOIN turnos    ts ON ts.id_turno   = d.id_turno_si
+        LEFT JOIN turnos    tn ON tn.id_turno   = d.id_turno_no
+        LEFT JOIN catedras  ct ON ct.id_docente = d.id_docente
+        LEFT JOIN materias  m  ON m.id_materia  = ct.id_materia
+        LEFT JOIN curso     cu ON cu.id_curso   = ct.id_curso
+        LEFT JOIN division  dv ON dv.id_division= ct.id_division
         $where
         GROUP BY
             d.id_docente, d.docente,

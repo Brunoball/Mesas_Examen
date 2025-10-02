@@ -12,7 +12,7 @@ try {
     $pdo->exec("SET NAMES utf8mb4");
 
     // Solo JSON
-    $raw = file_get_contents('php://input');
+    $raw  = file_get_contents('php://input');
     $body = json_decode($raw, true);
     if (!is_array($body)) {
         http_response_code(400);
@@ -26,8 +26,8 @@ try {
     // 🔹 Nuevos campos (opcionales)
     $id_turno_si = array_key_exists('id_turno_si', $body) ? $body['id_turno_si'] : null;
     $id_turno_no = array_key_exists('id_turno_no', $body) ? $body['id_turno_no'] : null;
-    $fecha_si    = array_key_exists('fecha_si', $body)    ? $body['fecha_si']    : null;
-    $fecha_no    = array_key_exists('fecha_no', $body)    ? $body['fecha_no']    : null;
+    $fecha_si    = array_key_exists('fecha_si',    $body) ? $body['fecha_si']    : null;
+    $fecha_no    = array_key_exists('fecha_no',    $body) ? $body['fecha_no']    : null;
 
     if ($docente === '' || $id_cargo <= 0) {
         http_response_code(400);
@@ -57,19 +57,19 @@ try {
 
     // (Opcional) validar que los turnos existan si vienen informados
     if ($id_turno_si !== null) {
-        $chk = $pdo->prepare("SELECT 1 FROM mesas_examen.turnos WHERE id_turno = ?");
+        $chk = $pdo->prepare("SELECT 1 FROM turnos WHERE id_turno = ?");
         $chk->execute([$id_turno_si]);
         if (!$chk->fetchColumn()) $id_turno_si = null;
     }
     if ($id_turno_no !== null) {
-        $chk = $pdo->prepare("SELECT 1 FROM mesas_examen.turnos WHERE id_turno = ?");
+        $chk = $pdo->prepare("SELECT 1 FROM turnos WHERE id_turno = ?");
         $chk->execute([$id_turno_no]);
         if (!$chk->fetchColumn()) $id_turno_no = null;
     }
 
-    // Insert (fecha_carga se completa sola por default; activo default 1)
+    // Insert (fecha_carga default, activo default 1)
     $sql = "
-        INSERT INTO mesas_examen.docentes
+        INSERT INTO docentes
             (docente, id_cargo, id_turno_si, id_turno_no, fecha_si, fecha_no)
         VALUES
             (:docente, :id_cargo, :id_turno_si, :id_turno_no, :fecha_si, :fecha_no)
@@ -87,9 +87,9 @@ try {
     $id = (int)$pdo->lastInsertId();
 
     echo json_encode([
-        'exito'       => true,
-        'mensaje'     => 'Docente creado',
-        'id_docente'  => $id,
+        'exito'      => true,
+        'mensaje'    => 'Docente creado',
+        'id_docente' => $id,
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
