@@ -652,3 +652,62 @@
   opacity: .95;
   margin-top: 6px;
 }
+
+.materia-card.inscripto { opacity: .55; filter: grayscale(0.8); cursor: not-allowed; }
+.badge-inscripto { margin-left:.5rem; font-size:.72rem; padding:.08rem .4rem; border-radius:.5rem; border:1px solid currentColor; }
+
+
+/* Ventana abierta/cerrada pill */
+.ventana-pill {
+  display: inline-block;
+  margin-top: .5rem;
+  padding: .35rem .6rem;
+  border-radius: 999px;
+  font-size: .9rem;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+.ventana-pill.is-open {
+  background: #e7f6ee;
+  color: #0f6e3d;
+  border-color: #bfe8d1;
+}
+.ventana-pill.is-closed {
+  background: #fdecea;
+  color: #9f2a1a;
+  border-color: #f5c6c1;
+}
+
+/* Grid deshabilitada si cerrada (solo aspecto visual extra) */
+.materias-grid.is-disabled {
+  opacity: .7;
+  pointer-events: none;
+}
+
+/* Pantalla cerrada */
+.closed-box {
+  padding: .8rem 1rem;
+  background: #f7f7f9;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+.closed-list {
+  margin: .5rem 0 0;
+  padding-left: 1.2rem;
+}
+.loading-center {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  gap: .75rem;
+  color: #444;
+}
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #ddd;
+  border-top-color: #444;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

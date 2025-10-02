@@ -2,13 +2,14 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faUsers,              // Alumnos
+  faUsers,              // (no se usa aquí, pero lo podés dejar si luego agregás Alumnos)
   faUserPlus,           // Registro
   faClipboardList,      // Mesas de Examen
   faChalkboardTeacher,  // Profesores
   faSignOutAlt,         // Salir
   faFileAlt,            // Previas
-  faBookOpen            // Cátedras (NUEVO)
+  faBookOpen,           // Cátedras
+  faCogs                // ⚙️ Configurar formulario (NUEVO)
 } from "@fortawesome/free-solid-svg-icons";
 import logoRH from "../../imagenes/Escudo.png";
 import "./principal.css";
@@ -101,21 +102,23 @@ const Principal = () => {
   const role = (usuario?.rol || "").toLowerCase();
   const isAdmin = role === "admin";
 
-  // ✅ Cajas del menú principal (AGREGADA CÁTEDRAS)
+  // ✅ Cajas del menú principal (incluye nueva caja "Configurar formulario")
+  // Nota: si luego agregás la ruta /alumnos, podés incluirla también.
   const menuItems = [
-    { icon: faClipboardList,     text: "Mesas de Examen", ruta: "/mesas-examen" },
-    { icon: faFileAlt,           text: "Previas",         ruta: "/previas" },
-    { icon: faBookOpen,          text: "Cátedras",        ruta: "/catedras" }, // NUEVA CAJA
-    { icon: faChalkboardTeacher, text: "Profesores",      ruta: "/profesores" },
-    { icon: faUserPlus,          text: "Registro",        ruta: "/registro" }
+    { icon: faClipboardList,     text: "Mesas de Examen",        ruta: "/mesas-examen" },
+    { icon: faFileAlt,           text: "Previas",                ruta: "/previas" },
+    { icon: faBookOpen,          text: "Cátedras",               ruta: "/catedras" },
+    { icon: faChalkboardTeacher, text: "Profesores",             ruta: "/profesores" },
+    { icon: faUserPlus,          text: "Registro",               ruta: "/registro" },
+    { icon: faCogs,              text: "Configurar formulario",  ruta: "/config-formulario", adminOnly: true }, // ⭐ NUEVA
   ];
 
   // 🔒 Visibilidad por rol:
   // - Admin ve todo
-  // - No admin: Alumnos, Previas y Cátedras (consulta)
+  // - No admin: NO ve las cajas marcadas adminOnly
   const visibleItems = isAdmin
     ? menuItems
-    : menuItems.filter((m) => ["/alumnos", "/previas", "/catedras"].includes(m.ruta));
+    : menuItems.filter((m) => !m.adminOnly);
 
   const handleItemClick = (item) => {
     navigate(item.ruta);
@@ -163,6 +166,7 @@ const Principal = () => {
                 className="menu-button"
                 onClick={() => handleItemClick(item)}
                 aria-label={item.text}
+                title={item.text}
               >
                 <div className="button-icon">
                   <FontAwesomeIcon icon={item.icon} size="lg" />

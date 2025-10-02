@@ -15,10 +15,13 @@ import ProfesorBaja from './components/Profesores/ProfesorBaja';
 // 📚 Previas
 import Previas from './components/Previas/Previas';
 import AgregarPrevia from './components/Previas/AgregarPrevia';
-import EditarPrevia from './components/Previas/EditarPrevia'; // ⬅️ NUEVO
+import EditarPrevia from './components/Previas/EditarPrevia';
 
 // 🏛️ Cátedras
 import Catedras from './components/Catedras/Catedras';
+
+// ⚙️ Configurar formulario (NUEVO)
+import ConfigForm from './components/ConfigFormulario/ConfigForm';
 
 function App() {
   return (
@@ -26,7 +29,6 @@ function App() {
       <Routes>
         {/* Públicas */}
         <Route path="/" element={<Inicio />} />
-        {/* Si Registro debe ser público, dejalo así; si no, envolvelo con RutaProtegida */}
         <Route path="/registro" element={<Registro />} />
 
         {/* Panel principal */}
@@ -38,13 +40,16 @@ function App() {
         <Route path="/profesores/editar/:id" element={<RutaAdmin componente={<EditarProfesor />} />} />
         <Route path="/profesores/baja" element={<RutaAdmin componente={<ProfesorBaja />} />} />
 
-        {/* Previas */}
+        {/* Previas (protegido) */}
         <Route path="/previas" element={<RutaProtegida componente={<Previas />} />} />
         <Route path="/previas/agregar" element={<RutaProtegida componente={<AgregarPrevia />} />} />
-        <Route path="/previas/editar/:id_previa" element={<RutaProtegida componente={<EditarPrevia />} />} /> {/* ⬅️ NUEVO */}
+        <Route path="/previas/editar/:id_previa" element={<RutaProtegida componente={<EditarPrevia />} />} />
 
-        {/* Cátedras (acceso como Previas/Alumnos) */}
+        {/* Cátedras (protegido) */}
         <Route path="/catedras" element={<RutaProtegida componente={<Catedras />} />} />
+
+        {/* Configurar Formulario (sólo ADMIN) */}
+        <Route path="/config-formulario" element={<RutaAdmin componente={<ConfigForm />} />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

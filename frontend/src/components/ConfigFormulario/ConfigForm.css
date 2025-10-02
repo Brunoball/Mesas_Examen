@@ -1,0 +1,198 @@
+/* ===========================
+   Configurar Formulario — UI
+   =========================== */
+
+/* Paleta de la escuela (rojo y azul) */
+:root {
+  --esc-rojo: #b71c1c;
+  --esc-rojo-oscuro: #7f0000;
+  --esc-azul: #1d428a;
+  --esc-blanco: #ffffff;
+  --esc-gris: #f1f5f9;
+  --esc-sombra: rgba(0, 0, 0, 0.2);
+}
+
+/* ------- Page ------- */
+.page-wrap {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  background: transparent;
+}
+
+/* ------- Card ------- */
+.card {
+  width: 100%;
+  max-width: 700px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 8px 20px var(--esc-sombra);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  padding: 20px;
+  background: linear-gradient(90deg, var(--esc-rojo), var(--esc-azul));
+  color: white;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: bold;
+}
+
+.page-subtitle {
+  margin: 0;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--esc-gris);
+}
+
+/* ------- Alerts ------- */
+.alert {
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0 14px;
+  font-size: 0.95rem;
+}
+
+.alert-danger {
+  background: #fef2f2;
+  color: var(--esc-rojo-oscuro);
+  border: 1px solid #fecaca;
+}
+
+.alert-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+/* ------- Form ------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+
+.form-field {
+  grid-column: span 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field--full {
+  grid-column: 1 / -1;
+}
+
+.form-label {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: var(--esc-azul);
+}
+
+.form-input {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  transition: 0.2s ease;
+  cursor: pointer; /* 👉 cualquier parte clickeable */
+}
+
+.form-input:focus {
+  border-color: var(--esc-rojo);
+  box-shadow: 0 0 0 3px rgba(183, 28, 28, 0.25);
+}
+
+/* ------- Switch ------- */
+.form-switch {
+  grid-column: span 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-switch input[type="checkbox"] {
+  appearance: none;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: #ccc;
+  position: relative;
+  cursor: pointer;
+}
+
+.form-switch input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+}
+
+.form-switch input[type="checkbox"]:checked {
+  background: var(--esc-azul);
+}
+
+.form-switch input[type="checkbox"]:checked::after {
+  transform: translateX(18px);
+}
+
+/* ------- Preview ------- */
+.preview-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+/* ------- Buttons ------- */
+.btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.btn-ghost {
+  background: white;
+  border: 1px solid #ccc;
+}
+
+.btn-ghost:hover {
+  background: #f3f3f3;
+}
+
+.btn-primary {
+  background: var(--esc-rojo);
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background: var(--esc-rojo-oscuro);
+}

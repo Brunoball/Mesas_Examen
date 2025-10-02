@@ -88,7 +88,11 @@ try {
             include_module($MODULES_DIR . '/global/obtener_listas.php');
             break;
 
-        // -------- Formulario público --------
+        // -------- Formulario público (Mesas / Previas) --------
+        case 'form_obtener_config_inscripcion': // <--- NUEVO
+            include_module($MODULES_DIR . '/formulario/obtener_config_inscripcion.php');
+            break;
+
         case 'form_buscar_previas':
             include_module($MODULES_DIR . '/formulario/buscar_previas.php');
             break;
@@ -97,13 +101,15 @@ try {
             include_module($MODULES_DIR . '/formulario/registrar_inscripcion.php');
             break;
 
+        case 'admin_guardar_config_inscripcion':
+            include_module($MODULES_DIR . '/formulario/guardar_config_inscripcion.php');
+            break;
+
         // -------- Previas (Backoffice) --------
         case 'previas':
         case 'obtener_previas':
             include_module($MODULES_DIR . '/previas/obtener_previas.php');
             break;
-
-        
 
         // *** NUEVOS ENDPOINTS (Previas) ***
         case 'previa_eliminar':
@@ -114,11 +120,11 @@ try {
             include_module($MODULES_DIR . '/previas/desinscribir.php');
             break;
 
-        case 'previa_inscribir': // NUEVO
+        case 'previa_inscribir':
             include_module($MODULES_DIR . '/previas/inscribir.php');
             break;
 
-        case 'previa_agregar':   // NUEVO
+        case 'previa_agregar':
             include_module($MODULES_DIR . '/previas/agregar_previa.php');
             break;
 
@@ -133,7 +139,6 @@ try {
         case 'previa_get':
             include_module($MODULES_DIR . '/previas/obtener_previa.php');
             break;
-
 
         // -------- Profesores --------
         case 'profesores':
