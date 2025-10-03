@@ -1,27 +1,30 @@
-// src/App.jsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+/* Login / Registro / Panel */
 import Inicio from './components/Login/Inicio';
 import Principal from './components/Principal/Principal';
 import Registro from './components/Login/Registro';
 
-// 👩‍🏫 Profesores
+/* Profesores (admin) */
 import Profesores from './components/Profesores/Profesores';
 import AgregarProfesor from './components/Profesores/AgregarProfesor';
 import EditarProfesor from './components/Profesores/EditarProfesor';
 import ProfesorBaja from './components/Profesores/ProfesorBaja';
 
-// 📚 Previas
+/* Previas */
 import Previas from './components/Previas/Previas';
 import AgregarPrevia from './components/Previas/AgregarPrevia';
 import EditarPrevia from './components/Previas/EditarPrevia';
 
-// 🏛️ Cátedras
+/* Cátedras */
 import Catedras from './components/Catedras/Catedras';
 
-// ⚙️ Configurar formulario (NUEVO)
+/* Configurar Formulario (admin) */
 import ConfigForm from './components/ConfigFormulario/ConfigForm';
+
+/* ✅ Mesas de Examen (NUEVO) */
+import MesasExamen from './components/MesasExamen/MesasExamen';
 
 function App() {
   return (
@@ -34,7 +37,10 @@ function App() {
         {/* Panel principal */}
         <Route path="/panel" element={<RutaProtegida componente={<Principal />} />} />
 
-        {/* Rutas de Profesores (sólo ADMIN) */}
+        {/* Mesas de Examen (protegido) */}
+        <Route path="/mesas-examen" element={<RutaProtegida componente={<MesasExamen />} />} />
+
+        {/* Profesores (solo ADMIN) */}
         <Route path="/profesores" element={<RutaAdmin componente={<Profesores />} />} />
         <Route path="/profesores/agregar" element={<RutaAdmin componente={<AgregarProfesor />} />} />
         <Route path="/profesores/editar/:id" element={<RutaAdmin componente={<EditarProfesor />} />} />
@@ -48,7 +54,7 @@ function App() {
         {/* Cátedras (protegido) */}
         <Route path="/catedras" element={<RutaProtegida componente={<Catedras />} />} />
 
-        {/* Configurar Formulario (sólo ADMIN) */}
+        {/* Configurar Formulario (solo ADMIN) */}
         <Route path="/config-formulario" element={<RutaAdmin componente={<ConfigForm />} />} />
 
         {/* Fallback */}

@@ -15,7 +15,6 @@ import {
   FaInfoCircle,
   FaArrowLeft,
   FaFileExcel,
-  FaUserSlash,
   FaSearch,
   FaTimes,
   FaUsers,
@@ -24,7 +23,7 @@ import {
   FaTrash,
   FaPlus,
   FaEdit,
-  FaCheckCircle, // ⬅️ para botón Inscribir
+  FaCheckCircle,
 } from 'react-icons/fa';
 
 import * as XLSX from 'xlsx';
@@ -33,7 +32,6 @@ import Toast from '../Global/Toast';
 import InscribirModal from './InscribirModal';
 import ModalInfoPrevia from './modales/ModalInfoPrevia';
 import '../Global/roots.css';
-import './Previas.css';
 
 /* ================================
    Utils
@@ -82,13 +80,11 @@ function useIsMobile(breakpoint = 768) {
 ================================ */
 const Previas = () => {
   const [previas, setPrevias] = useState([]);
-  const [previasDB, setPreviasDB] = useState([]);
   const [cargando, setCargando] = useState(false);
 
   const [tab, setTab] = useState('todos'); // 'todos' | 'inscriptos'
 
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
-  const [bloquearInteraccion, setBloquearInteraccion] = useState(true);
 
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
@@ -109,7 +105,7 @@ const Previas = () => {
     division: false,
   });
 
-  // Modal genérico (eliminar / desinscribir)
+  // Modal confirmación (eliminar / desinscribir)
   const [modal, setModal] = useState({
     open: false,
     mode: null, // 'eliminar' | 'desinscribir'
@@ -118,7 +114,7 @@ const Previas = () => {
     error: '',
   });
 
-  // ➜ Modal para INSCRIBIR
+  // Modal INSCRIBIR
   const [modalIns, setModalIns] = useState({
     open: false,
     item: null,
@@ -126,7 +122,7 @@ const Previas = () => {
     error: '',
   });
 
-  // ➜ Modal INFO PREVIA
+  // Modal INFO PREVIA
   const [modalInfo, setModalInfo] = useState({
     open: false,
     item: null,
@@ -259,13 +255,6 @@ const Previas = () => {
   }, []);
 
   useEffect(() => {
-    if (previasFiltradas.length > 0) {
-      const timer = setTimeout(() => setBloquearInteraccion(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [previasFiltradas]);
-
-  useEffect(() => {
     const handleClickOutsideFiltros = (event) => {
       if (filtrosRef.current && !filtrosRef.current.contains(event.target)) {
         setMostrarFiltros(false);
@@ -294,7 +283,6 @@ const Previas = () => {
             materia_curso_division: `${p.materia_curso_nombre || ''} ${p.materia_division_nombre || ''}`.trim()
           }));
           setPrevias(procesados);
-          setPreviasDB(procesados);
         } else {
           mostrarToast(`Error al obtener previas: ${data?.mensaje || 'desconocido'}`, 'error');
         }
@@ -487,19 +475,19 @@ const Previas = () => {
     } catch (e) {
       setModal((m) => ({ ...m, loading: false, error: e.message || 'Error desconocido' }));
     }
-  }, [BASE_URL, modal, mostrarToast]);
+  }, [modal, mostrarToast]);
 
   const cancelarModal = useCallback(() => {
     if (modal.loading) return;
     setModal({ open: false, mode: null, item: null, loading: false, error: '' });
   }, [modal.loading]);
 
-  // ➜ Abrir modal INSCRIBIR
+  // Abrir modal INSCRIBIR
   const abrirModalInscribir = useCallback((p) => {
     setModalIns({ open: true, item: p, loading: false, error: '' });
   }, []);
 
-  // ➜ Confirmar INSCRIPCIÓN
+  // Confirmar INSCRIPCIÓN
   const confirmarInscripcion = useCallback(async () => {
     if (!modalIns.item) return;
     try {
@@ -527,14 +515,14 @@ const Previas = () => {
     } catch (e) {
       setModalIns((m) => ({ ...m, loading: false, error: e.message || 'Error desconocido' }));
     }
-  }, [BASE_URL, modalIns.item, mostrarToast]);
+  }, [modalIns.item, mostrarToast]);
 
   const cancelarInscripcion = useCallback(() => {
     if (modalIns.loading) return;
     setModalIns({ open: false, item: null, loading: false, error: '' });
   }, [modalIns.loading]);
 
-  // ➜ Modal Info (abrir/cerrar)
+  // Modal Info (abrir/cerrar)
   const abrirModalInfo = useCallback((p) => {
     setModalInfo({ open: true, item: p });
   }, []);
@@ -542,7 +530,7 @@ const Previas = () => {
     setModalInfo({ open: false, item: null });
   }, []);
 
-  // Exportar a Excel lo visible
+  // Exportar a Excel (solo lo visible)
   const exportarExcel = useCallback(() => {
     const puede = (hayFiltros || filtroActivo === 'todos') && previasFiltradas.length > 0 && !cargando;
     if (!puede) {
@@ -594,8 +582,6 @@ const Previas = () => {
 
   /* ================================
      Fila virtualizada (desktop)
-     ➜ Columna “Inscripción” separada y
-       columna final solo “Acciones”.
   ================================= */
   const Row = React.memo(({ index, style, data }) => {
     const p = data[index];
@@ -613,29 +599,25 @@ const Previas = () => {
           opacity: preMask ? 0 : undefined,
           transform: preMask ? 'translateY(8px)' : undefined,
         }}
-        className={`prev-row ${esFilaPar ? 'prev-even-row' : 'prev-odd-row'} ${willAnimate ? 'prev-cascade' : ''}`}
+        className={`glob-row ${esFilaPar ? 'glob-even-row' : 'glob-odd-row'} ${willAnimate ? 'glob-cascade' : ''}`}
       >
-        <div className="prev-column prev-column-nombre" title={p.alumno}>{p.alumno}</div>
-        <div className="prev-column prev-column-dni" title={p.dni}>{p.dni}</div>
-        <div className="prev-column prev-column-materia" title={p.materia_nombre}>{p.materia_nombre}</div>
-        <div className="prev-column prev-column-condicion" title={p.condicion_nombre}>{p.condicion_nombre}</div>
+        <div className="glob-column glob-column-nombre" title={p.alumno}>{p.alumno}</div>
+        <div className="glob-column glob-column-dni" title={p.dni}>{p.dni}</div>
+        <div className="glob-column" title={p.materia_nombre}>{p.materia_nombre}</div>
+        <div className="glob-column" title={p.condicion_nombre}>{p.condicion_nombre}</div>
 
-        {/* Curso y división ahora sin “/”, juntos */}
-        <div className="prev-column prev-column-curso-division" title={p.materia_curso_division}>
+        <div className="glob-column" title={p.materia_curso_division}>
           {p.materia_curso_division}
         </div>
 
-        {/* Columna “Inscripción” */}
-        <div className={`prev-column prev-column-inscripcion ${estado === 'INSCRIPTO' ? 'is-ok' : 'is-pend'}`}>
+        <div className={`glob-column ${estado === 'INSCRIPTO' ? 'glob-badge-ok' : 'glob-badge-warn'}`}>
           {estado}
         </div>
 
-        {/* Solo Acciones */}
-        <div className="prev-column prev-icons-column">
-          <div className="prev-icons-container">
-            {/* Info -> abre modal */}
+        <div className="glob-column glob-icons-column">
+          <div className="glob-icons-container">
             <button
-              className="prev-iconchip is-info"
+              className="glob-iconchip is-info"
               title="Ver información"
               onClick={() => abrirModalInfo(p)}
               aria-label="Ver información"
@@ -643,9 +625,8 @@ const Previas = () => {
               <FaInfoCircle />
             </button>
 
-            {/* Editar */}
             <button
-              className="prev-iconchip is-warn"
+              className="glob-iconchip is-edit"
               title="Editar"
               onClick={() => navigate(`/previas/editar/${p.id_previa}`)}
               aria-label="Editar"
@@ -653,10 +634,9 @@ const Previas = () => {
               <FaEdit />
             </button>
 
-            {/* Inscribir (solo si está pendiente) */}
             {estado === 'PENDIENTE' && (
               <button
-                className="prev-iconchip is-affirm"
+                className="glob-iconchip is-affirm"
                 title="Inscribir manualmente"
                 onClick={() => abrirModalInscribir(p)}
                 aria-label="Inscribir"
@@ -665,9 +645,8 @@ const Previas = () => {
               </button>
             )}
 
-            {/* Eliminar / Desinscribir */}
             <button
-              className="prev-iconchip is-danger"
+              className="glob-iconchip is-delete"
               title={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
               onClick={() => abrirModalAccion(p)}
               aria-label={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
@@ -686,8 +665,8 @@ const Previas = () => {
   const hayChips = !!(busqueda || cursoSeleccionado || divisionSeleccionada);
 
   return (
-    <div className="prev-container">
-      <div className="prev-box">
+    <div className="glob-profesor-container">
+      <div className="glob-profesor-box">
         {toast.mostrar && (
           <Toast
             tipo={toast.tipo}
@@ -699,37 +678,37 @@ const Previas = () => {
 
         {/* Modal Confirmación (eliminar / desinscribir) */}
         {modal.open && (
-          <div className="prev-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="prev-modal">
-              <div className="prev-modal-header">
+          <div className="glob-modal-backdrop" role="dialog" aria-modal="true">
+            <div className="glob-modal">
+              <div className="glob-modal-header">
                 <h3>
                   {modal.mode === 'desinscribir' ? 'Marcar como NO inscripto' : 'Eliminar registro'}
                 </h3>
               </div>
-              <div className="prev-modal-body">
+              <div className="glob-modal-body">
                 <p>
                   {modal.mode === 'desinscribir'
                     ? '¿Confirmás pasar este alumno a NO inscripto?'
                     : '¿Confirmás eliminar definitivamente este registro?'}
                 </p>
                 {modal.item && (
-                  <div className="prev-modal-item">
+                  <div className="glob-modal-item">
                     <strong>{modal.item.alumno}</strong> — DNI {modal.item.dni}<br />
                     Materia: {modal.item.materia_nombre}
                   </div>
                 )}
-                {modal.error && <div className="prev-modal-error">{modal.error}</div>}
+                {modal.error && <div className="glob-modal-error">{modal.error}</div>}
               </div>
-              <div className="prev-modal-actions">
+              <div className="glob-modal-actions">
                 <button
-                  className="prev-btn prev-hover prev-btn-cancel"
+                  className="glob-profesor-button glob-hover-effect"
                   onClick={cancelarModal}
                   disabled={modal.loading}
                 >
                   Cancelar
                 </button>
                 <button
-                  className={`prev-btn prev-hover ${modal.mode === 'desinscribir' ? 'prev-btn-warn' : 'prev-btn-danger'}`}
+                  className={`glob-profesor-button glob-hover-effect ${modal.mode === 'desinscribir' ? 'glob-btn-warn' : 'glob-btn-danger'}`}
                   onClick={confirmarAccion}
                   disabled={modal.loading}
                 >
@@ -758,20 +737,20 @@ const Previas = () => {
         />
 
         {/* Header superior */}
-        <div className="prev-headerbar">
-          <span className="prev-title">Gestión de Previas</span>
+        <div className="glob-front-row-pro">
+          <span className="glob-profesor-title">Gestión de Previas</span>
 
-          {/* Tabs */}
-          <div className="prev-tabs">
+          {/* Tabs (estilo chip global) */}
+          <div className="glob-grid-filtros" style={{ gap: 8, alignItems: 'center' }}>
             <button
-              className={`prev-tab ${tab === 'todos' ? 'is-active' : ''}`}
+              className={`glob-chip-filtro ${tab === 'todos' ? 'glob-active' : ''}`}
               onClick={() => setTab('todos')}
               title="Ver todas las previas"
             >
               Todos
             </button>
             <button
-              className={`prev-tab ${tab === 'inscriptos' ? 'is-active' : ''}`}
+              className={`glob-chip-filtro ${tab === 'inscriptos' ? 'glob-active' : ''}`}
               onClick={() => setTab('inscriptos')}
               title="Ver solo inscriptos"
             >
@@ -780,27 +759,27 @@ const Previas = () => {
           </div>
 
           {/* Búsqueda */}
-          <div className="prev-search">
+          <div className="glob-search-input-container">
             <input
               type="text"
               placeholder="Buscar por alumno, DNI o materia"
-              className="prev-search-input"
+              className="glob-search-input"
               value={busqueda}
               onChange={(e) => handleBuscarChange(e.target.value)}
               disabled={cargando}
             />
             {busqueda ? (
-              <FaTimes className="prev-clear-search-icon" onClick={quitarBusqueda} />
+              <FaTimes className="glob-clear-search-icon" onClick={quitarBusqueda} />
             ) : null}
-            <button className="prev-search-button" title="Buscar">
-              <FaSearch className="prev-search-icon" />
+            <button className="glob-search-button" title="Buscar">
+              <FaSearch className="glob-search-icon" />
             </button>
           </div>
 
           {/* Filtros */}
-          <div className="prev-filtros" ref={filtrosRef}>
+          <div className="glob-filtros-container" ref={filtrosRef}>
             <button
-              className="prev-filtros-button"
+              className="glob-filtros-button"
               onClick={() => {
                 setMostrarFiltros((prev) => {
                   const next = !prev;
@@ -810,34 +789,34 @@ const Previas = () => {
               }}
               disabled={cargando}
             >
-              <FaFilter className="prev-icon-button" />
+              <FaFilter className="glob-icon-button" />
               <span>Aplicar Filtros</span>
-              <FaChevronDown className={`prev-chevron ${mostrarFiltros ? 'prev-rotate' : ''}`} />
+              <FaChevronDown className={`glob-chevron-icon ${mostrarFiltros ? 'glob-rotate' : ''}`} />
             </button>
 
             {mostrarFiltros && (
-              <div className="prev-filtros-menu" role="menu">
+              <div className="glob-filtros-menu" role="menu">
                 {/* CURSO (cursando) */}
-                <div className="prev-filtros-group">
+                <div className="glob-filtros-group">
                   <button
                     type="button"
-                    className={`prev-filtros-group-header ${openSecciones.curso ? 'is-open' : ''}`}
+                    className={`glob-filtros-group-header ${openSecciones.curso ? 'is-open' : ''}`}
                     onClick={() => setOpenSecciones((s) => ({ ...s, curso: !s.curso }))}
                     aria-expanded={openSecciones.curso}
                   >
-                    <span className="prev-filtros-group-title">Filtrar por curso (cursando)</span>
-                    <FaChevronDown className="prev-accordion-caret" />
+                    <span className="glob-filtros-group-title">Filtrar por curso (cursando)</span>
+                    <FaChevronDown className="glob-accordion-caret" />
                   </button>
 
-                  <div className={`prev-filtros-group-body ${openSecciones.curso ? 'is-open' : 'is-collapsed'}`}>
-                    <div className="prev-alfabeto-filtros">
+                  <div className={`glob-filtros-group-body ${openSecciones.curso ? 'is-open' : 'is-collapsed'}`}>
+                    <div className="glob-grid-filtros">
                       {listas.cursos.length === 0 ? (
-                        <span className="prev-filtro-empty">No hay cursos disponibles</span>
+                        <span className="glob-chip-mini">No hay cursos disponibles</span>
                       ) : (
                         listas.cursos.map((c) => (
                           <button
                             key={`curso-${c.id}-${c.nombre}`}
-                            className={`prev-letra-filtro ${filtros.cursoSeleccionado === c.nombre ? 'prev-active' : ''}`}
+                            className={`glob-chip-filtro ${filtros.cursoSeleccionado === c.nombre ? 'glob-active' : ''}`}
                             onClick={() => handleFiltrarPorCurso(c.nombre)}
                             title={`Filtrar por curso ${c.nombre}`}
                           >
@@ -850,26 +829,26 @@ const Previas = () => {
                 </div>
 
                 {/* DIVISIÓN (cursando) */}
-                <div className="prev-filtros-group">
+                <div className="glob-filtros-group">
                   <button
                     type="button"
-                    className={`prev-filtros-group-header ${openSecciones.division ? 'is-open' : ''}`}
+                    className={`glob-filtros-group-header ${openSecciones.division ? 'is-open' : ''}`}
                     onClick={() => setOpenSecciones((s) => ({ ...s, division: !s.division }))}
                     aria-expanded={openSecciones.division}
                   >
-                    <span className="prev-filtros-group-title">Filtrar por división (cursando)</span>
-                    <FaChevronDown className="prev-accordion-caret" />
+                    <span className="glob-filtros-group-title">Filtrar por división (cursando)</span>
+                    <FaChevronDown className="glob-accordion-caret" />
                   </button>
 
-                  <div className={`prev-filtros-group-body ${openSecciones.division ? 'is-open' : 'is-collapsed'}`}>
-                    <div className="prev-alfabeto-filtros">
+                  <div className={`glob-filtros-group-body ${openSecciones.division ? 'is-open' : 'is-collapsed'}`}>
+                    <div className="glob-grid-filtros">
                       {listas.divisiones.length === 0 ? (
-                        <span className="prev-filtro-empty">No hay divisiones disponibles</span>
+                        <span className="glob-chip-mini">No hay divisiones disponibles</span>
                       ) : (
                         listas.divisiones.map((d) => (
                           <button
                             key={`div-${d.id}-${d.nombre}`}
-                            className={`prev-letra-filtro ${filtros.divisionSeleccionada === d.nombre ? 'prev-active' : ''}`}
+                            className={`glob-chip-filtro ${filtros.divisionSeleccionada === d.nombre ? 'glob-active' : ''}`}
                             onClick={() => handleFiltrarPorDivision(d.nombre)}
                             title={`Filtrar por división ${d.nombre}`}
                           >
@@ -883,7 +862,7 @@ const Previas = () => {
 
                 {/* Mostrar Todos */}
                 <div
-                  className="prev-filtros-menu-item prev-mostrar-todas"
+                  className="glob-filtros-menu-item glob-mostrar-todas"
                   onClick={() => {
                     handleMostrarTodos();
                     setMostrarFiltros(false);
@@ -898,52 +877,73 @@ const Previas = () => {
         </div>
 
         {/* CONTADOR + CHIPS + LISTADO */}
-        <div className="prev-list-wrapper">
-          <div className="prev-toolbar-row">
+        <div className="glob-profesores-list">
+          <div className="glob-contenedor-list-items">
             {/* Contador */}
-            <div className="prev-toolbar-left">
-              <div className="prev-contador">
-                <span className="prev-count-desktop">
+            <div className="glob-left-inline">
+              <div className="glob-contador-container">
+                <span className="glob-profesores-desktop">
                   {tab === 'inscriptos' ? 'Inscriptos: ' : 'Cant previas: '}
                   {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
                 </span>
-                <span className="prev-count-mobile">
+                <span className="glob-profesores-mobile">
                   {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
                 </span>
-                <FaUsers className="prev-icono" />
+                <FaUsers className="glob-icono-profesor" />
               </div>
 
               {/* Chips */}
               {hayFiltros && (
-                <div className="prev-chips">
+                <div className="glob-chips-container">
                   {busqueda && (
-                    <div className="prev-chip" title="Filtro activo">
-                      <span className="prev-chip-text prev-chip-desktop">Búsqueda: {busqueda}</span>
-                      <span className="prev-chip-text prev-chip-mobile">
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text glob-profesores-desktop">Búsqueda: {busqueda}</span>
+                      <span className="glob-chip-mini-text glob-profesores-mobile">
                         {busqueda.length > 3 ? `${busqueda.substring(0, 3)}...` : busqueda}
                       </span>
-                      <button className="prev-chip-close" onClick={quitarBusqueda} aria-label="Quitar filtro" title="Quitar este filtro">×</button>
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={quitarBusqueda}
+                        aria-label="Quitar filtro"
+                        title="Quitar este filtro"
+                      >
+                        ×
+                      </button>
                     </div>
                   )}
 
                   {cursoSeleccionado && (
-                    <div className="prev-chip" title="Filtro activo">
-                      <span className="prev-chip-text prev-chip-desktop">Curso: {cursoSeleccionado}</span>
-                      <span className="prev-chip-text prev-chip-mobile">{cursoSeleccionado}</span>
-                      <button className="prev-chip-close" onClick={quitarCurso} aria-label="Quitar filtro" title="Quitar este filtro">×</button>
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text glob-profesores-desktop">Curso: {cursoSeleccionado}</span>
+                      <span className="glob-chip-mini-text glob-profesores-mobile">{cursoSeleccionado}</span>
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={quitarCurso}
+                        aria-label="Quitar filtro"
+                        title="Quitar este filtro"
+                      >
+                        ×
+                      </button>
                     </div>
                   )}
 
                   {divisionSeleccionada && (
-                    <div className="prev-chip" title="Filtro activo">
-                      <span className="prev-chip-text prev-chip-desktop">División: {divisionSeleccionada}</span>
-                      <span className="prev-chip-text prev-chip-mobile">{divisionSeleccionada}</span>
-                      <button className="prev-chip-close" onClick={quitarDivision} aria-label="Quitar filtro" title="Quitar este filtro">×</button>
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text glob-profesores-desktop">División: {divisionSeleccionada}</span>
+                      <span className="glob-chip-mini-text glob-profesores-mobile">{divisionSeleccionada}</span>
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={quitarDivision}
+                        aria-label="Quitar filtro"
+                        title="Quitar este filtro"
+                      >
+                        ×
+                      </button>
                     </div>
                   )}
 
                   <button
-                    className="prev-chip prev-chip-clear-all"
+                    className="glob-chip-mini glob-chip-clear-all"
                     onClick={limpiarTodosLosChips}
                     title="Quitar todos los filtros"
                   >
@@ -956,40 +956,40 @@ const Previas = () => {
 
           {/* TABLA (desktop) */}
           {!isMobile && (
-            <div className="prev-table">
-              <div className="prev-thead">
-                <div className="prev-th prev-th-nombre">Alumno</div>
-                <div className="prev-th prev-th-dni">DNI</div>
-                <div className="prev-th prev-th-materia">Materia</div>
-                <div className="prev-th prev-th-condicion">Condición</div>
-                <div className="prev-th prev-th-curso-division">Curso y División (Materia)</div>
-                <div className="prev-th prev-th-inscripcion">Inscripción</div>
-                <div className="prev-th prev-icons-column">Acciones</div>
+            <div className="glob-box-table">
+              <div className="glob-header">
+                <div className="glob-column-header">Alumno</div>
+                <div className="glob-column-header">DNI</div>
+                <div className="glob-column-header">Materia</div>
+                <div className="glob-column-header">Condición</div>
+                <div className="glob-column-header">Cur y Div (Mat)</div>
+                <div className="glob-column-header">Inscripción</div>
+                <div className="glob-column-header">Acciones</div>
               </div>
 
-              <div className="prev-tbody">
+              <div className="glob-body">
                 {!hayFiltros && filtroActivo !== 'todos' ? (
-                  <div className="prev-no-data">
-                    <div className="prev-no-data-content">
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
                       <p>Aplicá búsqueda o filtros para ver las previas</p>
-                      <button className="prev-btn-show-all" onClick={handleMostrarTodos}>
+                      <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
                         Mostrar todas
                       </button>
                     </div>
                   </div>
                 ) : mostrarLoader ? (
-                  <div className="prev-loading">
-                    <div className="prev-spinner"></div>
+                  <div className="glob-loading-spinner-container">
+                    <div className="glob-loading-spinner"></div>
                   </div>
                 ) : basePorTab.length === 0 ? (
-                  <div className="prev-no-data">
-                    <div className="prev-no-data-content">
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
                       <p>{tab === 'inscriptos' ? 'No hay inscriptos aún' : 'No hay previas registradas'}</p>
                     </div>
                   </div>
                 ) : previasFiltradas.length === 0 ? (
-                  <div className="prev-no-data">
-                    <div className="prev-no-data-content">
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
                       <p>No hay resultados con los filtros actuales</p>
                     </div>
                   </div>
@@ -1019,32 +1019,32 @@ const Previas = () => {
           {/* TARJETAS (mobile) */}
           {isMobile && (
             <div
-              className={`prev-cards ${animacionActiva && previasFiltradas.length <= MAX_CASCADE_ITEMS ? 'prev-cascade-anim' : ''}`}
+              className={`glob-cards-wrapper ${animacionActiva && previasFiltradas.length <= MAX_CASCADE_ITEMS ? 'glob-cascade-animation' : ''}`}
             >
               {!hayFiltros && filtroActivo !== 'todos' ? (
-                <div className="prev-no-data prev-no-data-mobile">
-                  <div className="prev-no-data-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
-                    <button className="prev-btn-show-all" onClick={handleMostrarTodos}>
+                    <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
                       Mostrar todas
                     </button>
                   </div>
                 </div>
               ) : mostrarLoader ? (
-                <div className="prev-no-data prev-no-data-mobile">
-                  <div className="prev-no-data-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>Cargando previas...</p>
                   </div>
                 </div>
               ) : basePorTab.length === 0 ? (
-                <div className="prev-no-data prev-no-data-mobile">
-                  <div className="prev-no-data-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>{tab === 'inscriptos' ? 'No hay inscriptos aún' : 'No hay previas registradas'}</p>
                   </div>
                 </div>
               ) : previasFiltradas.length === 0 ? (
-                <div className="prev-no-data prev-no-data-mobile">
-                  <div className="prev-no-data-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>No hay resultados con los filtros actuales</p>
                   </div>
                 </div>
@@ -1056,47 +1056,47 @@ const Previas = () => {
                   return (
                     <div
                       key={p.id_previa || `card-${index}`}
-                      className={`prev-card ${willAnimate ? 'prev-cascade' : ''}`}
+                      className={`glob-card ${willAnimate ? 'glob-cascade' : ''}`}
                       style={{
                         animationDelay: willAnimate ? `${index * 0.03}s` : '0s',
                         opacity: preMask ? 0 : undefined,
                         transform: preMask ? 'translateY(8px)' : undefined,
                       }}
                     >
-                      <div className="prev-card-header">
-                        <h3 className="prev-card-title">{p.alumno}</h3>
+                      <div className="glob-card-header">
+                        <h3 className="glob-card-title">{p.alumno}</h3>
                       </div>
 
-                      <div className="prev-card-body">
-                        <div className="prev-card-row">
-                          <span className="prev-card-label">DNI</span>
-                          <span className="prev-card-value prev-mono">{p.dni}</span>
+                      <div className="glob-card-body">
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">DNI</span>
+                          <span className="glob-card-value">{p.dni}</span>
                         </div>
-                        <div className="prev-card-row">
-                          <span className="prev-card-label">Materia</span>
-                          <span className="prev-card-value">{p.materia_nombre}</span>
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">Materia</span>
+                          <span className="glob-card-value">{p.materia_nombre}</span>
                         </div>
-                        <div className="prev-card-row">
-                          <span className="prev-card-label">Condición</span>
-                          <span className="prev-card-value">{p.condicion_nombre}</span>
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">Condición</span>
+                          <span className="glob-card-value">{p.condicion_nombre}</span>
                         </div>
-                        <div className="prev-card-row">
-                          <span className="prev-card-label">Curso/División</span>
-                          <span className="prev-card-value">{p.materia_curso_division}</span>
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">Curso/División</span>
+                          <span className="glob-card-value">{p.materia_curso_division}</span>
                         </div>
-                        <div className="prev-card-row">
-                          <span className="prev-card-label">Inscripción</span>
-                          <span className={`prev-card-value ${estado === 'INSCRIPTO' ? 'is-ok' : 'is-pend'}`}>{estado}</span>
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">Inscripción</span>
+                          <span className={`glob-card-value ${estado === 'INSCRIPTO' ? 'glob-badge-ok' : 'glob-badge-warn'}`}>{estado}</span>
                         </div>
-                        <div className="prev-card-row">
-                          <span className="prev-card-label">Fecha Carga</span>
-                          <span className="prev-card-value">{formatearFechaISO(p.fecha_carga)}</span>
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">Fecha Carga</span>
+                          <span className="glob-card-value">{formatearFechaISO(p.fecha_carga)}</span>
                         </div>
                       </div>
 
-                      <div className="prev-card-actions">
+                      <div className="glob-card-actions">
                         <button
-                          className="prev-action-btn prev-iconchip is-info"
+                          className="glob-action-btn glob-iconchip is-info"
                           title="Información"
                           onClick={() => abrirModalInfo(p)}
                           aria-label="Información"
@@ -1104,9 +1104,8 @@ const Previas = () => {
                           <FaInfoCircle />
                         </button>
 
-                        {/* Editar */}
                         <button
-                          className="prev-action-btn prev-iconchip is-warn"
+                          className="glob-action-btn glob-iconchip is-edit"
                           title="Editar"
                           onClick={() => navigate(`/previas/editar/${p.id_previa}`)}
                           aria-label="Editar"
@@ -1114,10 +1113,9 @@ const Previas = () => {
                           <FaEdit />
                         </button>
 
-                        {/* Inscribir si está pendiente */}
                         {estado === 'PENDIENTE' && (
                           <button
-                            className="prev-action-btn prev-iconchip is-affirm"
+                            className="glob-action-btn glob-iconchip is-affirm"
                             title="Inscribir manualmente"
                             onClick={() => abrirModalInscribir(p)}
                             aria-label="Inscribir"
@@ -1126,9 +1124,8 @@ const Previas = () => {
                           </button>
                         )}
 
-                        {/* Eliminar / Desinscribir */}
                         <button
-                          className="prev-action-btn prev-iconchip is-danger"
+                          className="glob-action-btn glob-iconchip is-delete"
                           title={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
                           onClick={() => abrirModalAccion(p)}
                           aria-label={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
@@ -1145,9 +1142,9 @@ const Previas = () => {
         </div>
 
         {/* BOTONERA INFERIOR */}
-        <div className="prev-bottombar">
+        <div className="glob-down-container">
           <button
-            className="prev-btn prev-hover prev-volver"
+            className="glob-profesor-button glob-hover-effect glob-volver-atras"
             onClick={() => {
               setFiltros({
                 busqueda: '',
@@ -1161,40 +1158,30 @@ const Previas = () => {
             aria-label="Volver"
             title="Volver"
           >
-            <FaArrowLeft className="prev-btn-icon" />
+            <FaArrowLeft className="glob-profesor-icon-button" />
             <p>Volver Atrás</p>
           </button>
 
-          <div className="prev-bottom-actions">
+          <div className="glob-botones-container">
             <button
-              className="prev-btn prev-hover"
+              className="glob-profesor-button glob-hover-effect"
               onClick={exportarExcel}
               disabled={!puedeExportar}
               aria-label="Exportar"
               title={puedeExportar ? 'Exportar a Excel' : 'No hay filas visibles para exportar'}
             >
-              <FaFileExcel className="prev-btn-icon" />
+              <FaFileExcel className="glob-profesor-icon-button" />
               <p>Exportar a Excel</p>
             </button>
 
             <button
-              className="prev-btn prev-hover prev-btn-add"
+              className="glob-profesor-button glob-hover-effect"
               onClick={() => navigate('/previas/agregar')}
               aria-label="Agregar Previa"
               title="Agregar Previa"
             >
-              <FaPlus className="prev-btn-icon" />
+              <FaPlus className="glob-profesor-icon-button" />
               <p>Agregar Previa</p>
-            </button>
-
-            <button
-              className="prev-btn prev-hover prev-btn-baja-nav"
-              onClick={() => navigate('/alumnos/baja')}
-              title="Dados de Baja"
-              aria-label="Dados de Baja"
-            >
-              <FaUserSlash className="prev-btn-icon" />
-              <p>Dados de Baja</p>
             </button>
           </div>
         </div>

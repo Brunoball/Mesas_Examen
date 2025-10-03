@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BASE_URL from '../../config/config';
+import '../Global/roots.css';
 import './inicio.css';
 import logoRH from '../../imagenes/Escudo.png';
+import Toast from '../Global/Toast';
 
 const STORAGE_KEYS = {
   rememberFlag: 'rememberLogin',
@@ -27,12 +29,18 @@ function decodeJwtPayload(token) {
 const Inicio = () => {
   const [nombre, setNombre] = useState('');
   const [contrasena, setContrasena] = useState('');
-  const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
 
+  // Estado del toast
+  const [toast, setToast] = useState({ visible: false, tipo: 'info', mensaje: '', duracion: 3000 });
+
   const navigate = useNavigate();
+
+  const mostrarToast = (tipo, mensaje, duracion = 3000) => {
+    setToast({ visible: true, tipo, mensaje, duracion });
+  };
 
   // Cargar datos recordados al montar
   useEffect(() => {
@@ -77,10 +85,9 @@ const Inicio = () => {
     e.preventDefault();
     if (cargando) return; // evita doble submit
     setCargando(true);
-    setMensaje('');
 
     if (!nombre || !contrasena) {
-      setMensaje('Por favor complete todos los campos');
+      mostrarToast('advertencia', 'Por favor complete todos los campos', 3000);
       setCargando(false);
       return;
     }
@@ -90,50 +97,71 @@ const Inicio = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nombre, contrasena }),
+        cache: 'no-store',
       });
 
-      if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+      let data = null;
+      try {
+        data = await respuesta.json();
+      } catch {
+        // puede no venir cuerpo o no ser JSON
+      }
 
-      const data = await respuesta.json();
+      // Si el backend devuelve 200 + exito=false para credenciales inválidas
+      if (respuesta.ok && data?.exito === false) {
+        mostrarToast('error', data?.mensaje || 'Credenciales incorrectas.', 3500);
+        setCargando(false);
+        return;
+      }
 
+      // Otros errores no-2xx (mantengo por compatibilidad)
+      if (!respuesta.ok) {
+        mostrarToast(
+          'error',
+          data?.mensaje || `Error del servidor (${respuesta.status}). Intente más tarde.`,
+          3500
+        );
+        setCargando(false);
+        return;
+      }
+
+      // 2xx
       if (data?.exito) {
-        // 1) Guardar token
+        // 1) Guardar token si vino
         const token = data.token;
         if (token) localStorage.setItem('token', token);
 
         // 2) Derivar rol desde diferentes fuentes
         const usuarioResp = data.usuario || {};
-        let rol =
-          (usuarioResp.rol || data.rol || '').toString().toLowerCase();
+        let rol = (usuarioResp.rol || data.rol || '').toString().toLowerCase();
 
         // 3) Si no vino rol explícito, intentar leerlo del JWT
         if ((!rol || rol === '') && token && token.split('.').length === 3) {
           const payload = decodeJwtPayload(token);
-          const fromJwt =
-            (payload?.rol || payload?.role || payload?.scope || '').toString().toLowerCase();
+          const fromJwt = (payload?.rol || payload?.role || payload?.scope || '')
+            .toString()
+            .toLowerCase();
           if (fromJwt) rol = fromJwt;
         }
 
-        // 4) Por seguridad, si no hay rol, default a 'vista' (más restrictivo)
+        // 4) Default seguro
         if (!rol) rol = 'vista';
 
-        // 5) Guardar usuario + rol unificado
-        const usuarioFinal = {
-          ...usuarioResp,
-          rol, // <- acá queda persistido
-        };
+        // 5) Guardar usuario + rol
+        const usuarioFinal = { ...usuarioResp, rol };
         localStorage.setItem('usuario', JSON.stringify(usuarioFinal));
 
-        // Mantener o limpiar recordatorio según el check
+        // Recordarme
         persistRemember(nombre, contrasena, remember);
 
         navigate('/panel');
       } else {
-        setMensaje(data?.mensaje || 'Credenciales incorrectas');
+        // 2xx pero exito=false (fallback)
+        mostrarToast('error', data?.mensaje || 'Credenciales incorrectas.', 3500);
       }
     } catch (err) {
       console.error('Error al iniciar sesión:', err);
-      setMensaje('Error del servidor. Intente más tarde.');
+      mostrarToast('error', 'Error del servidor. Intente más tarde.', 3500);
     } finally {
       setCargando(false);
     }
@@ -141,14 +169,21 @@ const Inicio = () => {
 
   return (
     <div className="ini_contenedor-principal">
+      {toast.visible && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={() => setToast(t => ({ ...t, visible: false }))}
+        />
+      )}
+
       <div className="ini_contenedor">
         <div className="ini_encabezado">
           <img src={logoRH} alt="Cooperadora IPET 50" className="ini_logo" />
           <h1 className="ini_titulo">Iniciar Sesión</h1>
           <p className="ini_subtitulo">Ingresá tus credenciales para acceder al sistema</p>
         </div>
-
-        {mensaje && <p className="ini_mensaje">{mensaje}</p>}
 
         <form onSubmit={manejarEnvio} className="ini_formulario" autoComplete="on" noValidate>
           <div className="ini_campo">
@@ -197,7 +232,6 @@ const Inicio = () => {
             </button>
           </div>
 
-          {/* Checkbox Recordar cuenta */}
           <div className="ini_check-row">
             <input
               id="recordar"

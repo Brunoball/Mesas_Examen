@@ -26,7 +26,6 @@ import {
   FaFilter,
   FaChevronDown
 } from 'react-icons/fa';
-import './Profesores.css';
 
 // Modales
 import ModalEliminarProfesor from './modales/ModalEliminarProfesor';
@@ -281,7 +280,7 @@ const Profesores = () => {
     };
 
     const handleClickOutsideTable = (event) => {
-      if (!event.target.closest('.pro-row')) {
+      if (!event.target.closest('.glob-row')) {
         setProfesorSeleccionado(null);
       }
     };
@@ -317,7 +316,7 @@ const Profesores = () => {
           setProfesorInfo((prev) => ({ ...(prev || profesorBase), ...extendido }));
         }
       } catch {
-        // silencioso: ya mostramos lo base
+        // silencioso: ya se muestra lo base
       }
     })();
   }, []);
@@ -625,33 +624,11 @@ const Profesores = () => {
   }, []);
 
   /* ================================
-     Badge de materias
+     Badge de materias (solo texto para usar CSS global)
   ================================= */
   const BadgeMaterias = ({ total }) => {
     if (!total || total <= 1) return null;
-    return (
-      <span
-        className="pro-badge-materias"
-        title={`${total} materias`}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginLeft: 8,
-          minWidth: 20,
-          height: 20,
-          padding: '0 6px',
-          borderRadius: 999,
-          fontSize: 12,
-          lineHeight: '20px',
-          background: 'var(--soc-primary, #2c7be5)',
-          color: 'white',
-          fontWeight: 600,
-        }}
-      >
-        {total}
-      </span>
-    );
+    return <span> (+{total - 1})</span>;
   };
 
   /* ================================
@@ -672,7 +649,6 @@ const Profesores = () => {
     } = data;
 
     const profesor = rows[index];
-    const esFilaPar = index % 2 === 0;
     const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
 
@@ -681,34 +657,36 @@ const Profesores = () => {
 
     return (
       <div
+        className={`glob-row ${index % 2 === 0 ? 'glob-even-row' : 'glob-odd-row'} ${
+          profesorSeleccionado?.id_profesor === profesor.id_profesor ? 'glob-selected-row' : ''
+        } ${willAnimate ? 'glob-cascade' : ''}`}
+        onClick={() => manejarSeleccion(profesor)}
         style={{
           ...style,
           animationDelay: willAnimate ? `${index * 0.03}s` : '0s',
           opacity: preMask ? 0 : undefined,
           transform: preMask ? 'translateY(8px)' : undefined,
         }}
-        className={`pro-row ${esFilaPar ? 'pro-even-row' : 'pro-odd-row'} ${profesorSeleccionado?.id_profesor === profesor.id_profesor ? 'pro-selected-row' : ''} ${willAnimate ? 'pro-cascade' : ''}`}
-        onClick={() => manejarSeleccion(profesor)}
       >
-        <div className="pro-column pro-column-dni" title={profesor.id_profesor}>
+        <div className="glob-column glob-column-dni" title={profesor.id_profesor}>
           {profesor.id_profesor}
         </div>
 
-        <div className="pro-column pro-column-nombre" title={nombreDesdeDB}>
+        <div className="glob-column glob-column-nombre" title={nombreDesdeDB}>
           {nombreDesdeDB}
         </div>
 
-        <div className="pro-column pro-column-materia" title={materiaPrincipal}>
+        <div className="glob-column" title={materiaPrincipal}>
           <span>{materiaPrincipal}</span>
           <BadgeMaterias total={profesor.materias_total} />
         </div>
 
-        <div className="pro-column pro-icons-column">
+        <div className="glob-column glob-icons-column">
           {profesorSeleccionado?.id_profesor === profesor.id_profesor && (
-            <div className="pro-icons-container">
+            <div className="glob-icons-container">
               {/* INFO */}
               <button
-                className="pro-iconchip is-info"
+                className="glob-iconchip is-info"
                 title="Ver información"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -723,7 +701,7 @@ const Profesores = () => {
               {!isVista && (
                 <>
                   <button
-                    className="pro-iconchip is-edit"
+                    className="glob-iconchip is-edit"
                     title="Editar"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -735,7 +713,7 @@ const Profesores = () => {
                   </button>
 
                   <button
-                    className="pro-iconchip is-delete"
+                    className="glob-iconchip is-delete"
                     title="Eliminar"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -747,7 +725,7 @@ const Profesores = () => {
                   </button>
 
                   <button
-                    className="pro-iconchip is-baja"
+                    className="glob-iconchip is-baja"
                     title="Dar de baja"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -772,8 +750,8 @@ const Profesores = () => {
   const hayChips = !!(busqueda || materiaSeleccionada || departamentoSeleccionado);
 
   return (
-    <div className="pro-profesor-container">
-      <div className="pro-profesor-box">
+    <div className="glob-profesor-container">
+      <div className="glob-profesor-box">
         {toast.mostrar && (
           <Toast
             tipo={toast.tipo}
@@ -784,31 +762,31 @@ const Profesores = () => {
         )}
 
         {/* Header superior */}
-        <div className="pro-front-row-pro">
-          <span className="pro-profesor-title">Gestión de Profesores</span>
+        <div className="glob-front-row-pro">
+          <span className="glob-profesor-title">Gestión de Profesores</span>
 
           {/* Búsqueda */}
-          <div className="pro-search-input-container">
+          <div className="glob-search-input-container">
             <input
               type="text"
               placeholder="Buscar por nombre DB o DNI"
-              className="pro-search-input"
+              className="glob-search-input"
               value={busqueda}
               onChange={(e) => handleBuscarChange(e.target.value)}
               disabled={cargando}
             />
             {busqueda ? (
-              <FaTimes className="pro-clear-search-icon" onClick={quitarBusqueda} />
+              <FaTimes className="glob-clear-search-icon" onClick={quitarBusqueda} />
             ) : null}
-            <button className="pro-search-button" title="Buscar">
-              <FaSearch className="pro-search-icon" />
+            <button className="glob-search-button" title="Buscar">
+              <FaSearch className="glob-search-icon" />
             </button>
           </div>
 
           {/* Filtros */}
-          <div className="pro-filtros-container" ref={filtrosRef}>
+          <div className="glob-filtros-container" ref={filtrosRef}>
             <button
-              className="pro-filtros-button"
+              className="glob-filtros-button"
               onClick={() => {
                 setMostrarFiltros((prev) => {
                   const next = !prev;
@@ -818,31 +796,31 @@ const Profesores = () => {
               }}
               disabled={cargando}
             >
-              <FaFilter className="pro-icon-button" />
+              <FaFilter className="glob-icon-button" />
               <span>Aplicar Filtros</span>
-              <FaChevronDown className={`pro-chevron-icon ${mostrarFiltros ? 'pro-rotate' : ''}`} />
+              <FaChevronDown className={`glob-chevron-icon ${mostrarFiltros ? 'glob-rotate' : ''}`} />
             </button>
 
             {mostrarFiltros && (
-              <div className="pro-filtros-menu" role="menu">
+              <div className="glob-filtros-menu" role="menu">
                 {/* MATERIA */}
-                <div className="pro-filtros-group">
+                <div className="glob-filtros-group">
                   <button
                     type="button"
-                    className={`pro-filtros-group-header ${openSecciones.materia ? 'is-open' : ''}`}
+                    className={`glob-filtros-group-header ${openSecciones.materia ? 'is-open' : ''}`}
                     onClick={() => setOpenSecciones((s) => ({ ...s, materia: !s.materia }))}
                     aria-expanded={openSecciones.materia}
                   >
-                    <span className="pro-filtros-group-title">Filtrar por materia</span>
-                    <FaChevronDown className="pro-accordion-caret" />
+                    <span className="glob-filtros-group-title">Filtrar por materia</span>
+                    <FaChevronDown className="glob-accordion-caret" />
                   </button>
 
-                  <div className={`pro-filtros-group-body ${openSecciones.materia ? 'is-open' : 'is-collapsed'}`}>
-                    <div className="pro-grid-filtros">
+                  <div className={`glob-filtros-group-body ${openSecciones.materia ? 'is-open' : 'is-collapsed'}`}>
+                    <div className="glob-grid-filtros">
                       {(materiasDisponibles.length ? materiasDisponibles : materiasUnicas).map((mat) => (
                         <button
                           key={`mat-${mat}`}
-                          className={`pro-chip-filtro ${filtros.materiaSeleccionada === mat ? 'pro-active' : ''}`}
+                          className={`glob-chip-filtro ${filtros.materiaSeleccionada === mat ? 'glob-active' : ''}`}
                           onClick={() => handleFiltrarPorMateria(mat)}
                           title={`Filtrar por materia ${mat}`}
                         >
@@ -854,23 +832,23 @@ const Profesores = () => {
                 </div>
 
                 {/* DEPARTAMENTO */}
-                <div className="pro-filtros-group">
+                <div className="glob-filtros-group">
                   <button
                     type="button"
-                    className={`pro-filtros-group-header ${openSecciones.departamento ? 'is-open' : ''}`}
+                    className={`glob-filtros-group-header ${openSecciones.departamento ? 'is-open' : ''}`}
                     onClick={() => setOpenSecciones((s) => ({ ...s, departamento: !s.departamento }))}
                     aria-expanded={openSecciones.departamento}
                   >
-                    <span className="pro-filtros-group-title">Filtrar por departamento</span>
-                    <FaChevronDown className="pro-accordion-caret" />
+                    <span className="glob-filtros-group-title">Filtrar por departamento</span>
+                    <FaChevronDown className="glob-accordion-caret" />
                   </button>
 
-                  <div className={`pro-filtros-group-body ${openSecciones.departamento ? 'is-open' : 'is-collapsed'}`}>
-                    <div className="pro-grid-filtros">
+                  <div className={`glob-filtros-group-body ${openSecciones.departamento ? 'is-open' : 'is-collapsed'}`}>
+                    <div className="glob-grid-filtros">
                       {(departamentosDisponibles.length ? departamentosDisponibles : departamentosUnicos).map((dep) => (
                         <button
                           key={`dep-${dep}`}
-                          className={`pro-chip-filtro ${filtros.departamentoSeleccionado === dep ? 'pro-active' : ''}`}
+                          className={`glob-chip-filtro ${filtros.departamentoSeleccionado === dep ? 'glob-active' : ''}`}
                           onClick={() => handleFiltrarPorDepartamento(dep)}
                           title={`Filtrar por departamento ${dep}`}
                         >
@@ -883,7 +861,7 @@ const Profesores = () => {
 
                 {/* Mostrar Todos */}
                 <div
-                  className="pro-filtros-menu-item pro-mostrar-todas"
+                  className="glob-filtros-menu-item glob-mostrar-todas"
                   onClick={() => {
                     handleMostrarTodos();
                     setMostrarFiltros(false);
@@ -898,31 +876,31 @@ const Profesores = () => {
         </div>
 
         {/* CONTADOR + CHIPS + LISTADO */}
-        <div className="pro-profesores-list">
-          <div className="pro-contenedor-list-items">
+        <div className="glob-profesores-list">
+          <div className="glob-contenedor-list-items">
             {/* Contador */}
-            <div className="pro-left-inline">
-              <div className="pro-contador-container">
-                <span className="pro-profesores-desktop">
+            <div className="glob-left-inline">
+              <div className="glob-contador-container">
+                <span className="glob-profesores-desktop">
                   Cant profesores: {(hayFiltros || filtroActivo === 'todos') ? profesoresFiltrados.length : 0}
                 </span>
-                <span className="pro-profesores-mobile">
+                <span className="glob-profesores-mobile">
                   {(hayFiltros || filtroActivo === 'todos') ? profesoresFiltrados.length : 0}
                 </span>
-                <FaUsers className="pro-icono-profesor" />
+                <FaUsers className="glob-icono-profesor" />
               </div>
 
               {/* Chips */}
               {hayChips && (
-                <div className="pro-chips-container">
+                <div className="glob-chips-container">
                   {busqueda && (
-                    <div className="pro-chip-mini" title="Filtro activo">
-                      <span className="pro-chip-mini-text pro-profesores-desktop">Búsqueda: {busqueda}</span>
-                      <span className="pro-chip-mini-text pro-profesores-mobile">
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text glob-profesores-desktop">Búsqueda: {busqueda}</span>
+                      <span className="glob-chip-mini-text glob-profesores-mobile">
                         {busqueda.length > 3 ? `${busqueda.substring(0, 3)}...` : busqueda}
                       </span>
                       <button
-                        className="pro-chip-mini-close"
+                        className="glob-chip-mini-close"
                         onClick={quitarBusqueda}
                         aria-label="Quitar filtro"
                         title="Quitar este filtro"
@@ -933,11 +911,11 @@ const Profesores = () => {
                   )}
 
                   {materiaSeleccionada && (
-                    <div className="pro-chip-mini" title="Filtro activo">
-                      <span className="pro-chip-mini-text pro-profesores-desktop">Materia: {materiaSeleccionada}</span>
-                      <span className="pro-chip-mini-text pro-profesores-mobile">{materiaSeleccionada}</span>
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text glob-profesores-desktop">Materia: {materiaSeleccionada}</span>
+                      <span className="glob-chip-mini-text glob-profesores-mobile">{materiaSeleccionada}</span>
                       <button
-                        className="pro-chip-mini-close"
+                        className="glob-chip-mini-close"
                         onClick={quitarMateria}
                         aria-label="Quitar filtro"
                         title="Quitar este filtro"
@@ -948,11 +926,11 @@ const Profesores = () => {
                   )}
 
                   {departamentoSeleccionado && (
-                    <div className="pro-chip-mini" title="Filtro activo">
-                      <span className="mi-chip-mini-text pro-profesores-desktop">Departamento: {departamentoSeleccionado}</span>
-                      <span className="mi-chip-mini-text pro-profesores-mobile">{departamentoSeleccionado}</span>
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text glob-profesores-desktop">Departamento: {departamentoSeleccionado}</span>
+                      <span className="glob-chip-mini-text glob-profesores-mobile">{departamentoSeleccionado}</span>
                       <button
-                        className="pro-chip-mini-close"
+                        className="glob-chip-mini-close"
                         onClick={quitarDepartamento}
                         aria-label="Quitar filtro"
                         title="Quitar este filtro"
@@ -963,7 +941,7 @@ const Profesores = () => {
                   )}
 
                   <button
-                    className="pro-chip-mini pro-chip-clear-all"
+                    className="glob-chip-mini glob-chip-clear-all"
                     onClick={limpiarTodosLosChips}
                     title="Quitar todos los filtros"
                   >
@@ -976,37 +954,37 @@ const Profesores = () => {
 
           {/* TABLA (solo desktop) */}
           {!isMobile && (
-            <div className="pro-box-table">
-              <div className="pro-header">
-                <div className="pro-column-header pro-header-dni">ID Docente</div>
-                <div className="pro-column-header pro-header-nombre">Apellido y Nombre</div>
-                <div className="pro-column-header pro-header-materia">Materia</div>
-                <div className="pro-column-header pro-icons-column">Acciones</div>
+            <div className="glob-box-table">
+              <div className="glob-header">
+                <div className="glob-column-header">ID Docente</div>
+                <div className="glob-column-header">Apellido y Nombre</div>
+                <div className="glob-column-header">Materia</div>
+                <div className="glob-column-header">Acciones</div>
               </div>
 
-              <div className="pro-body">
+              <div className="glob-body">
                 {!hayFiltros && filtroActivo !== 'todos' ? (
-                  <div className="pro-no-data-message">
-                    <div className="pro-message-content">
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
                       <p>Por favor aplicá búsqueda o filtros para ver los profesores</p>
-                      <button className="pro-btn-show-all" onClick={handleMostrarTodos}>
+                      <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
                         Mostrar todos los profesores
                       </button>
                     </div>
                   </div>
                 ) : mostrarLoader ? (
-                  <div className="pro-loading-spinner-container">
-                    <div className="pro-loading-spinner"></div>
+                  <div className="glob-loading-spinner-container">
+                    <div className="glob-loading-spinner"></div>
                   </div>
                 ) : profesores.length === 0 ? (
-                  <div className="pro-no-data-message">
-                    <div className="pro-message-content">
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
                       <p>No hay profesores registrados</p>
                     </div>
                   </div>
                 ) : profesoresFiltrados.length === 0 ? (
-                  <div className="pro-no-data-message">
-                    <div className="pro-message-content">
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
                       <p>No hay resultados con los filtros actuales</p>
                     </div>
                   </div>
@@ -1047,34 +1025,34 @@ const Profesores = () => {
           {/* TARJETAS (solo mobile) */}
           {isMobile && (
             <div
-              className={`pro-cards-wrapper ${
-                animacionActiva && profesoresFiltrados.length <= MAX_CASCADE_ITEMS ? 'pro-cascade-animation' : ''
+              className={`glob-cards-wrapper ${
+                animacionActiva && profesoresFiltrados.length <= MAX_CASCADE_ITEMS ? 'glob-cascade-animation' : ''
               }`}
             >
               {!hayFiltros && filtroActivo !== 'todos' ? (
-                <div className="pro-no-data-message pro-no-data-mobile">
-                  <div className="pro-message-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
-                    <button className="pro-btn-show-all" onClick={handleMostrarTodos}>
+                    <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
                       Mostrar todos
                     </button>
                   </div>
                 </div>
               ) : mostrarLoader ? (
-                <div className="pro-no-data-message pro-no-data-mobile">
-                  <div className="pro-message-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>Cargando profesores...</p>
                   </div>
                 </div>
               ) : profesores.length === 0 ? (
-                <div className="pro-no-data-message pro-no-data-mobile">
-                  <div className="pro-message-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>No hay profesores registrados</p>
                   </div>
                 </div>
               ) : profesoresFiltrados.length === 0 ? (
-                <div className="pro-no-data-message pro-no-data-mobile">
-                  <div className="pro-message-content">
+                <div className="glob-no-data-message glob-no-data-mobile">
+                  <div className="glob-message-content">
                     <p>No hay resultados con los filtros actuales</p>
                   </div>
                 </div>
@@ -1087,7 +1065,7 @@ const Profesores = () => {
                   return (
                     <div
                       key={profesor.id_profesor || `card-${index}`}
-                      className={`pro-card ${willAnimate ? 'pro-cascade' : ''}`}
+                      className={`glob-card ${willAnimate ? 'glob-cascade' : ''}`}
                       style={{
                         animationDelay: willAnimate ? `${index * 0.03}s` : '0s',
                         opacity: preMask ? 0 : undefined,
@@ -1095,28 +1073,28 @@ const Profesores = () => {
                       }}
                       onClick={() => manejarSeleccion(profesor)}
                     >
-                      <div className="pro-card-header">
-                        <h3 className="pro-card-title">{nombreDesdeDB}</h3>
+                      <div className="glob-card-header">
+                        <h3 className="glob-card-title">{nombreDesdeDB}</h3>
                       </div>
 
-                      <div className="pro-card-body">
-                        <div className="pro-card-row">
-                          <span className="pro-card-label">ID</span>
-                          <span className="pro-card-value">{profesor.id_profesor}</span>
+                      <div className="glob-card-body">
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">ID</span>
+                          <span className="glob-card-value">{profesor.id_profesor}</span>
                         </div>
-                        <div className="pro-card-row">
-                          <span className="pro-card-label">Materia</span>
-                          <span className="pro-card-value">
+                        <div className="glob-card-row">
+                          <span className="glob-card-label">Materia</span>
+                          <span className="glob-card-value">
                             {materiaPrincipal}
                             <BadgeMaterias total={profesor.materias_total} />
                           </span>
                         </div>
                       </div>
 
-                      <div className="pro-card-actions">
+                      <div className="glob-card-actions">
                         {/* INFO */}
                         <button
-                          className="pro-action-btn pro-iconchip is-info"
+                          className="glob-action-btn glob-iconchip is-info"
                           title="Información"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1131,7 +1109,7 @@ const Profesores = () => {
                         {!isVista && (
                           <>
                             <button
-                              className="pro-action-btn pro-iconchip is-edit"
+                              className="glob-action-btn glob-iconchip is-edit"
                               title="Editar"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1142,7 +1120,7 @@ const Profesores = () => {
                               <FaEdit />
                             </button>
                             <button
-                              className="pro-action-btn pro-iconchip is-delete"
+                              className="glob-action-btn glob-iconchip is-delete"
                               title="Eliminar"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1153,7 +1131,7 @@ const Profesores = () => {
                               <FaTrash />
                             </button>
                             <button
-                              className="pro-action-btn pro-iconchip is-baja"
+                              className="glob-action-btn glob-iconchip is-baja"
                               title="Dar de baja"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1175,9 +1153,9 @@ const Profesores = () => {
         </div>
 
         {/* BOTONERA INFERIOR */}
-        <div className="pro-down-container">
+        <div className="glob-down-container">
           <button
-            className="pro-profesor-button pro-hover-effect pro-volver-atras"
+            className="glob-profesor-button glob-hover-effect glob-volver-atras"
             onClick={() => {
               setFiltros({
                 busqueda: '',
@@ -1191,41 +1169,41 @@ const Profesores = () => {
             aria-label="Volver"
             title="Volver"
           >
-            <FaArrowLeft className="pro-profesor-icon-button" />
+            <FaArrowLeft className="glob-profesor-icon-button" />
             <p>Volver Atrás</p>
           </button>
 
-          <div className="pro-botones-container">
+          <div className="glob-botones-container">
             {!isVista && (
               <button
-                className="pro-profesor-button pro-hover-effect"
+                className="glob-profesor-button glob-hover-effect"
                 onClick={() => navigate('/profesores/agregar')}
                 aria-label="Agregar"
                 title="Agregar profesor"
               >
-                <FaUserPlus className="pro-profesor-icon-button" />
+                <FaUserPlus className="glob-profesor-icon-button" />
                 <p>Agregar Profesor</p>
               </button>
             )}
 
             <button
-              className="pro-profesor-button pro-hover-effect"
+              className="glob-profesor-button glob-hover-effect"
               onClick={exportarExcel}
               disabled={!puedeExportar}
               aria-label="Exportar"
               title={puedeExportar ? 'Exportar a Excel' : 'No hay filas visibles para exportar'}
             >
-              <FaFileExcel className="pro-profesor-icon-button" />
+              <FaFileExcel className="glob-profesor-icon-button" />
               <p>Exportar a Excel</p>
             </button>
 
             <button
-              className="pro-profesor-button pro-hover-effect pro-btn-baja-nav"
+              className="glob-profesor-button glob-hover-effect glob-btn-baja-nav"
               onClick={() => navigate('/profesores/baja')}
               title="Dados de Baja"
               aria-label="Dados de Baja"
             >
-              <FaUserSlash className="pro-profesor-icon-button" />
+              <FaUserSlash className="glob-profesor-icon-button" />
               <p>Dados de Baja</p>
             </button>
           </div>
