@@ -28,15 +28,12 @@ const fmtFechaHoraES = (iso) => {
 
 /* =========================================================
    Hook ventana de inscripción con REFRESCO EN TIEMPO REAL
-   - Primer fetch al montar
-   - Polling cada 10s
-   - Refresh inmediato al volver al tab (visibilitychange)
    ========================================================= */
 const useVentanaInscripcion = (pollMs = 10000) => {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
-  const prevAbiertaRef = useRef(null); // para detectar cambios
+  const prevAbiertaRef = useRef(null);
 
   const fetchVentana = useCallback(async () => {
     try {
@@ -59,30 +56,19 @@ const useVentanaInscripcion = (pollMs = 10000) => {
     }
   }, []);
 
-  // fetch inicial
-  useEffect(() => {
-    fetchVentana();
-  }, [fetchVentana]);
-
-  // polling
+  useEffect(() => { fetchVentana(); }, [fetchVentana]);
   useEffect(() => {
     const id = setInterval(fetchVentana, pollMs);
     return () => clearInterval(id);
   }, [fetchVentana, pollMs]);
-
-  // visibilitychange: refrescar al volver al tab
   useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === "visible") fetchVentana();
-    };
+    const onVis = () => { if (document.visibilityState === "visible") fetchVentana(); };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [fetchVentana]);
 
-  // expone también si hubo cambio (para mostrar avisos arriba)
   useEffect(() => {
     if (data?.abierta !== undefined && prevAbiertaRef.current !== null) {
-      // cambio detectado (true<->false)
       if (prevAbiertaRef.current !== data.abierta) {
         const ev = new CustomEvent("ventana:cambio", {
           detail: { abierta: data.abierta, data },
@@ -109,11 +95,7 @@ const InscripcionCerrada = ({ cfg }) => {
               <h1 className="hero-title">{titulo}</h1>
               <p className="hero-sub">Inscripción en línea</p>
             </div>
-            <img
-              src={escudo}
-              alt="Escudo IPET 50"
-              className="hero-logo hero-logo--big"
-            />
+            <img src={escudo} alt="Escudo IPET 50" className="hero-logo hero-logo--big" />
           </div>
         </aside>
 
@@ -140,21 +122,16 @@ const InscripcionCerrada = ({ cfg }) => {
 
 /* ============== Subvista: Resumen Alumno ============== */
 const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro }) => {
-  // selecciona sólo NO inscriptas
   const [seleccion, setSeleccion] = useState(
-    () =>
-      new Set(
-        data.alumno.materias
-          .filter((m) => !Number(m.inscripcion))
-          .map((m) => m.id_materia)
-      )
+    () => new Set(
+      data.alumno.materias
+        .filter((m) => !Number(m.inscripcion))
+        .map((m) => m.id_materia)
+    )
   );
 
-  // si la ventana se cierra mientras estoy acá, avisar
   useEffect(() => {
-    const handler = (e) => {
-      if (e?.detail?.abierta === false) onVentanaCerro?.();
-    };
+    const handler = (e) => { if (e?.detail?.abierta === false) onVentanaCerro?.(); };
     window.addEventListener("ventana:cambio", handler);
     return () => window.removeEventListener("ventana:cambio", handler);
   }, [onVentanaCerro]);
@@ -169,21 +146,23 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
   };
 
   const materiasOrdenadas = useMemo(
-    () =>
-      [...data.alumno.materias].sort((a, b) =>
-        a.materia.localeCompare(b.materia, "es", { sensitivity: "base" })
-      ),
+    () => [...data.alumno.materias].sort((a, b) =>
+      a.materia.localeCompare(b.materia, "es", { sensitivity: "base" })
+    ),
     [data.alumno.materias]
   );
 
+  // 👉 Enviamos IDs y también NOMBRES de materias + gmail + nombre del alumno
   const handleConfirm = () => {
-    const materiasElegidas = materiasOrdenadas.filter(
+    const elegidas = materiasOrdenadas.filter(
       (m) => !Number(m.inscripcion) && seleccion.has(m.id_materia)
     );
     onConfirmar({
       dni: data.alumno.dni,
       gmail: data.gmail ?? "",
-      materias: materiasElegidas.map((m) => m.id_materia),
+      nombre_alumno: data.alumno?.nombre ?? "",
+      materias: elegidas.map((m) => m.id_materia),                 // IDs (para tu API)
+      materias_nombres: elegidas.map((m) => m.materia || ""),      // NOMBRES (para email)
     });
   };
 
@@ -265,9 +244,7 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
             return (
               <label
                 key={m.id_materia}
-                className={`materia-card ${yaIncripto ? "inscripto" : checked ? "selected" : ""} ${
-                  !abierta ? "disabled" : ""
-                }`}
+                className={`materia-card ${yaIncripto ? "inscripto" : checked ? "selected" : ""} ${!abierta ? "disabled" : ""}`}
                 title={
                   yaIncripto
                     ? "Ya estás inscripto en esta materia"
@@ -315,7 +292,7 @@ const Formulario = () => {
     error: errorVentana,
     data: ventana,
     refetch: refetchVentana,
-  } = useVentanaInscripcion(10000); // cada 10s
+  } = useVentanaInscripcion(10000);
 
   const [gmail, setGmail] = useState("");
   const [dni, setDni] = useState("");
@@ -328,7 +305,6 @@ const Formulario = () => {
     setToast({ tipo, mensaje, duracion });
   }, []);
 
-  // Aviso global cuando la ventana cambia
   useEffect(() => {
     const handler = (e) => {
       if (e?.detail?.abierta === false) {
@@ -347,7 +323,6 @@ const Formulario = () => {
   );
   const isValidDni = useCallback((v) => /^[0-9]{7,9}$/.test(v), []);
 
-  /* ==== Recordarme ==== */
   useEffect(() => {
     try {
       const savedRemember = localStorage.getItem(LS.REMEMBER) === "1";
@@ -361,15 +336,8 @@ const Formulario = () => {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    if (!remember) return;
-    try { localStorage.setItem(LS.GMAIL, gmail || ""); } catch {}
-  }, [gmail, remember]);
-
-  useEffect(() => {
-    if (!remember) return;
-    try { localStorage.setItem(LS.DNI, dni || ""); } catch {}
-  }, [dni, remember]);
+  useEffect(() => { if (remember) try { localStorage.setItem(LS.GMAIL, gmail || ""); } catch {} }, [gmail, remember]);
+  useEffect(() => { if (remember) try { localStorage.setItem(LS.DNI, dni || ""); } catch {} }, [dni, remember]);
 
   const onToggleRemember = (e) => {
     const checked = e.target.checked;
@@ -389,8 +357,6 @@ const Formulario = () => {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-
-    // hard refresh por las dudas (evita carrera si justo cambió)
     await refetchVentana();
 
     if (ventana && !ventana.abierta) {
@@ -434,13 +400,13 @@ const Formulario = () => {
     }
   };
 
-  const confirmarInscripcion = async ({ dni, materias }) => {
+  // ⬇️ Aquí añadimos el envío de email luego del registro OK
+  const confirmarInscripcion = async ({ dni, materias, materias_nombres, gmail, nombre_alumno }) => {
     if (!materias?.length) {
       mostrarToast("advertencia", "Seleccioná al menos una materia (no inscripta).");
       return;
     }
 
-    // hard refresh por las dudas
     await refetchVentana();
     if (ventana && !ventana.abierta) {
       mostrarToast("advertencia", ventana.mensaje_cerrado || "Inscripción cerrada.");
@@ -448,10 +414,11 @@ const Formulario = () => {
     }
 
     try {
+      // 1) Registrar inscripción (igual que antes)
       const resp = await fetch(`${BASE_URL}/api.php?action=form_registrar_inscripcion`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dni, materias }),
+        body: JSON.stringify({ dni, materias }), // IDs al backend
       });
       const json = await resp.json();
 
@@ -461,8 +428,25 @@ const Formulario = () => {
       }
 
       mostrarToast("exito", `Inscripción registrada (${json.insertados} materia/s).`);
-      setDataAlumno(null);
 
+      // 2) Enviar correo (no bloqueante para UX)
+      try {
+        await fetch(`https://inscripcion.ipet50.edu.ar/mails/confirm_inscripcion.php`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            toEmail: gmail,
+            nombre: nombre_alumno || "",
+            dni,
+            materias: materias_nombres || [],
+          }),
+        });
+      } catch (e) {
+        console.warn("Error enviando correo de confirmación", e);
+      }
+
+      // 3) Reset
+      setDataAlumno(null);
       if (!remember) {
         setDni("");
         setGmail("");
@@ -471,6 +455,7 @@ const Formulario = () => {
       mostrarToast("error", "Error de red al registrar la inscripción.");
     }
   };
+
 
   /* ==== Estados de carga/error/closed ==== */
   if (cargandoVentana) {
@@ -514,17 +499,12 @@ const Formulario = () => {
           ventana={ventana}
           onVentanaCerro={() => {
             setDataAlumno(null);
-            // mensaje ya lo muestra el handler global
           }}
         />
       ) : (
         <div className="auth-card">
-          {/* Panel izquierdo (hero) - LOGIN */}
           <aside className="auth-hero is-login">
             <div className="hero-inner">
-              {/* Nota: mantenemos este orden (textos luego logo).
-                  El CSS ya reordena visualmente para que el logo quede arriba
-                  y el bloque entero se centre verticalmente. */}
               <div className="her-container">
                 <h1 className="hero-title">{ventana?.titulo || "Mesas de Examen · IPET 50"}</h1>
                 <p className="hero-sub">
@@ -535,7 +515,6 @@ const Formulario = () => {
             </div>
           </aside>
 
-          {/* Panel derecho (formulario) */}
           <section className="auth-body">
             <header className="auth-header">
               <h2 className="auth-title">Iniciar sesión</h2>
