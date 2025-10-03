@@ -68,7 +68,7 @@
 }
 
 /* =========================
-   LAYOUT RAÍZ
+   LAYOUT RAÍZ (opcional si usás una vista root)
    ========================= */
 .app-root {
   position: fixed;
@@ -91,6 +91,7 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
+  padding-bottom: 68px; /* para que no tape la nav-bar fija */
 }
 
 .auth-card {
@@ -106,9 +107,7 @@
 
 /* Importante: que hijos del grid puedan encogerse */
 .auth-hero,
-.auth-body {
-  min-width: 0;
-}
+.auth-body { min-width: 0; }
 
 /* =========================
    HERO (LADO IZQUIERDO ROJO)
@@ -149,7 +148,6 @@
   width: 100%;
   max-width: 420px;
   display: grid;
-  gap: 18px;
   align-items: start;
   z-index: 1;
 }
@@ -163,7 +161,7 @@
 .hero-title{
   margin: 0;
   line-height: .98;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: .2px;
 }
 .hero-sub{
@@ -204,14 +202,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.hf-input[readonly]{
-  cursor: not-allowed;
-  user-select: text;
-}
-.hf-hint{
-  font-size: 12px;
-  opacity: .9;
-}
+.hf-input[readonly]{ cursor: not-allowed; user-select: text; }
+.hf-hint{ font-size: 12px; opacity: .9; }
 
 /* Fila de 3 columnas (Año / Curso / División) */
 .hf-row-3{
@@ -220,30 +212,7 @@
   gap: 10px;
   min-width: 0;
 }
-.ACD-field{
-  width: 100%;
-  max-width: none;
-}
-
-/* Botones héroe */
-.hero-actions{
-  display: flex;
-  gap: 10px;
-  margin-top: 4px;
-}
-.btn-hero-secondary{
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,.5);
-  background: transparent;
-  color: #fff;
-  font-weight: 700;
-  cursor: pointer;
-}
-.btn-hero-secondary:hover{
-  background: rgba(255,255,255,.12);
-}
+.ACD-field{ width: 100%; max-width: none; }
 
 /* =========================
    BODY (LADO DERECHO)
@@ -262,10 +231,7 @@
   font-weight: 800;
   color: var(--ink-900);
 }
-.auth-sub{
-  margin: 0;
-  color: var(--ink-500);
-}
+.auth-sub{ margin: 0; color: var(--ink-500); }
 
 /* ------- Form (login) ------- */
 .auth-form{
@@ -345,7 +311,7 @@
   background: var(--mc-bg);
   position: relative;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--reg-shadow-sm);
   transition: box-shadow .2s, border-color .2s, transform .06s, background-color .25s;
   overflow: hidden;
 }
@@ -360,10 +326,7 @@
   background: var(--mc);
   box-shadow: inset 0 0 0 1px var(--mc-border);
 }
-.materia-card input{
-  margin-top: 2px;
-  accent-color: var(--mc);
-}
+.materia-card input{ margin-top: 2px; accent-color: var(--mc); }
 .materia-card .nombre{
   width: 100%;
   font-weight: 800;
@@ -371,7 +334,6 @@
   line-height: 1.2;
   display: flex;
   justify-content: space-between;
-
 }
 .materia-card .sub{
   color: var(--ink-500);
@@ -402,7 +364,7 @@
 .materias-grid > .materia-card:nth-child(10n + 9){ --mc:#7C3AED; }
 .materias-grid > .materia-card:nth-child(10n + 10){ --mc:#CA8A04; }
 
-/* Acciones de confirmación */
+/* Acciones de confirmación (cuando se use) */
 .actions{
   margin-top: 14px;
   display: flex;
@@ -423,24 +385,19 @@
 .btn-primary:hover{ background: var(--reg-primary-dark); }
 
 /* =========================
-   RESPONSIVE
+   RESPONSIVE BÁSICO
    ========================= */
 @media (max-width: 860px){
   .auth-card{
     grid-template-columns: 1fr;
-    min-height: unset;
+    min-height: 100vh;
+    border-radius: 0;
   }
-  .auth-hero{
-    min-height: 220px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-  .hf-row-3{
-    grid-template-columns: 1fr; /* apilar campos en mobile */
-  }
+  .auth-hero{ min-height: 220px; }
+  .hf-row-3{ grid-template-columns: 1fr; }
 }
 
-/* --- 1) “sub” debajo del nombre del alumno --- */
+/* --- 1) Sub debajo del nombre del alumno --- */
 .hero-title { margin: 0; }
 .hero-sub {
   width: 100%;
@@ -457,7 +414,7 @@
   line-height: 1.15;
 }
 
-/* --- 2) Estilo del checklist custom en tarjetas --- */
+/* --- 2) Checklist custom en tarjetas --- */
 .materia-card { position: relative; padding-left: 44px; }
 .materia-card input[type="checkbox"]{
   position: absolute;
@@ -509,34 +466,23 @@
   border-bottom: 3px solid #fff;
   z-index: 3;
 }
-.materia-card input[type="checkbox"]:focus-visible ~ .nombre,
-.materia-card input[type="checkbox"]:focus-visible ~ .sub{
-  outline: none;
-}
 .materia-card input[type="checkbox"]:focus-visible{ outline: none; }
 .materia-card:has(input[type="checkbox"]:focus-visible)::after{
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--mc) 35%, transparent);
 }
 
-/* --- 3) Alinear “Confirmar inscripción” con “Volver” (misma altura) --- */
-.auth-hero{
-  display: flex;
-  flex-direction: column;
-}
+/* --- 3) Alineación de acciones / ergonomía --- */
+.auth-hero{ display: flex; flex-direction: column; }
 .hero-inner{
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 18px;
+
   width: 100%;
   max-width: 420px;
   flex: 1 1 auto;
 }
-.hero-actions{
-  margin-top: auto;
-  display: flex;
-  gap: 10px;
-}
+.hero-actions{ margin-top: auto; display: flex; gap: 10px; }
 .auth-body{
   display: flex;
   flex-direction: column;
@@ -544,15 +490,8 @@
   padding: 28px;
   background: #fff;
 }
-.materias-grid{
-  overflow: auto;
-}
-.actions{
-  margin-top: auto;
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
+.materias-grid{ overflow: auto; }
+.actions{ margin-top: auto; display: flex; gap: 10px; justify-content: flex-end; }
 .btn-hero-secondary{
   height: 46px;
   padding: 0 14px;
@@ -563,15 +502,9 @@
   font-weight: 700;
   cursor: pointer;
 }
-.btn-hero-secondary:hover{
-  background: rgba(255,255,255,.12);
-}
-.btn-primary{
-  height: 46px;
-  padding: 0 16px;
-  border-radius: 12px;
-  font-weight: 800;
-}
+.btn-hero-secondary:hover{ background: rgba(255,255,255,.12); }
+.btn-primary{ height: 46px; padding: 0 16px; border-radius: 12px; font-weight: 800; }
+
 @media (max-width: 860px){
   .auth-card{ grid-template-columns: 1fr; }
   .auth-hero{ min-height: 220px; }
@@ -594,6 +527,7 @@
 .auth-hero.is-login .hero-sub{
   opacity: .95;
   margin-top: 6px;
+  font-weight: 200;
 }
 
 /* Estados de tarjeta inscripta */
@@ -622,10 +556,7 @@
 }
 
 /* Grid deshabilitada si cerrada */
-.materias-grid.is-disabled {
-  opacity: .7;
-  pointer-events: none;
-}
+.materias-grid.is-disabled { opacity: .7; pointer-events: none; }
 
 /* Pantalla cerrada */
 .closed-box {
@@ -655,7 +586,7 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ===== Ventana de inscripción (look claro con variables de :root) ===== */
+/* ===== Ventana de inscripción (look claro con variables) ===== */
 .closed-box{
   --accent: var(--reg-primary, #B71C1C);
   --accent-light: var(--reg-primary-light, #E53935);
@@ -706,16 +637,6 @@
   border-color: color-mix(in oklab, var(--accent) 18%, var(--bd));
   background: color-mix(in oklab, var(--reg-gray-100) 70%, #fff);
 }
-.closed-list li::before{
-  content: "📅";
-  position: absolute;
-  left: .8rem;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1.05rem;
-  line-height: 1;
-  opacity: .9;
-}
 .closed-list li strong{
   display: block;
   font-size: .78rem;
@@ -741,44 +662,38 @@
 
 /* =========================
    AJUSTE DE LOGIN PEDIDO:
-   LOGO ARRIBA Y BLOQUE CENTRADO VERTICAL
+   LOGO ARRIBA Y BLOQUE CENTRADO
    ========================= */
-.auth-hero.is-login {
-  display: flex;            /* asegura flex en el panel rojo */
-  flex-direction: column;
-}
+.auth-hero.is-login { display: flex; flex-direction: column; }
 .auth-hero.is-login .hero-inner {
   display: flex;
   flex-direction: column;
-  justify-content: center;  /* centra vertical */
-  align-items: center;      /* centra horizontal */
+  justify-content: center;
+  align-items: center;      
   gap: 10px;
   height: 100%;
   max-width: 520px;
   margin: 0 auto;
   text-align: center;
 }
-/* Orden: primero el logo, luego textos */
 .auth-hero.is-login .hero-inner .hero-logo--big { order: 1; }
 .auth-hero.is-login .hero-inner .her-container   { order: 2; }
-/* Afinado de tamaños/márgenes */
 .auth-hero.is-login .hero-logo--big { margin-bottom: 6px; }
 .auth-hero.is-login .hero-title{ font-size: clamp(22px, 3vw, 30px); margin: 0; }
 .auth-hero.is-login .hero-sub{ margin-top: 4px; opacity: .95; }
-
 @media (max-width: 860px){
   .auth-hero.is-login .hero-inner{ padding-block: 12px; }
 }
+
 /* =========================
    Checkbox "Recordarme" estilizado
-   (no requiere cambiar tu JSX actual)
    ========================= */
 .remember{
-  --cb-size: 20px;                 /* tamaño del cuadrado */
-  --cb-radius: 6px;                /* radio del cuadrado */
-  --cb-bd: var(--border, #E2E8F0); /* color borde base */
+  --cb-size: 20px;
+  --cb-radius: 6px;
+  --cb-bd: var(--border, #E2E8F0);
   --cb-ink: var(--ink-700, #334155);
-  --cb-accent: var(--reg-primary, #B71C1C);        /* color activo */
+  --cb-accent: var(--reg-primary, #B71C1C);
   --cb-accent-ghost: color-mix(in oklab, var(--cb-accent) 20%, transparent);
   position: relative;
   display: inline-flex;
@@ -789,8 +704,6 @@
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-
-/* Ocultamos visualmente el checkbox nativo pero sigue siendo accesible */
 .remember input{
   position: absolute;
   left: 0;
@@ -802,15 +715,11 @@
   opacity: 0;
   cursor: pointer;
 }
-
-/* El texto */
 .remember span{
   color: var(--ink-500, #64748B);
-  padding-left: calc(var(--cb-size) + 8px); /* deja lugar al “cuadrado” */
+  padding-left: calc(var(--cb-size) + 8px);
   line-height: 1.1;
 }
-
-/* Dibujamos el cuadrado del checkbox en el ::before del span */
 .remember span::before{
   content: "";
   position: absolute;
@@ -825,12 +734,10 @@
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cb-bd) 60%, transparent);
   transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease, transform .06s ease;
 }
-
-/* Check (tilde) */
 .remember span::after{
   content: "";
   position: absolute;
-  left: 5px;                        /* centrado óptico del tilde */
+  left: 5px;
   top: 50%;
   width: 6px;
   height: 12px;
@@ -839,54 +746,31 @@
   border-bottom: 3px solid transparent;
   transition: border-color .2s ease, transform .15s ease;
 }
-
-/* Hover general */
 .remember:hover span::before{
   border-color: color-mix(in oklab, var(--cb-bd) 40%, var(--cb-accent));
-  box-shadow:
-    inset 0 0 0 1px color-mix(in oklab, var(--cb-bd) 70%, transparent),
-    0 2px 6px rgba(0,0,0,.04);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cb-bd) 70%, transparent), 0 2px 6px rgba(0,0,0,.04);
 }
-
-/* Estado FOCUS (accesible con teclado) */
 .remember:has(input:focus-visible) span::before{
   box-shadow: 0 0 0 3px var(--cb-accent-ghost);
   border-color: var(--cb-accent);
 }
-
-/* Estado CHECKED */
-.remember input:checked + span{
-  color: var(--cb-ink);
-}
+.remember input:checked + span{ color: var(--cb-ink); }
 .remember input:checked + span::before{
   background: var(--cb-accent);
   border-color: var(--cb-accent);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in oklab, #fff 55%, transparent),
-    0 2px 10px color-mix(in oklab, var(--cb-accent) 25%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, #fff 55%, transparent), 0 2px 10px color-mix(in oklab, var(--cb-accent) 25%, transparent);
 }
 .remember input:checked + span::after{
-  transform: translateY(-58%) rotate(45deg) scale(1); /* pequeño pop */
+  transform: translateY(-58%) rotate(45deg) scale(1);
 }
-
-/* Estado DISABLED (por si en algún momento lo usás) */
-.remember input:disabled + span{
-  opacity: .6;
-  cursor: not-allowed;
-}
+.remember input:disabled + span{ opacity: .6; cursor: not-allowed; }
 .remember input:disabled + span::before{
-  background: #f9fafb;
-  border-color: #e5e7eb;
-  box-shadow: none;
+  background: #f9fafb; border-color: #e5e7eb; box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce){
+  .remember span::before, .remember span::after{ transition: none; }
 }
 
-/* Respeta preferencias de movimiento reducido */
-@media (prefers-reduced-motion: reduce){
-  .remember span::before,
-  .remember span::after{
-    transition: none;
-  }
-}
 /* =========================
    Tipografía minimal (scope local)
    ========================= */
@@ -898,20 +782,73 @@
   letter-spacing: .005em;
   text-rendering: optimizeLegibility;
 }
-
-/* Pesos y limpieza en títulos y etiquetas (scopeado) */
 .auth-title{ font-weight: 800; letter-spacing: 0; }
-.auth-sub, .field-label, .hf-label{ font-weight: 600; color: color-mix(in oklab, var(--ink-700) 80%, #0000); }
+.field-label, .hf-label{ font-weight: 600; }
 .field-input, .hf-input, .closed-list li{ font-variant-numeric: tabular-nums; }
 
-/* ===========================================
-   Iconos de calendario con color --reg-primary
-   (sólo en la caja de ventana cerrada/abierta)
-   =========================================== */
-.closed-list li{
-  padding-left: 3.2rem; /* espacio para el ícono */
+
+/* ===== PARCHE MOBILE: forzar scroll de toda la pantalla ===== */
+@media (max-width: 860px){
+
+  /* Si usás un wrapper .app-root alrededor del Formulario, dejalo estático */
+  .app-root{
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+    display: block !important;  /* evita grid/flex que centre y recorte */
+  }
+  .auth-hero::before{width: 0;}
+
+  /* Por si tu #root o contenedor de React quedó con height fijo */
+  #root, #app, .app, .page{
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+
+  /* Nuestra página y tarjeta: nada de alturas fijas ni overflow interno */
+  .auth-page{
+    min-height: 100dvh !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding-bottom: 68px !important; /* nav fija */
+  }
+  .auth-card{
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Quitar cualquier scroll interno de las cajas */
+  .auth-hero,
+  .auth-body,
+  .hero-scroll,
+  .materias-scroll{
+    min-height: unset !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+
+  }
+.auth-body{padding: 28px 10px;}
+  /* Cualquier regla heredada que haya puesto overflow:hidden arriba */
+  .auth-page *{
+    overflow: visible !important;  /* seguro: solo en mobile */
+  }
 }
 
+
+
+
+
+/* ===========================================
+   Icono calendario tintado (en closed-list)
+   =========================================== */
+.closed-list li{ padding-left: 3.2rem; }
 .closed-list li::before{
   content: "";
   position: absolute;
@@ -920,10 +857,9 @@
   transform: translateY(-50%);
   width: 24px;
   height: 24px;
-  background: var(--reg-primary);    /* << usa tu color de tema */
+  background: var(--reg-primary);
   opacity: .95;
 
-  /* Calendario SVG como máscara para poder teñirlo */
   -webkit-mask: url("data:image/svg+xml;utf8,\
   <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>\
     <rect x='3' y='4' width='18' height='17' rx='3' ry='3' fill='%23000'/>\
@@ -952,21 +888,333 @@
   </svg>") center / contain no-repeat;
 }
 
-.closed-list li:hover::before{
-  background: color-mix(in oklab, var(--reg-primary) 88%, #ffffff);
+/* =========================
+   Layout “panel derecho” con header sticky y scroll interno
+   (para escritorio / tablet)
+   ========================= */
+.auth-body{
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 0;
+  overflow: hidden;           /* el scroll va en .materias-scroll */
+  gap: 14px;
+}
+.auth-header--sticky{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-block: 6px 10px;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    radial-gradient(800px 100px at 0% 0%, color-mix(in oklab, var(--reg-primary-light) 6%, transparent), transparent) border-box;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 80%, #fff);
+}
+.materias-section{
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 12px;
+}
+.materias-scroll{
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+.materias-scroll.is-disabled{ opacity: .7; pointer-events: none; }
+.actions--sticky{
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-top: 8px;
+  background: linear-gradient(180deg, #ffffff, #ffffff 65%, #ffffffcc 100%);
+  backdrop-filter: blur(2px);
+  border-top: 1px solid color-mix(in oklab, var(--border) 80%, #fff);
 }
 
-/* Etiquetas DESDE/HASTA con tracking sutil (scopeado) */
-.closed-list li strong{
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  font-weight: 700;
-  color: color-mix(in oklab, var(--ink-700) 90%, #0000);
+/* Grid de materias fluida escritorio/tablet */
+.materias-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  max-width: unset;
+  margin: 8px 0;
+  padding: 2px;
 }
 
-/* Pastillas con tipografía limpia (scopeado) */
-.closed-list li > :not(strong){
+/* Tarjetas más compactas en móviles chicos */
+@media (max-width: 420px){
+  .materia-card{ padding: 10px 12px 10px 44px; }
+  .materia-card .nombre{ font-weight: 700; }
+  .materia-card .sub{ font-size: 11.5px; }
+}
+
+/* Campos del HERO responsivos (3 → 2 → 1) */
+@media (max-width: 1024px){
+  .hf-row-3{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 600px){
+  .hf-row-3{ grid-template-columns: 1fr; }
+}
+
+/* Inputs y tipografías más “tranquilas” en pantallas chicas */
+@media (max-width: 600px){
+  .hero-title{ font-size: clamp(18px, 4.5vw, 24px); font-weight: 600; }
+  .hero-sub{ font-size: clamp(13px, 3.7vw, 14px); }
+  .hf-label{ font-size: 11.5px; font-weight: 600; }
+  .hf-input{ height: 38px; padding: 8px 10px; font-size: 14px; }
+  .btn-hero-secondary{ height: 42px; }
+}
+
+/* Ergonomía táctil */
+.materia-card input[type="checkbox"]{ width: 24px; height: 24px; }
+.materia-card::after{ width: 24px; height: 24px; border-radius: 7px; }
+.materia-card.selected::before{ left: 21px; height: 12px; width: 6px; }
+
+/* Accesibilidad: foco visible */
+.materia-card:has(input[type="checkbox"]:focus-visible){
+  outline: 2px solid color-mix(in oklab, var(--mc) 35%, transparent);
+  outline-offset: 2px;
+}
+
+/* ===== NAV BAR FIJA (botones Volver / Confirmar) ===== */
+.nav-bar{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid var(--border);
+}
+.btn-light{
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
   font-weight: 600;
-  border-radius: 10px;
-  padding: .28rem .6rem;
+  color: var(--ink-700);
+  cursor: pointer;
+}
+.btn-light:hover{ background: #fafafa; }
+
+/* =========================
+   Alturas contenedor principal (desktop)
+   ========================= */
+.auth-card{
+  height: clamp(560px, 86svh, 820px);
+  max-height: 86svh;
+}
+
+/* =========================
+   MODO MOBILE: UN SOLO SCROLL EN TODA LA PÁGINA
+   (une hero + body, desactiva scroll internos)
+   ========================= */
+@media (max-width: 860px){
+
+  .auth-card{
+    grid-template-columns: 1fr;
+    height: auto !important;
+    max-height: none !important;
+    border-radius: 0;
+  }
+
+  .auth-page{
+    min-height: 100dvh;
+    height: auto;
+    overflow: visible;
+    padding-bottom: 68px; /* espacio para la nav-bar fija */
+  }
+
+  .auth-hero,
+  .auth-body{
+    min-height: unset !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .hero-scroll{
+    overflow: visible !important;
+    max-height: none !important;
+    padding-right: 0 !important;
+  }
+
+  .materias-scroll{
+    flex: initial !important;
+    min-height: unset !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+  }
+
+  .materias-grid{ margin-bottom: 12px; }
+  .auth-sub{ display: none; }
+  .nav-bar{ position: fixed; }
+
+  /* Forzar 3 columnas compactas en A/C/D en móviles si te gusta este look */
+  .hf-row-3{
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    align-items: center;
+  }
+  .hf-label{
+    font-size: 11px !important;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+  .hf-input{
+    height: 34px !important;
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+    min-width: 0;
+    text-overflow: ellipsis;
+  }
+}
+
+
+/* ===== Desktop: ocultar barra de navegación y quitar espacio inferior ===== */
+@media (min-width: 861px){
+  .nav-bar{ display: none !important; }
+  .auth-page{ padding-bottom: 0 !important; } /* ya no reservamos 68px */
+}
+
+/* ===== Móvil: bloquear scroll horizontal ===== */
+html, body{ overflow-x: hidden; } /* seguridad global */
+
+@media (max-width: 860px){
+  html, body, #root, .auth-page{
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;   /* sin scroll X */
+  }
+
+  /* Asegura que los contenedores no se desborden */
+  .auth-card, .auth-hero, .auth-body, .materias-scroll, .hero-scroll{
+    max-width: 100% !important;
+  }
+
+  /* Medios e imágenes responsivas para evitar desbordes */
+  img, svg, video, canvas{ max-width: 100%; height: auto; }
+
+  /* Evita que algún padding empuje el ancho */
+  .auth-body{ padding-left: 12px; padding-right: 12px; }
+}
+/* Visibilidad por breakpoint */
+.only-desktop { display: none; }
+.only-mobile  { display: flex; }
+
+@media (min-width: 861px){
+  .only-desktop { display: flex; }
+  .only-mobile  { display: none !important; }
+}
+
+/* Contenedor botón izq (debajo de datos) */
+.actions-left{
+  margin-top: 10px;
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* Contenedor botón der (debajo de materias) */
+.actions-right{
+  margin-top: 8px;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 80%, #fff);
+}
+
+/* Botón del hero (ya lo tenías, por si falta) */
+.btn-hero-secondary{
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.5);
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-hero-secondary:hover{ background: rgba(255,255,255,.12); }
+
+/* La nav inferior queda SOLO para mobile (ya estaba) */
+@media (min-width: 861px){
+  .nav-bar{ display: none !important; }
+  .auth-page{ padding-bottom: 0 !important; }
+}
+@media (max-width: 860px){
+  .nav-bar{ display: flex !important; }         /* móvil sí */
+  .only-mobile{ display: flex; }
+  .only-desktop{ display: none !important; }
+  .auth-page{ padding-bottom: 68px !important; } /* reservar espacio por la nav fija */
+}
+/* ===== Login móvil SIN SCROLL ===== */
+@media (max-width: 860px){
+  /* Solo para la vista de inicio de sesión */
+  .auth-page.is-login-screen{
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    padding-bottom: 0 !important;   /* no reservamos espacio de nav */
+    overflow: hidden !important;     /* sin scroll general */
+  }
+
+  .auth-page.is-login-screen .auth-card{
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    grid-template-columns: 1fr !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Hero compacto arriba */
+  .auth-page.is-login-screen .auth-hero.is-login{
+    min-height: 38dvh !important;      /* ajustable 34–42dvh según gusto */
+    padding: 16px !important;
+  }
+  .auth-page.is-login-screen .auth-hero.is-login .hero-inner{
+    gap: 8px !important;
+  }
+  .auth-page.is-login-screen .auth-hero.is-login .hero-sub{
+    display: none !important;          /* ahorra alto, opcional */
+  }
+
+  /* Panel derecho sin scroll interno */
+  .auth-page.is-login-screen .auth-body{
+    display: grid !important;
+    grid-template-rows: auto 1fr auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding: 16px 12px !important;
+  }
+  .auth-page.is-login-screen .auth-header{
+    margin-bottom: 6px !important;
+  }
+  .auth-page.is-login-screen .auth-form{
+    min-height: 0 !important;
+    overflow: hidden !important;   /* evita que el form cree scroll interno */
+    gap: 10px !important;
+  }
+
+  /* Inputs y tipografía un poco más compactos para entrar sin scroll */
+  .auth-page.is-login-screen .field-input{
+    height: 40px !important;
+    padding: 8px 10px !important;
+    font-size: 14px !important;
+  }
+  .auth-page.is-login-screen .btn-cta{
+    height: 44px !important;
+  }
+}
+
+/* Asegurar que la nav fija solo aparezca en la vista de resumen (no login) */
+@media (max-width: 860px){
+  .auth-page.is-login-screen .nav-bar{
+    display: none !important;
+  }
 }

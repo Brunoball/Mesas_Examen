@@ -57,10 +57,12 @@ const useVentanaInscripcion = (pollMs = 10000) => {
   }, []);
 
   useEffect(() => { fetchVentana(); }, [fetchVentana]);
+
   useEffect(() => {
     const id = setInterval(fetchVentana, pollMs);
     return () => clearInterval(id);
   }, [fetchVentana, pollMs]);
+
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === "visible") fetchVentana(); };
     document.addEventListener("visibilitychange", onVis);
@@ -152,7 +154,6 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
     [data.alumno.materias]
   );
 
-  // 👉 Enviamos IDs y también NOMBRES de materias + gmail + nombre del alumno
   const handleConfirm = () => {
     const elegidas = materiasOrdenadas.filter(
       (m) => !Number(m.inscripcion) && seleccion.has(m.id_materia)
@@ -161,8 +162,8 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
       dni: data.alumno.dni,
       gmail: data.gmail ?? "",
       nombre_alumno: data.alumno?.nombre ?? "",
-      materias: elegidas.map((m) => m.id_materia),                 // IDs (para tu API)
-      materias_nombres: elegidas.map((m) => m.materia || ""),      // NOMBRES (para email)
+      materias: elegidas.map((m) => m.id_materia),
+      materias_nombres: elegidas.map((m) => m.materia || ""),
     });
   };
 
@@ -171,56 +172,61 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
 
   return (
     <div className="auth-card">
+      {/* Caja izquierda (datos) + VOLVER abajo (desktop) */}
       <aside className="auth-hero">
-        <div className="hero-inner">
-          <div className="hero-top">
-            <img src={escudo} alt="Escudo IPET 50" className="hero-logo" />
-            <h1 className="hero-title">¡Bienvenido!</h1>
-            <p className="hero-sub">Revisá tus datos de inscripción.</p>
-          </div>
-
-          <div className="hero-form" aria-label="Datos del alumno (solo lectura)">
-            <label className="hf-field">
-              <span className="hf-label">Nombre y Apellido</span>
-              <input className="hf-input" value={a?.nombre ?? ""} readOnly />
-            </label>
-
-            <label className="hf-field">
-              <span className="hf-label">DNI</span>
-              <input className="hf-input" value={a?.dni ?? ""} readOnly />
-            </label>
-
-            <div className="hf-row-3">
-              <label className="hf-field">
-                <span className="hf-label ">Año actual</span>
-                <input className="hf-input ACD-field" value={a?.anio_actual ?? ""} readOnly />
-              </label>
-              <label className="hf-field">
-                <span className="hf-label">Curso</span>
-                <input className="hf-input ACD-field" value={a?.cursando?.curso ?? ""} readOnly />
-              </label>
-              <label className="hf-field">
-                <span className="hf-label">División</span>
-                <input className="hf-input ACD-field" value={a?.cursando?.division ?? ""} readOnly />
-              </label>
+        <div className="hero-scroll">
+          <div className="hero-inner">
+            <div className="hero-top">
+              <img src={escudo} alt="Escudo IPET 50" className="hero-logo" />
+              <h1 className="hero-title">¡Bienvenido!</h1>
+              <p className="hero-sub">Revisá tus datos de inscripción.</p>
             </div>
 
-            <label className="hf-field">
-              <span className="hf-label">Gmail</span>
-              <input className="hf-input" value={data?.gmail ?? ""} readOnly />
-            </label>
+            <div className="hero-form" aria-label="Datos del alumno (solo lectura)">
+              <label className="hf-field">
+                <span className="hf-label">Nombre y Apellido</span>
+                <input className="hf-input" value={a?.nombre ?? ""} readOnly />
+              </label>
 
-            <div className="hf-hint">Estos datos no se pueden modificar aquí.</div>
-          </div>
+              <label className="hf-field">
+                <span className="hf-label">DNI</span>
+                <input className="hf-input" value={a?.dni ?? ""} readOnly />
+              </label>
 
-          <div className="hero-actions">
-            <button type="button" className="btn-hero-secondary" onClick={onVolver}>
-              Volver
-            </button>
+              <div className="hf-row-3">
+                <label className="hf-field">
+                  <span className="hf-label">Año actual</span>
+                  <input className="hf-input ACD-field" value={a?.anio_actual ?? ""} readOnly />
+                </label>
+                <label className="hf-field">
+                  <span className="hf-label">Curso</span>
+                  <input className="hf-input ACD-field" value={a?.cursando?.curso ?? ""} readOnly />
+                </label>
+                <label className="hf-field">
+                  <span className="hf-label">División</span>
+                  <input className="hf-input ACD-field" value={a?.cursando?.division ?? ""} readOnly />
+                </label>
+              </div>
+
+              <label className="hf-field">
+                <span className="hf-label">Gmail</span>
+                <input className="hf-input" value={data?.gmail ?? ""} readOnly />
+              </label>
+
+              <div className="hf-hint">Estos datos no se pueden modificar aquí.</div>
+            </div>
+
+            {/* VOLVER — solo desktop */}
+            <div className="actions-left only-desktop">
+              <button type="button" className="btn-hero-secondary" onClick={onVolver}>
+                Volver
+              </button>
+            </div>
           </div>
         </div>
       </aside>
 
+      {/* Caja derecha (materias) + CONFIRMAR abajo (desktop) */}
       <section className="auth-body">
         <header className="auth-header">
           <h2 className="auth-title">Materias pendientes de rendir</h2>
@@ -228,7 +234,7 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
           {ventana && (
             <div className={`ventana-pill ${abierta ? "is-open" : "is-closed"}`}>
               {abierta ? (
-                <>Inscripción abierta hasta <strong>{fmtFechaHoraES(ventana.fin)}</strong>.</>
+                <>Inscripción abierta hasta <strong className="fecha-cierre">{fmtFechaHoraES(ventana.fin)}</strong>.</>
               ) : (
                 <>Inscripción cerrada (desde {fmtFechaHoraES(ventana.inicio)} hasta {fmtFechaHoraES(ventana.fin)}).</>
               )}
@@ -236,40 +242,43 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
           )}
         </header>
 
-        <div className={`materias-grid ${abierta ? "" : "is-disabled"}`}>
-          {materiasOrdenadas.map((m) => {
-            const yaIncripto = !!Number(m.inscripcion);
-            const checked = seleccion.has(m.id_materia);
-            const disabled = yaIncripto || !abierta;
-            return (
-              <label
-                key={m.id_materia}
-                className={`materia-card ${yaIncripto ? "inscripto" : checked ? "selected" : ""} ${!abierta ? "disabled" : ""}`}
-                title={
-                  yaIncripto
-                    ? "Ya estás inscripto en esta materia"
-                    : !abierta
-                    ? "La inscripción está cerrada"
-                    : ""
-                }
-              >
-                <input
-                  type="checkbox"
-                  checked={yaIncripto ? false : checked}
-                  disabled={disabled}
-                  onChange={() => !disabled && toggle(m.id_materia, false)}
-                />
-                <span className="nombre">
-                  {m.materia}
-                  {yaIncripto && <span className="badge-inscripto">INSCRIPTO</span>}
-                </span>
-                <small className="sub">{`(Curso ${m.curso} • Div. ${m.division})`}</small>
-              </label>
-            );
-          })}
+        <div className="materias-scroll">
+          <div className="materias-grid">
+            {materiasOrdenadas.map((m) => {
+              const yaIncripto = !!Number(m.inscripcion);
+              const checked = seleccion.has(m.id_materia);
+              const disabled = yaIncripto || !abierta;
+              return (
+                <label
+                  key={m.id_materia}
+                  className={`materia-card ${yaIncripto ? "inscripto" : checked ? "selected" : ""} ${!abierta ? "disabled" : ""}`}
+                  title={
+                    yaIncripto
+                      ? "Ya estás inscripto en esta materia"
+                      : !abierta
+                      ? "La inscripción está cerrada"
+                      : ""
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={yaIncripto ? false : checked}
+                    disabled={disabled}
+                    onChange={() => !disabled && toggle(m.id_materia, false)}
+                  />
+                  <span className="nombre">
+                    {m.materia}
+                    {yaIncripto && <span className="badge-inscripto">INSCRIPTO</span>}
+                  </span>
+                  <small className="sub">{`(Curso ${m.curso} • Div. ${m.division})`}</small>
+                </label>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="actions">
+        {/* CONFIRMAR — solo desktop */}
+        <div className="actions-right only-desktop">
           <button
             type="button"
             className="btn-primary"
@@ -281,6 +290,22 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
           </button>
         </div>
       </section>
+
+      {/* Barra fija SOLO para móviles */}
+      <nav className="nav-bar only-mobile">
+        <button type="button" className="btn-light" onClick={onVolver}>
+          Volver
+        </button>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={handleConfirm}
+          disabled={!abierta}
+          title={!abierta ? "La inscripción está cerrada" : ""}
+        >
+          Confirmar inscripción
+        </button>
+      </nav>
     </div>
   );
 };
@@ -400,7 +425,7 @@ const Formulario = () => {
     }
   };
 
-  // ⬇️ Aquí añadimos el envío de email luego del registro OK
+  // Envío de confirmación
   const confirmarInscripcion = async ({ dni, materias, materias_nombres, gmail, nombre_alumno }) => {
     if (!materias?.length) {
       mostrarToast("advertencia", "Seleccioná al menos una materia (no inscripta).");
@@ -414,11 +439,10 @@ const Formulario = () => {
     }
 
     try {
-      // 1) Registrar inscripción (igual que antes)
       const resp = await fetch(`${BASE_URL}/api.php?action=form_registrar_inscripcion`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dni, materias }), // IDs al backend
+        body: JSON.stringify({ dni, materias }),
       });
       const json = await resp.json();
 
@@ -429,7 +453,6 @@ const Formulario = () => {
 
       mostrarToast("exito", `Inscripción registrada (${json.insertados} materia/s).`);
 
-      // 2) Enviar correo (no bloqueante para UX)
       try {
         await fetch(`https://inscripcion.ipet50.edu.ar/mails/confirm_inscripcion.php`, {
           method: "POST",
@@ -445,7 +468,6 @@ const Formulario = () => {
         console.warn("Error enviando correo de confirmación", e);
       }
 
-      // 3) Reset
       setDataAlumno(null);
       if (!remember) {
         setDni("");
@@ -455,7 +477,6 @@ const Formulario = () => {
       mostrarToast("error", "Error de red al registrar la inscripción.");
     }
   };
-
 
   /* ==== Estados de carga/error/closed ==== */
   if (cargandoVentana) {
@@ -480,8 +501,10 @@ const Formulario = () => {
   }
 
   /* ==== Ventana abierta: render normal ==== */
+  const isLoginScreen = !dataAlumno; // ===> para NO tener scroll en login móvil
+
   return (
-    <div className="auth-page">
+    <div className={`auth-page ${isLoginScreen ? "is-login-screen" : ""}`}>
       {toast && (
         <Toast
           tipo={toast.tipo}
@@ -519,7 +542,7 @@ const Formulario = () => {
             <header className="auth-header">
               <h2 className="auth-title">Iniciar sesión</h2>
               <p className="auth-sub">
-                Inscripción abierta hasta <strong>{fmtFechaHoraES(ventana?.fin)}</strong>.
+                Inscripción abierta hasta <strong className="fecha-cierre">{fmtFechaHoraES(ventana?.fin)}</strong>.
               </p>
             </header>
 
