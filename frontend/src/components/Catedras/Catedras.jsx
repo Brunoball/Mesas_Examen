@@ -5,10 +5,9 @@ import React, {
   useState,
   useRef,
   useCallback,
-  useDeferredValue,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { FixedSizeList as List } from "react-window";
+import { FixedSizeList as List, areEqual as areRowEqual } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 import {
   FaEdit,
@@ -45,8 +44,18 @@ const normalizar = (str = "") =>
 
 const MAX_CASCADE_ITEMS = 15;
 
+/* Debounce simple */
+function useDebouncedValue(value, delay = 200) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 /* ================================
-   Componente Cátedras (clon de diseño)
+   Componente Cátedras
 ================================ */
 const Catedras = () => {
   const navigate = useNavigate();
@@ -59,13 +68,15 @@ const Catedras = () => {
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const filtrosRef = useRef(null);
 
-  const [q, setQ] = useState("");
-  const qDef = useDeferredValue(q);
+  // Buscador: input inmediato + valor con debounce (para filtrar)
+  const [qInput, setQInput] = useState("");
+  const q = useDebouncedValue(qInput, 200);
 
-  const [cursoSel, setCursoSel] = useState("");     // guarda el nombre del curso para mostrar igual que en chips
-  const [divisionSel, setDivisionSel] = useState(""); // idem división
+  const [cursoSel, setCursoSel] = useState(""); // nombre del curso
+  const [divisionSel, setDivisionSel] = useState(""); // nombre de la división
 
-  // animación calcada
+  // Animación: la deshabilitamos durante escritura de búsqueda,
+  // sólo la activamos en cambios de chips (curso/división).
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
 
@@ -73,7 +84,7 @@ const Catedras = () => {
   const [showModal, setShowModal] = useState(false);
   const [catedraSel, setCatedraSel] = useState(null);
 
-  // ======= Carga desde API =======
+  // ======= Carga desde API (una sola vez, y luego cuando asignás) =======
   const fetchCatedras = useCallback(async () => {
     try {
       setCargando(true);
@@ -86,7 +97,7 @@ const Catedras = () => {
 
       const data = (json.catedras || []).map((c) => ({
         ...c,
-        // índices normalizados para búsqueda rápida
+        _id: String(c.id_catedra || "").trim(),
         _materia: normalizar(c.materia),
         _docente: normalizar(c.docente || ""),
         _curso: normalizar(c.nombre_curso || ""),
@@ -116,16 +127,18 @@ const Catedras = () => {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
   }, [catedras]);
 
-  // ======= Filtrado =======
+  // ======= Filtrado super rápido =======
   const hayFiltros = !!(q || cursoSel || divisionSel);
 
   const catedrasFiltradas = useMemo(() => {
     let res = catedras;
 
-    if (qDef?.trim()) {
-      const nq = normalizar(qDef);
+    if (q) {
+      const nq = normalizar(q);
+      // match rápido por id exacto o parcial + texto
       res = res.filter(
         (c) =>
+          c._id.includes(nq) ||
           c._materia.includes(nq) ||
           c._docente.includes(nq) ||
           c._curso.includes(nq) ||
@@ -135,18 +148,18 @@ const Catedras = () => {
 
     if (cursoSel) {
       const ncur = normalizar(cursoSel);
-      res = res.filter((c) => normalizar(c.nombre_curso) === ncur);
+      res = res.filter((c) => c._curso === ncur);
     }
 
     if (divisionSel) {
       const ndiv = normalizar(divisionSel);
-      res = res.filter((c) => normalizar(c.nombre_division) === ndiv);
+      res = res.filter((c) => c._division === ndiv);
     }
 
     return res;
-  }, [catedras, qDef, cursoSel, divisionSel]);
+  }, [catedras, q, cursoSel, divisionSel]);
 
-  // ======= Animación en cascada (idéntica) =======
+  // ======= Animación en cascada sólo para chips (no para typing) =======
   const dispararCascadaUnaVez = useCallback((duracionMs) => {
     const safeMs = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
     const total = typeof duracionMs === "number" ? duracionMs : safeMs;
@@ -165,9 +178,8 @@ const Catedras = () => {
     });
   }, [dispararCascadaUnaVez]);
 
-  useEffect(() => {
-    if (qDef?.trim()) triggerCascadaConPreMask();
-  }, [qDef, triggerCascadaConPreMask]);
+  // ❌ Importante: NO disparamos cascada por q (typing). Sólo chips.
+  // (Se elimina el useEffect que miraba q)
 
   // ======= Click fuera para cerrar filtros =======
   useEffect(() => {
@@ -185,6 +197,7 @@ const Catedras = () => {
     if (!catedrasFiltradas.length) return;
 
     const filas = catedrasFiltradas.map((c) => ({
+      "ID": c.id_catedra ?? "",
       "Materia": c.materia ?? "",
       "Curso": c.nombre_curso ?? "",
       "División": c.nombre_division ?? "",
@@ -192,11 +205,11 @@ const Catedras = () => {
     }));
 
     const ws = XLSX.utils.json_to_sheet(filas, {
-      header: ["Materia", "Curso", "División", "Docente"],
+      header: ["ID", "Materia", "Curso", "División", "Docente"],
     });
 
     // ancho de columnas aprox
-    ws["!cols"] = [{ wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 28 }];
+    ws["!cols"] = [{ wch: 7 }, { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 28 }];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cátedras");
@@ -235,6 +248,9 @@ const Catedras = () => {
         }}
         className={`glob-row ${index % 2 === 0 ? "glob-even-row" : "glob-odd-row"} ${willAnimate ? "glob-cascade" : ""}`}
       >
+        <div className="glob-column" style={{ width: "100%", maxWidth: 80 }} title={`ID ${cat.id_catedra}`}>
+          {cat.id_catedra}
+        </div>
         <div className="glob-column glob-column-nombre" title={cat.materia}>
           {cat.materia}
         </div>
@@ -244,7 +260,6 @@ const Catedras = () => {
 
         <div className="glob-column glob-icons-column">
           <div className="glob-icons-container">
-            {/* Sólo editar (se quitó el botón de información) */}
             <button
               className="glob-iconchip is-edit"
               title="Asignar / cambiar docente"
@@ -257,7 +272,7 @@ const Catedras = () => {
         </div>
       </div>
     );
-  });
+  }, areRowEqual);
 
   // ======= Render =======
   const hayResultados = catedrasFiltradas.length > 0;
@@ -276,13 +291,16 @@ const Catedras = () => {
           <div className="glob-search-input-container">
             <input
               type="text"
-              placeholder="Buscar por materia, docente, curso o división"
+              placeholder="Buscar por ID, materia, docente, curso o división"
               className="glob-search-input"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              value={qInput}
+              onChange={(e) => {
+                setQInput(e.target.value);
+                setMostrarFiltros(false); // UX: cierro filtros al tipear
+              }}
               disabled={cargando}
             />
-            {q ? <FaTimes className="glob-clear-search-icon" onClick={() => setQ("")} /> : null}
+            {qInput ? <FaTimes className="glob-clear-search-icon" onClick={() => setQInput("")} /> : null}
             <button className="glob-search-button" title="Buscar" aria-label="Buscar">
               <FaSearch className="glob-search-icon" />
             </button>
@@ -325,6 +343,7 @@ const Catedras = () => {
                           onClick={() => {
                             setCursoSel(cur === cursoSel ? "" : cur);
                             setMostrarFiltros(false);
+                            // ✅ Sólo acá disparamos animación
                             triggerCascadaConPreMask();
                           }}
                           title={`Filtrar por ${cur}`}
@@ -359,6 +378,7 @@ const Catedras = () => {
                           onClick={() => {
                             setDivisionSel(d === divisionSel ? "" : d);
                             setMostrarFiltros(false);
+                            // ✅ Sólo acá disparamos animación
                             triggerCascadaConPreMask();
                           }}
                           title={`Filtrar por ${d}`}
@@ -375,7 +395,7 @@ const Catedras = () => {
                 <div
                   className="glob-filtros-menu-item glob-mostrar-todas"
                   onClick={() => {
-                    setQ("");
+                    setQInput("");
                     setCursoSel("");
                     setDivisionSel("");
                     setMostrarFiltros(false);
@@ -404,15 +424,15 @@ const Catedras = () => {
                 <FaUsers className="glob-icono-profesor" />
               </div>
 
-              {(q || cursoSel || divisionSel) && (
+              {(qInput || cursoSel || divisionSel) && (
                 <div className="glob-chips-container">
-                  {q && (
+                  {qInput && (
                     <div className="glob-chip-mini" title="Filtro activo">
-                      <span className="glob-chip-mini-text glob-profesores-desktop">Búsqueda: {q}</span>
+                      <span className="glob-chip-mini-text glob-profesores-desktop">Búsqueda: {qInput}</span>
                       <span className="glob-chip-mini-text glob-profesores-mobile">
-                        {q.length > 6 ? `${q.substring(0, 6)}…` : q}
+                        {qInput.length > 6 ? `${qInput.substring(0, 6)}…` : qInput}
                       </span>
-                      <button className="glob-chip-mini-close" onClick={() => setQ("")} aria-label="Quitar">
+                      <button className="glob-chip-mini-close" onClick={() => setQInput("")} aria-label="Quitar">
                         ×
                       </button>
                     </div>
@@ -439,7 +459,7 @@ const Catedras = () => {
                   <button
                     className="glob-chip-mini glob-chip-clear-all"
                     onClick={() => {
-                      setQ("");
+                      setQInput("");
                       setCursoSel("");
                       setDivisionSel("");
                     }}
@@ -454,7 +474,11 @@ const Catedras = () => {
 
           {/* TABLA (desktop) */}
           <div className="glob-box-table">
-            <div className="glob-header" style={{ gridTemplateColumns: "1.6fr 0.8fr 0.8fr 1fr 0.8fr" }}>
+            <div
+              className="glob-header"
+              style={{ gridTemplateColumns: "0.5fr 1.6fr 0.8fr 0.8fr 1fr 0.8fr" }}
+            >
+              <div className="glob-column-header">ID</div>
               <div className="glob-column-header">Materia</div>
               <div className="glob-column-header">Curso</div>
               <div className="glob-column-header">División</div>
@@ -522,19 +546,19 @@ const Catedras = () => {
             ) : (
               catedrasFiltradas.map((c, i) => {
                 const willAnimate = animacionActiva && i < MAX_CASCADE_ITEMS;
-                const preMask = preCascada && i < MAX_CASCADE_ITEMS;
+                const preMask2 = preCascada && i < MAX_CASCADE_ITEMS;
                 return (
                   <div
                     key={c.id_catedra}
                     className={`glob-card ${willAnimate ? "glob-cascade" : ""}`}
                     style={{
                       animationDelay: willAnimate ? `${i * 0.03}s` : "0s",
-                      opacity: preMask ? 0 : undefined,
-                      transform: preMask ? "translateY(8px)" : undefined,
+                      opacity: preMask2 ? 0 : undefined,
+                      transform: preMask2 ? "translateY(8px)" : undefined,
                     }}
                   >
                     <div className="glob-card-header">
-                      <h3 className="glob-card-title">{c.materia}</h3>
+                      <h3 className="glob-card-title">#{c.id_catedra} — {c.materia}</h3>
                     </div>
                     <div className="glob-card-body">
                       <div className="glob-card-row">
@@ -548,7 +572,6 @@ const Catedras = () => {
                     </div>
 
                     <div className="glob-card-actions">
-                      {/* Sólo editar (se quitó el botón de información) */}
                       <button
                         className="glob-action-btn glob-iconchip is-edit"
                         title="Asignar / cambiar docente"
@@ -578,7 +601,6 @@ const Catedras = () => {
           </button>
 
           <div className="glob-botones-container">
-            {/* 🔻 Eliminado el botón “Asignar Docente” */}
             <button
               className="glob-profesor-button glob-hover-effect"
               onClick={exportarExcel}
@@ -593,7 +615,7 @@ const Catedras = () => {
         </div>
       </div>
 
-      {/* Modal para asignar/editar docente (se mantiene para el ícono de edición) */}
+      {/* Modal para asignar/editar docente */}
       <ModalAgregar
         open={showModal}
         catedra={catedraSel}

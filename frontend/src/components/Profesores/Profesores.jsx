@@ -206,7 +206,8 @@ const Profesores = () => {
       resultados = resultados.filter(
         (p) =>
           p._nyap.includes(q) ||
-          p._dni.includes(q)
+          p._dni.includes(q) ||
+          p._id.includes(q)            // ✅ incluye búsqueda por ID (parcial o completa)
       );
     }
 
@@ -362,6 +363,7 @@ const Profesores = () => {
               ...p,
               _nyap: normalizar(nyap),
               _dni: String(p?.dni ?? p?.num_documento ?? '').toLowerCase(),
+              _id: String(p?.id_profesor ?? '').trim().toLowerCase(), // ✅ index por ID para búsqueda
             };
           });
 
@@ -769,7 +771,7 @@ const Profesores = () => {
           <div className="glob-search-input-container">
             <input
               type="text"
-              placeholder="Buscar por nombre DB o DNI"
+              placeholder="Buscar por ID, nombre DB o DNI"  // ✅ actualizado
               className="glob-search-input"
               value={busqueda}
               onChange={(e) => handleBuscarChange(e.target.value)}

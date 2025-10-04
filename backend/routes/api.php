@@ -184,6 +184,24 @@ try {
             include_module($MODULES_DIR . '/catedras/asignar_docente.php');
             break;
 
+
+
+        // -------- Mesas de Examen --------
+        case 'mesas_listar':
+            include_module($MODULES_DIR . '/mesas/obtener_mesas.php');
+            break;
+
+        case 'mesas_crear':
+            include_module($MODULES_DIR . '/mesas/armar_mesas.php');
+            break;
+
+        
+        case 'mesas_crear_todas':
+            include_module($MODULES_DIR . '/mesas/armar_mesas_lote.php');
+            break;
+
+
+        
         // -------- Default --------
         default:
             http_response_code(400);

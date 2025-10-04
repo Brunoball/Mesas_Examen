@@ -30,7 +30,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 import BASE_URL from "../../config/config";
-import "../Global/section-ui.css"; 
+import "../Global/section-ui.css";
 
 /* ================================
    Utils
@@ -62,6 +62,13 @@ const MesasExamen = () => {
   const [mesasDB, setMesasDB] = useState([]);
   const [cargando, setCargando] = useState(true);
 
+  // listas básicas (se usan para filtros / combos, pero crear mesa ya no las necesita)
+  const [listas, setListas] = useState({
+    cursos: [],     // [{id_curso, nombre|nombre_curso}]
+    divisiones: [], // [{id_division, nombre|nombre_division}]
+    turnos: [],     // [{id_turno, nombre|turno}]
+  });
+
   // filtros y UI
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const filtrosRef = useRef(null);
@@ -71,42 +78,75 @@ const MesasExamen = () => {
 
   const [materiaSel, setMateriaSel] = useState("");
   const [turnoSel, setTurnoSel] = useState("");
+  // 🔹 filtros fijos (opcional seguir mostrándolos; no son obligatorios)
+  const [cursoSel, setCursoSel] = useState("");
+  const [divisionSel, setDivisionSel] = useState("");
 
-  // animación calcada
+  // animación
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
 
-  // ======= Carga (mock) =======
+  // ======= Carga de listas =======
+  const fetchListas = useCallback(async () => {
+    try {
+      const resp = await fetch(`${BASE_URL}/api.php?action=obtener_listas`, {
+        cache: "no-store",
+      });
+      const json = await resp.json();
+      if (json?.exito) {
+        setListas({
+          cursos: json.listas?.cursos || [],
+          divisiones: json.listas?.divisiones || [],
+          turnos: json.listas?.turnos || [],
+        });
+      }
+    } catch {}
+  }, []);
+
+  // ======= Carga de mesas (reales) =======
   const fetchMesas = useCallback(async () => {
     setCargando(true);
     try {
-      // Cuando tengas endpoint real:
-      // const resp = await fetch(`${BASE_URL}/api.php?action=mesas_listar`, { cache: "no-store" });
-      // const json = await resp.json();
-      // if (!json?.exito) throw new Error(json?.mensaje || "No se pudieron obtener las mesas.");
-      // const data = json.data || [];
+      const resp = await fetch(`${BASE_URL}/api.php?action=mesas_listar`, {
+        cache: "no-store",
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-      // Mock de ejemplo
-      const data = [
-        { id: 1, materia: "Matemática I", curso: "1°", division: "A", fecha: "2025-11-10", turno: "Mañana", profesor: "Pairone, Verónica" },
-        { id: 2, materia: "Lengua",        curso: "2°", division: "B", fecha: "2025-11-11", turno: "Tarde",   profesor: "González, María" },
-        { id: 3, materia: "Física",        curso: "3°", division: "C", fecha: "2025-11-12", turno: "Mañana",  profesor: "Pérez, Juan"     },
-        { id: 4, materia: "Química",       curso: "4°", division: "A", fecha: "2025-11-15", turno: "Noche",   profesor: "Díaz, Carla"     },
-      ];
+      const json = await resp.json();
+      if (!json?.exito)
+        throw new Error(json?.mensaje || "Error al listar mesas.");
 
-      const procesadas = data.map((m) => ({
-        ...m,
-        _materia: normalizar(m.materia),
-        _profesor: normalizar(m.profesor),
-        _curso: normalizar(m.curso),
-        _division: normalizar(m.division),
-        _turno: normalizar(m.turno),
-      }));
+      const data = Array.isArray(json.data) ? json.data : [];
+
+      const procesadas = data.map((m) => {
+        const tribunalStr = Array.isArray(m.tribunal)
+          ? m.tribunal.filter(Boolean).join(" | ")
+          : m.tribunal || "";
+        const profesor = m.profesor || tribunalStr || "";
+
+        return {
+          ...m,
+          id: m.id ?? m.id_mesa,
+          id_materia: m.id_materia ?? m?.materia_id ?? null,
+          materia: m.materia ?? "",
+          curso: m.curso ?? "",
+          division: m.division ?? "",
+          fecha: m.fecha ?? m.fecha_mesa ?? "",
+          turno: m.turno ?? "",
+          profesor,
+
+          _materia: normalizar(m.materia ?? ""),
+          _profesor: normalizar(profesor),
+          _curso: normalizar(m.curso ?? ""),
+          _division: normalizar(m.division ?? ""),
+          _turno: normalizar(m.turno ?? ""),
+        };
+      });
 
       setMesas(procesadas);
       setMesasDB(procesadas);
     } catch (e) {
-      console.error(e);
+      console.error("[Mesas] Error:", e);
       setMesas([]);
       setMesasDB([]);
     } finally {
@@ -114,21 +154,25 @@ const MesasExamen = () => {
     }
   }, []);
 
-  useEffect(() => { fetchMesas(); }, [fetchMesas]);
+  useEffect(() => {
+    fetchListas();
+    fetchMesas();
+  }, [fetchListas, fetchMesas]);
 
-  // ======= Listas únicas para filtros =======
-  const materiasUnicas = useMemo(() => {
-    const s = new Set((mesasDB || []).map((m) => m.materia).filter(Boolean));
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-  }, [mesasDB]);
-
+  // ======= Listas únicas para filtros dentro del panel =======
   const turnosUnicos = useMemo(() => {
+    if (listas.turnos?.length)
+      return listas.turnos
+        .map((t) => String(t.nombre ?? t.turno ?? "").trim())
+        .filter(Boolean);
     const s = new Set((mesasDB || []).map((m) => m.turno).filter(Boolean));
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-  }, [mesasDB]);
+    return Array.from(s).sort((a, b) =>
+      a.localeCompare(b, "es", { sensitivity: "base" })
+    );
+  }, [mesasDB, listas.turnos]);
 
   // ======= Filtrado =======
-  const hayFiltros = !!(q || materiaSel || turnoSel);
+  const hayFiltros = !!(q || materiaSel || turnoSel || cursoSel || divisionSel);
 
   const mesasFiltradas = useMemo(() => {
     let res = mesas;
@@ -148,25 +192,39 @@ const MesasExamen = () => {
 
     if (materiaSel) {
       const nm = normalizar(materiaSel);
-      res = res.filter((m) => normalizar(m.materia) === nm);
+      res = res.filter((m) => m._materia === nm);
     }
 
     if (turnoSel) {
       const nt = normalizar(turnoSel);
-      res = res.filter((m) => normalizar(m.turno) === nt);
+      res = res.filter((m) => m._turno === nt);
+    }
+
+    // 🔹 filtros fijos (opcionales)
+    if (cursoSel) {
+      const nc = normalizar(cursoSel);
+      res = res.filter((m) => m._curso === nc);
+    }
+
+    if (divisionSel) {
+      const nd = normalizar(divisionSel);
+      res = res.filter((m) => m._division === nd);
     }
 
     return res;
-  }, [mesas, qDef, materiaSel, turnoSel]);
+  }, [mesas, qDef, materiaSel, turnoSel, cursoSel, divisionSel]);
 
-  // ======= Animación en cascada (idéntica) =======
-  const dispararCascadaUnaVez = useCallback((duracionMs) => {
-    const safeMs = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
-    const total = typeof duracionMs === "number" ? duracionMs : safeMs;
-    if (animacionActiva) return;
-    setAnimacionActiva(true);
-    window.setTimeout(() => setAnimacionActiva(false), total);
-  }, [animacionActiva]);
+  // ======= Animación en cascada =======
+  const dispararCascadaUnaVez = useCallback(
+    (duracionMs) => {
+      const safeMs = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
+      const total = typeof duracionMs === "number" ? duracionMs : safeMs;
+      if (animacionActiva) return;
+      setAnimacionActiva(true);
+      window.setTimeout(() => setAnimacionActiva(false), total);
+    },
+    [animacionActiva]
+  );
 
   const triggerCascadaConPreMask = useCallback(() => {
     setPreCascada(true);
@@ -199,18 +257,34 @@ const MesasExamen = () => {
 
     const filas = mesasFiltradas.map((m) => ({
       "ID Mesa": m.id,
-      "Materia": m.materia,
-      "Curso": m.curso,
+      Materia: m.materia,
+      Curso: m.curso,
       "División": m.division,
-      "Fecha": formatearFechaISO(m.fecha),
-      "Turno": m.turno,
-      "Profesor": m.profesor,
+      Fecha: formatearFechaISO(m.fecha),
+      Turno: m.turno,
+      "Tribunal / Profesor": m.profesor || "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(filas, {
-      header: ["ID Mesa", "Materia", "Curso", "División", "Fecha", "Turno", "Profesor"],
+      header: [
+        "ID Mesa",
+        "Materia",
+        "Curso",
+        "División",
+        "Fecha",
+        "Turno",
+        "Tribunal / Profesor",
+      ],
     });
-    ws["!cols"] = [{ wch: 10 }, { wch: 26 }, { wch: 8 }, { wch: 9 }, { wch: 12 }, { wch: 10 }, { wch: 28 }];
+    ws["!cols"] = [
+      { wch: 10 },
+      { wch: 26 },
+      { wch: 8 },
+      { wch: 9 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 36 },
+    ];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Mesas");
@@ -224,6 +298,55 @@ const MesasExamen = () => {
     const dd = String(d.getDate()).padStart(2, "0");
     saveAs(blob, `MesasDeExamen_${yyyy}-${mm}-${dd}(${filas.length}).xlsx`);
   }, [mesasFiltradas]);
+
+  /* ================================
+     Crear mesas (LOTE: todas)
+  ================================= */
+  const crearMesaRapida = useCallback(async () => {
+    try {
+      // Podés enviar fecha_mesa e id_turno si querés fijarlos explícitamente:
+      const body = {
+        // fecha_mesa: "2025-12-01",
+        // id_turno: 1,
+        // anio: 0,         // opcional para acotar
+        // id_materia: 0,   // opcional para acotar
+        // id_curso: 0,     // opcional para acotar
+        // id_division: 0,  // opcional para acotar
+      };
+
+      const resp = await fetch(`${BASE_URL}/api.php?action=mesas_crear_todas`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const json = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || !json?.exito) {
+        const msg =
+          json?.mensaje || `No se pudo crear el lote [HTTP ${resp.status}]`;
+        alert(msg + (json?.detalle ? `\n${json.detalle}` : ""));
+        return;
+      }
+
+      alert(
+        [
+          json.mensaje,
+          `Previas encontradas: ${json.total_previas}`,
+          `Mesas creadas OK: ${json.creadas_ok}`,
+          `Mesas incompletas: ${json.creadas_incompletas}`,
+          `Omitidas (duplicadas): ${json.omitidas_duplicadas}`,
+          `Total creadas: ${json.creadas_total}`,
+        ].join("\n")
+      );
+
+      // refrescar listado
+      fetchMesas();
+    } catch (e) {
+      console.error("[mesas_crear_todas] error:", e);
+      alert("Error de red al crear las mesas en lote.");
+    }
+  }, [fetchMesas]);
 
   /* ================================
      Fila virtualizada (desktop)
@@ -242,13 +365,17 @@ const MesasExamen = () => {
           opacity: preMask ? 0 : undefined,
           transform: preMask ? "translateY(8px)" : undefined,
         }}
-        className={`glob-row ${index % 2 === 0 ? "glob-even-row" : "glob-odd-row"} ${willAnimate ? "glob-cascade" : ""}`}
+        className={`glob-row ${
+          index % 2 === 0 ? "glob-even-row" : "glob-odd-row"
+        } ${willAnimate ? "glob-cascade" : ""}`}
       >
         <div className="glob-column glob-column-dni">{mesa.id}</div>
         <div className="glob-column glob-column-nombre" title={mesa.materia}>
           {mesa.materia}
         </div>
-        <div className="glob-column">{mesa.curso} {mesa.division}</div>
+        <div className="glob-column">
+          {mesa.curso} {mesa.division}
+        </div>
         <div className="glob-column">{formatearFechaISO(mesa.fecha)}</div>
         <div className="glob-column">{mesa.turno}</div>
         <div className="glob-column">{mesa.profesor}</div>
@@ -263,7 +390,6 @@ const MesasExamen = () => {
             >
               <FaInfoCircle />
             </button>
-
             <button
               className="glob-iconchip is-edit"
               title="Editar"
@@ -272,7 +398,6 @@ const MesasExamen = () => {
             >
               <FaEdit />
             </button>
-
             <button
               className="glob-iconchip is-delete"
               title="Eliminar"
@@ -290,6 +415,27 @@ const MesasExamen = () => {
   // ======= Render =======
   const hayResultados = mesasFiltradas.length > 0;
 
+  // Helpers para combos fijos (opcionales)
+  const cursosCombo = useMemo(() => {
+    const base = new Set(
+      (listas.cursos || []).map((c) => c.nombre ?? c.nombre_curso)
+    );
+    mesasDB.forEach((m) => base.add(m.curso));
+    return Array.from(base)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "es"));
+  }, [listas.cursos, mesasDB]);
+
+  const divisionesCombo = useMemo(() => {
+    const base = new Set(
+      (listas.divisiones || []).map((d) => d.nombre ?? d.nombre_division)
+    );
+    mesasDB.forEach((m) => base.add(m.division));
+    return Array.from(base)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "es"));
+  }, [listas.divisiones, mesasDB]);
+
   return (
     <div className="glob-profesor-container">
       <div className="glob-profesor-box">
@@ -301,19 +447,63 @@ const MesasExamen = () => {
           <div className="glob-search-input-container">
             <input
               type="text"
-              placeholder="Buscar por materia, profesor, curso, división o fecha"
+              placeholder="Buscar por materia, tribunal, curso, división o fecha"
               className="glob-search-input"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               disabled={cargando}
             />
-            {q ? <FaTimes className="glob-clear-search-icon" onClick={() => setQ("")} /> : null}
+            {q ? (
+              <FaTimes
+                className="glob-clear-search-icon"
+                onClick={() => setQ("")}
+              />
+            ) : null}
             <button className="glob-search-button" title="Buscar">
               <FaSearch className="glob-search-icon" />
             </button>
           </div>
 
-          {/* Filtros */}
+          {/* Filtros fijos (opcionales) */}
+          <div className="glob-filtros-fijos" style={{ display: "flex", gap: 8 }}>
+            <select
+              className="glob-select"
+              value={cursoSel}
+              onChange={(e) => {
+                setCursoSel(e.target.value);
+                triggerCascadaConPreMask();
+              }}
+              disabled={cargando}
+              title="Filtrar por curso"
+            >
+              <option value="">Curso: Todos</option>
+              {cursosCombo.map((c) => (
+                <option key={`curso-${c}`} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="glob-select"
+              value={divisionSel}
+              onChange={(e) => {
+                setDivisionSel(e.target.value);
+                triggerCascadaConPreMask();
+              }}
+              disabled={cargando}
+              title="Filtrar por división"
+            >
+              <option value="">División: Todas</option>
+              {divisionesCombo.map((d) => (
+                <option key={`div-${d}`} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Panel de filtros adicionales */}
           <div className="glob-filtros-container" ref={filtrosRef}>
             <button
               className="glob-filtros-button"
@@ -322,7 +512,11 @@ const MesasExamen = () => {
             >
               <FaFilter className="glob-icon-button" />
               <span>Aplicar Filtros</span>
-              <FaChevronDown className={`glob-chevron-icon ${mostrarFiltros ? "glob-rotate" : ""}`} />
+              <FaChevronDown
+                className={`glob-chevron-icon ${
+                  mostrarFiltros ? "glob-rotate" : ""
+                }`}
+              />
             </button>
 
             {mostrarFiltros && (
@@ -342,20 +536,30 @@ const MesasExamen = () => {
 
                   <div className="glob-filtros-group-body is-open">
                     <div className="glob-grid-filtros">
-                      {materiasUnicas.map((mat) => (
-                        <button
-                          key={`mat-${mat}`}
-                          className={`glob-chip-filtro ${materiaSel === mat ? "glob-active" : ""}`}
-                          onClick={() => {
-                            setMateriaSel(mat === materiaSel ? "" : mat);
-                            setMostrarFiltros(false);
-                            triggerCascadaConPreMask();
-                          }}
-                          title={`Filtrar por ${mat}`}
-                        >
-                          {mat}
-                        </button>
-                      ))}
+                      {Array.from(
+                        new Set(mesasDB.map((m) => m.materia).filter(Boolean))
+                      )
+                        .sort((a, b) =>
+                          a.localeCompare(b, "es", { sensitivity: "base" })
+                        )
+                        .map((nombre) => (
+                          <button
+                            key={`mat-${nombre}`}
+                            className={`glob-chip-filtro ${
+                              materiaSel === nombre ? "glob-active" : ""
+                            }`}
+                            onClick={() => {
+                              setMateriaSel(
+                                nombre === materiaSel ? "" : nombre
+                              );
+                              setMostrarFiltros(false);
+                              triggerCascadaConPreMask();
+                            }}
+                            title={`Filtrar por ${nombre}`}
+                          >
+                            {nombre}
+                          </button>
+                        ))}
                     </div>
                   </div>
                 </div>
@@ -378,7 +582,9 @@ const MesasExamen = () => {
                       {turnosUnicos.map((t) => (
                         <button
                           key={`turno-${t}`}
-                          className={`glob-chip-filtro ${turnoSel === t ? "glob-active" : ""}`}
+                          className={`glob-chip-filtro ${
+                            turnoSel === t ? "glob-active" : ""
+                          }`}
                           onClick={() => {
                             setTurnoSel(t === turnoSel ? "" : t);
                             setMostrarFiltros(false);
@@ -400,6 +606,8 @@ const MesasExamen = () => {
                     setQ("");
                     setMateriaSel("");
                     setTurnoSel("");
+                    setCursoSel("");
+                    setDivisionSel("");
                     setMostrarFiltros(false);
                     triggerCascadaConPreMask();
                   }}
@@ -427,15 +635,21 @@ const MesasExamen = () => {
               </div>
 
               {/* Chips activos */}
-              {(q || materiaSel || turnoSel) && (
+              {(q || materiaSel || turnoSel || cursoSel || divisionSel) && (
                 <div className="glob-chips-container">
                   {q && (
                     <div className="glob-chip-mini" title="Filtro activo">
-                      <span className="glob-chip-mini-text glob-profesores-desktop">Búsqueda: {q}</span>
+                      <span className="glob-chip-mini-text glob-profesores-desktop">
+                        Búsqueda: {q}
+                      </span>
                       <span className="glob-chip-mini-text glob-profesores-mobile">
                         {q.length > 6 ? `${q.substring(0, 6)}…` : q}
                       </span>
-                      <button className="glob-chip-mini-close" onClick={() => setQ("")} aria-label="Quitar">
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={() => setQ("")}
+                        aria-label="Quitar"
+                      >
                         ×
                       </button>
                     </div>
@@ -443,8 +657,14 @@ const MesasExamen = () => {
 
                   {materiaSel && (
                     <div className="glob-chip-mini" title="Filtro activo">
-                      <span className="glob-chip-mini-text">Materia: {materiaSel}</span>
-                      <button className="glob-chip-mini-close" onClick={() => setMateriaSel("")} aria-label="Quitar">
+                      <span className="glob-chip-mini-text">
+                        Materia: {materiaSel}
+                      </span>
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={() => setMateriaSel("")}
+                        aria-label="Quitar"
+                      >
                         ×
                       </button>
                     </div>
@@ -452,8 +672,44 @@ const MesasExamen = () => {
 
                   {turnoSel && (
                     <div className="glob-chip-mini" title="Filtro activo">
-                      <span className="glob-chip-mini-text">Turno: {turnoSel}</span>
-                      <button className="glob-chip-mini-close" onClick={() => setTurnoSel("")} aria-label="Quitar">
+                      <span className="glob-chip-mini-text">
+                        Turno: {turnoSel}
+                      </span>
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={() => setTurnoSel("")}
+                        aria-label="Quitar"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+
+                  {cursoSel && (
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text">
+                        Curso: {cursoSel}
+                      </span>
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={() => setCursoSel("")}
+                        aria-label="Quitar"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+
+                  {divisionSel && (
+                    <div className="glob-chip-mini" title="Filtro activo">
+                      <span className="glob-chip-mini-text">
+                        División: {divisionSel}
+                      </span>
+                      <button
+                        className="glob-chip-mini-close"
+                        onClick={() => setDivisionSel("")}
+                        aria-label="Quitar"
+                      >
                         ×
                       </button>
                     </div>
@@ -465,6 +721,8 @@ const MesasExamen = () => {
                       setQ("");
                       setMateriaSel("");
                       setTurnoSel("");
+                      setCursoSel("");
+                      setDivisionSel("");
                     }}
                     title="Quitar todos los filtros"
                   >
@@ -483,20 +741,26 @@ const MesasExamen = () => {
               <div className="glob-column-header">Curso/Div</div>
               <div className="glob-column-header">Fecha</div>
               <div className="glob-column-header">Turno</div>
-              <div className="glob-column-header">Profesor</div>
+              <div className="glob-column-header">Tribunal</div>
               <div className="glob-column-header">Acciones</div>
             </div>
 
             <div className="glob-body">
               {cargando ? (
-                <div className="glob-loading-spinner-container"><div className="glob-loading-spinner" /></div>
+                <div className="glob-loading-spinner-container">
+                  <div className="glob-loading-spinner" />
+                </div>
               ) : mesasDB.length === 0 ? (
                 <div className="glob-no-data-message">
-                  <div className="glob-message-content"><p>No hay mesas registradas</p></div>
+                  <div className="glob-message-content">
+                    <p>No hay mesas registradas</p>
+                  </div>
                 </div>
               ) : !hayResultados ? (
                 <div className="glob-no-data-message">
-                  <div className="glob-message-content"><p>No hay resultados con los filtros actuales</p></div>
+                  <div className="glob-message-content">
+                    <p>No hay resultados con los filtros actuales</p>
+                  </div>
                 </div>
               ) : (
                 <div style={{ height: "55vh", width: "100%" }}>
@@ -513,7 +777,9 @@ const MesasExamen = () => {
                           preCascada,
                         }}
                         overscanCount={10}
-                        itemKey={(index, data) => data.rows[index]?.id ?? index}
+                        itemKey={(index, data) =>
+                          data.rows[index]?.id ?? index
+                        }
                       >
                         {Row}
                       </List>
@@ -534,15 +800,21 @@ const MesasExamen = () => {
           >
             {cargando ? (
               <div className="glob-no-data-message glob-no-data-mobile">
-                <div className="glob-message-content"><p>Cargando mesas…</p></div>
+                <div className="glob-message-content">
+                  <p>Cargando mesas…</p>
+                </div>
               </div>
             ) : mesasDB.length === 0 ? (
               <div className="glob-no-data-message glob-no-data-mobile">
-                <div className="glob-message-content"><p>No hay mesas registradas</p></div>
+                <div className="glob-message-content">
+                  <p>No hay mesas registradas</p>
+                </div>
               </div>
             ) : !hayResultados ? (
               <div className="glob-no-data-message glob-no-data-mobile">
-                <div className="glob-message-content"><p>No hay resultados con los filtros actuales</p></div>
+                <div className="glob-message-content">
+                  <p>No hay resultados con los filtros actuales</p>
+                </div>
               </div>
             ) : (
               mesasFiltradas.map((m, i) => {
@@ -568,18 +840,28 @@ const MesasExamen = () => {
                       </div>
                       <div className="glob-card-row">
                         <span className="glob-card-label">Curso/Div</span>
-                        <span className="glob-card-value">{m.curso} • {m.division}</span>
+                        <span className="glob-card-value">
+                          {m.curso} • {m.division}
+                        </span>
                       </div>
                       <div className="glob-card-row">
-                        <span className="glob-card-label"><FaCalendarAlt style={{ marginRight: 6 }} />Fecha</span>
-                        <span className="glob-card-value">{formatearFechaISO(m.fecha)}</span>
+                        <span className="glob-card-label">
+                          <FaCalendarAlt style={{ marginRight: 6 }} />
+                          Fecha
+                        </span>
+                        <span className="glob-card-value">
+                          {formatearFechaISO(m.fecha)}
+                        </span>
                       </div>
                       <div className="glob-card-row">
-                        <span className="glob-card-label"><FaClock style={{ marginRight: 6 }} />Turno</span>
+                        <span className="glob-card-label">
+                          <FaClock style={{ marginRight: 6 }} />
+                          Turno
+                        </span>
                         <span className="glob-card-value">{m.turno}</span>
                       </div>
                       <div className="glob-card-row">
-                        <span className="glob-card-label">Profesor</span>
+                        <span className="glob-card-label">Tribunal</span>
                         <span className="glob-card-value">{m.profesor}</span>
                       </div>
                     </div>
@@ -632,12 +914,12 @@ const MesasExamen = () => {
           <div className="glob-botones-container">
             <button
               className="glob-profesor-button glob-hover-effect"
-              onClick={() => alert("Navegar a /mesas-examen/agregar (implementar).")}
+              onClick={crearMesaRapida}
               aria-label="Agregar"
-              title="Nueva Mesa"
+              title="Crear TODAS las mesas"
             >
               <FaUserPlus className="glob-profesor-icon-button" />
-              <p>Nueva Mesa</p>
+              <p>Crear Mesas (todas)</p>
             </button>
 
             <button
@@ -645,7 +927,11 @@ const MesasExamen = () => {
               onClick={exportarExcel}
               disabled={!hayResultados}
               aria-label="Exportar"
-              title={hayResultados ? "Exportar a Excel" : "No hay filas visibles para exportar"}
+              title={
+                hayResultados
+                  ? "Exportar a Excel"
+                  : "No hay filas visibles para exportar"
+              }
             >
               <FaFileExcel className="glob-profesor-icon-button" />
               <p>Exportar a Excel</p>
