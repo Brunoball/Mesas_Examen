@@ -1,0 +1,201 @@
+/* ====== Variables con fallback ====== */
+:root {
+  --glob-bg: #0f0f13;
+  --glob-panel: #151922;
+  --glob-text: #e9edf1;
+  --glob-muted: #9aa3ad;
+  --glob-border: #23293a;
+  --glob-primary: #5b8cff;
+  --glob-primary-700: #4b74d6;
+  --glob-danger: #e74c3c;
+  --glob-danger-700: #c0392b;
+  --glob-shadow: 0 10px 30px rgba(0,0,0,.45);
+  --glob-radius: 16px;
+  --glob-radius-sm: 12px;
+  --glob-gap: 14px;
+}
+
+/* ====== Overlay + contenedor ====== */
+.glob-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,12,16,0.6);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  animation: modalFade .18s ease-out both;
+}
+
+@keyframes modalFade {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+.glob-modal {
+  width: min(720px, 92vw);
+  background: var(--glob-panel);
+  color: var(--glob-text);
+  border: 1px solid var(--glob-border);
+  border-radius: var(--glob-radius);
+  box-shadow: var(--glob-shadow);
+  overflow: hidden;
+  animation: modalPop .18s ease-out both;
+}
+
+@keyframes modalPop {
+  from { transform: translateY(8px) scale(.98); opacity: 0 }
+  to   { transform: translateY(0) scale(1); opacity: 1 }
+}
+
+/* ====== Header ====== */
+.glob-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--glob-border);
+  background: linear-gradient(0deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02));
+}
+
+.glob-modal-header h3 {
+  font-size: 1.05rem;
+  letter-spacing: .2px;
+  margin: 0;
+}
+
+.glob-modal-close {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--glob-border);
+  background: transparent;
+  color: var(--glob-text);
+  cursor: pointer;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease;
+}
+.glob-modal-close:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: #2b3246;
+  transform: scale(1.03);
+}
+
+/* ====== Body ====== */
+.glob-modal-body {
+  padding: 16px;
+}
+
+.glob-modal-body p {
+  color: var(--glob-muted);
+  margin: 0 0 10px 0;
+}
+
+/* ====== Form rows ====== */
+.glob-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--glob-gap);
+}
+
+.glob-label {
+  font-size: .9rem;
+  color: #c9d2dc;
+}
+
+.glob-input,
+.glob-select,
+.glob-textarea {
+  width: 100%;
+  background: #0f1320;
+  color: var(--glob-text);
+  border: 1px solid var(--glob-border);
+  border-radius: var(--glob-radius-sm);
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.glob-input::placeholder { color: #7f8896; }
+
+.glob-input:focus,
+.glob-select:focus,
+.glob-textarea:focus {
+  border-color: #2f3a57;
+  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.08);
+}
+
+/* Grid 2 columnas (responsive) */
+.glob-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--glob-gap);
+}
+@media (max-width: 720px) {
+  .glob-grid-2 { grid-template-columns: 1fr; }
+}
+
+/* ====== Footer & Botones ====== */
+.glob-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--glob-border);
+}
+
+.glob-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .08s ease, filter .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.glob-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.glob-btn.primary {
+  background: var(--glob-primary);
+  border-color: #3f64d1;
+  color: #fff;
+}
+.glob-btn.primary:hover { filter: brightness(1.05); }
+
+.glob-btn.ghost {
+  background: transparent;
+  border-color: var(--glob-border);
+  color: var(--glob-text);
+}
+.glob-btn.ghost:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: #2b3246;
+}
+
+.glob-btn.danger {
+  background: var(--glob-danger);
+  border-color: var(--glob-danger-700);
+  color: #fff;
+}
+.glob-btn.danger:hover { filter: brightness(1.05); }
+
+/* Inputs select flecha consistente */
+.glob-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #9aa3ad 50%),
+    linear-gradient(135deg, #9aa3ad 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 20px) 16px,
+    calc(100% - 14px) 16px,
+    100% 0;
+  background-size: 6px 6px, 6px 6px, 2.5em 2.5em;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}

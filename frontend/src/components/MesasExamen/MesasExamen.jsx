@@ -25,12 +25,21 @@ import {
   FaCalendarAlt,
   FaClock,
   FaBook,
+  FaEraser,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 import BASE_URL from "../../config/config";
 import "../Global/section-ui.css";
+
+// 🔔 Toast
+import Toast from "../Global/Toast";
+
+// Modales
+import ModalCrearMesas from "./modales/ModalCrearMesas";
+import ModalEliminarMesas from "./modales/ModalEliminarMesas";
+import ModalInfoMesas from "./modales/ModalInfoMesas";
 
 /* ================================
    Utils
@@ -62,11 +71,11 @@ const MesasExamen = () => {
   const [mesasDB, setMesasDB] = useState([]);
   const [cargando, setCargando] = useState(true);
 
-  // listas básicas (se usan para filtros / combos, pero crear mesa ya no las necesita)
+  // listas básicas (para filtros / combos)
   const [listas, setListas] = useState({
-    cursos: [],     // [{id_curso, nombre|nombre_curso}]
-    divisiones: [], // [{id_division, nombre|nombre_division}]
-    turnos: [],     // [{id_turno, nombre|turno}]
+    cursos: [],
+    divisiones: [],
+    turnos: [],
   });
 
   // filtros y UI
@@ -78,13 +87,28 @@ const MesasExamen = () => {
 
   const [materiaSel, setMateriaSel] = useState("");
   const [turnoSel, setTurnoSel] = useState("");
-  // 🔹 filtros fijos (opcional seguir mostrándolos; no son obligatorios)
   const [cursoSel, setCursoSel] = useState("");
   const [divisionSel, setDivisionSel] = useState("");
 
   // animación
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
+
+  // modales
+  const [abrirCrear, setAbrirCrear] = useState(false);
+  const [abrirEliminar, setAbrirEliminar] = useState(false);
+
+  // modal info
+  const [abrirInfo, setAbrirInfo] = useState(false);
+  const [mesaSel, setMesaSel] = useState(null);
+
+  // 🔔 estado Toast
+  const [toast, setToast] = useState(null);
+  const notify = useCallback(
+    ({ tipo = "info", mensaje = "", duracion = 3000 }) =>
+      setToast({ tipo, mensaje, duracion }),
+    []
+  );
 
   // ======= Carga de listas =======
   const fetchListas = useCallback(async () => {
@@ -145,8 +169,7 @@ const MesasExamen = () => {
 
       setMesas(procesadas);
       setMesasDB(procesadas);
-    } catch (e) {
-      console.error("[Mesas] Error:", e);
+    } catch {
       setMesas([]);
       setMesasDB([]);
     } finally {
@@ -159,7 +182,7 @@ const MesasExamen = () => {
     fetchMesas();
   }, [fetchListas, fetchMesas]);
 
-  // ======= Listas únicas para filtros dentro del panel =======
+  // ======= Listas únicas =======
   const turnosUnicos = useMemo(() => {
     if (listas.turnos?.length)
       return listas.turnos
@@ -170,6 +193,26 @@ const MesasExamen = () => {
       a.localeCompare(b, "es", { sensitivity: "base" })
     );
   }, [mesasDB, listas.turnos]);
+
+  const cursosCombo = useMemo(() => {
+    const base = new Set(
+      (listas.cursos || []).map((c) => c.nombre ?? c.nombre_curso)
+    );
+    mesasDB.forEach((m) => base.add(m.curso));
+    return Array.from(base)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "es"));
+  }, [listas.cursos, mesasDB]);
+
+  const divisionesCombo = useMemo(() => {
+    const base = new Set(
+      (listas.divisiones || []).map((d) => d.nombre ?? d.nombre_division)
+    );
+    mesasDB.forEach((m) => base.add(m.division));
+    return Array.from(base)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "es"));
+  }, [listas.divisiones, mesasDB]);
 
   // ======= Filtrado =======
   const hayFiltros = !!(q || materiaSel || turnoSel || cursoSel || divisionSel);
@@ -200,7 +243,6 @@ const MesasExamen = () => {
       res = res.filter((m) => m._turno === nt);
     }
 
-    // 🔹 filtros fijos (opcionales)
     if (cursoSel) {
       const nc = normalizar(cursoSel);
       res = res.filter((m) => m._curso === nc);
@@ -300,59 +342,10 @@ const MesasExamen = () => {
   }, [mesasFiltradas]);
 
   /* ================================
-     Crear mesas (LOTE: todas)
-  ================================= */
-  const crearMesaRapida = useCallback(async () => {
-    try {
-      // Podés enviar fecha_mesa e id_turno si querés fijarlos explícitamente:
-      const body = {
-        // fecha_mesa: "2025-12-01",
-        // id_turno: 1,
-        // anio: 0,         // opcional para acotar
-        // id_materia: 0,   // opcional para acotar
-        // id_curso: 0,     // opcional para acotar
-        // id_division: 0,  // opcional para acotar
-      };
-
-      const resp = await fetch(`${BASE_URL}/api.php?action=mesas_crear_todas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const json = await resp.json().catch(() => ({}));
-
-      if (!resp.ok || !json?.exito) {
-        const msg =
-          json?.mensaje || `No se pudo crear el lote [HTTP ${resp.status}]`;
-        alert(msg + (json?.detalle ? `\n${json.detalle}` : ""));
-        return;
-      }
-
-      alert(
-        [
-          json.mensaje,
-          `Previas encontradas: ${json.total_previas}`,
-          `Mesas creadas OK: ${json.creadas_ok}`,
-          `Mesas incompletas: ${json.creadas_incompletas}`,
-          `Omitidas (duplicadas): ${json.omitidas_duplicadas}`,
-          `Total creadas: ${json.creadas_total}`,
-        ].join("\n")
-      );
-
-      // refrescar listado
-      fetchMesas();
-    } catch (e) {
-      console.error("[mesas_crear_todas] error:", e);
-      alert("Error de red al crear las mesas en lote.");
-    }
-  }, [fetchMesas]);
-
-  /* ================================
      Fila virtualizada (desktop)
   ================================= */
   const Row = React.memo(({ index, style, data }) => {
-    const { rows, animacionActiva, preCascada } = data;
+    const { rows, animacionActiva, preCascada, onInfo } = data;
     const mesa = rows[index];
     const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
@@ -385,7 +378,7 @@ const MesasExamen = () => {
             <button
               className="glob-iconchip is-info"
               title="Información"
-              onClick={() => alert(`Info mesa #${mesa.id}`)}
+              onClick={() => onInfo?.(mesa)}
               aria-label="Información"
             >
               <FaInfoCircle />
@@ -393,7 +386,7 @@ const MesasExamen = () => {
             <button
               className="glob-iconchip is-edit"
               title="Editar"
-              onClick={() => alert(`Editar mesa #${mesa.id}`)}
+              onClick={() => {}}
               aria-label="Editar"
             >
               <FaEdit />
@@ -401,7 +394,7 @@ const MesasExamen = () => {
             <button
               className="glob-iconchip is-delete"
               title="Eliminar"
-              onClick={() => alert(`Eliminar mesa #${mesa.id}`)}
+              onClick={() => {}}
               aria-label="Eliminar"
             >
               <FaTrash />
@@ -414,27 +407,6 @@ const MesasExamen = () => {
 
   // ======= Render =======
   const hayResultados = mesasFiltradas.length > 0;
-
-  // Helpers para combos fijos (opcionales)
-  const cursosCombo = useMemo(() => {
-    const base = new Set(
-      (listas.cursos || []).map((c) => c.nombre ?? c.nombre_curso)
-    );
-    mesasDB.forEach((m) => base.add(m.curso));
-    return Array.from(base)
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, "es"));
-  }, [listas.cursos, mesasDB]);
-
-  const divisionesCombo = useMemo(() => {
-    const base = new Set(
-      (listas.divisiones || []).map((d) => d.nombre ?? d.nombre_division)
-    );
-    mesasDB.forEach((m) => base.add(m.division));
-    return Array.from(base)
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, "es"));
-  }, [listas.divisiones, mesasDB]);
 
   return (
     <div className="glob-profesor-container">
@@ -462,45 +434,6 @@ const MesasExamen = () => {
             <button className="glob-search-button" title="Buscar">
               <FaSearch className="glob-search-icon" />
             </button>
-          </div>
-
-          {/* Filtros fijos (opcionales) */}
-          <div className="glob-filtros-fijos" style={{ display: "flex", gap: 8 }}>
-            <select
-              className="glob-select"
-              value={cursoSel}
-              onChange={(e) => {
-                setCursoSel(e.target.value);
-                triggerCascadaConPreMask();
-              }}
-              disabled={cargando}
-              title="Filtrar por curso"
-            >
-              <option value="">Curso: Todos</option>
-              {cursosCombo.map((c) => (
-                <option key={`curso-${c}`} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="glob-select"
-              value={divisionSel}
-              onChange={(e) => {
-                setDivisionSel(e.target.value);
-                triggerCascadaConPreMask();
-              }}
-              disabled={cargando}
-              title="Filtrar por división"
-            >
-              <option value="">División: Todas</option>
-              {divisionesCombo.map((d) => (
-                <option key={`div-${d}`} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
           </div>
 
           {/* Panel de filtros adicionales */}
@@ -599,6 +532,72 @@ const MesasExamen = () => {
                   </div>
                 </div>
 
+                {/* CURSO */}
+                <div className="glob-filtros-group">
+                  <button
+                    type="button"
+                    className="glob-filtros-group-header is-open"
+                    aria-expanded
+                  >
+                    <span className="glob-filtros-group-title">Curso</span>
+                    <FaChevronDown className="glob-accordion-caret" />
+                  </button>
+
+                  <div className="glob-filtros-group-body is-open">
+                    <div className="glob-grid-filtros">
+                      {cursosCombo.map((c) => (
+                        <button
+                          key={`curso-${c}`}
+                          className={`glob-chip-filtro ${
+                            cursoSel === c ? "glob-active" : ""
+                          }`}
+                          onClick={() => {
+                            setCursoSel(cursoSel === c ? "" : c);
+                            setMostrarFiltros(false);
+                            triggerCascadaConPreMask();
+                          }}
+                          title={`Filtrar por ${c}`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* DIVISIÓN */}
+                <div className="glob-filtros-group">
+                  <button
+                    type="button"
+                    className="glob-filtros-group-header is-open"
+                    aria-expanded
+                  >
+                    <span className="glob-filtros-group-title">División</span>
+                    <FaChevronDown className="glob-accordion-caret" />
+                  </button>
+
+                  <div className="glob-filtros-group-body is-open">
+                    <div className="glob-grid-filtros">
+                      {divisionesCombo.map((d) => (
+                        <button
+                          key={`div-${d}`}
+                          className={`glob-chip-filtro ${
+                            divisionSel === d ? "glob-active" : ""
+                          }`}
+                          onClick={() => {
+                            setDivisionSel(divisionSel === d ? "" : d);
+                            setMostrarFiltros(false);
+                            triggerCascadaConPreMask();
+                          }}
+                          title={`Filtrar por ${d}`}
+                        >
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Mostrar todos */}
                 <div
                   className="glob-filtros-menu-item glob-mostrar-todas"
@@ -634,7 +633,6 @@ const MesasExamen = () => {
                 <FaUsers className="glob-icono-profesor" />
               </div>
 
-              {/* Chips activos */}
               {(q || materiaSel || turnoSel || cursoSel || divisionSel) && (
                 <div className="glob-chips-container">
                   {q && (
@@ -775,6 +773,10 @@ const MesasExamen = () => {
                           rows: mesasFiltradas,
                           animacionActiva,
                           preCascada,
+                          onInfo: (m) => {
+                            setMesaSel(m);
+                            setAbrirInfo(true);
+                          },
                         }}
                         overscanCount={10}
                         itemKey={(index, data) =>
@@ -870,7 +872,10 @@ const MesasExamen = () => {
                       <button
                         className="glob-action-btn glob-iconchip is-info"
                         title="Información"
-                        onClick={() => alert(`Info mesa #${m.id}`)}
+                        onClick={() => {
+                          setMesaSel(m);
+                          setAbrirInfo(true);
+                        }}
                         aria-label="Información"
                       >
                         <FaInfoCircle />
@@ -878,7 +883,7 @@ const MesasExamen = () => {
                       <button
                         className="glob-action-btn glob-iconchip is-edit"
                         title="Editar"
-                        onClick={() => alert(`Editar mesa #${m.id}`)}
+                        onClick={() => {}}
                         aria-label="Editar"
                       >
                         <FaEdit />
@@ -886,7 +891,7 @@ const MesasExamen = () => {
                       <button
                         className="glob-action-btn glob-iconchip is-delete"
                         title="Eliminar"
-                        onClick={() => alert(`Eliminar mesa #${m.id}`)}
+                        onClick={() => {}}
                         aria-label="Eliminar"
                       >
                         <FaTrash />
@@ -914,12 +919,12 @@ const MesasExamen = () => {
           <div className="glob-botones-container">
             <button
               className="glob-profesor-button glob-hover-effect"
-              onClick={crearMesaRapida}
-              aria-label="Agregar"
-              title="Crear TODAS las mesas"
+              onClick={() => setAbrirCrear(true)}
+              aria-label="Crear"
+              title="Crear mesas (confirmar)"
             >
               <FaUserPlus className="glob-profesor-icon-button" />
-              <p>Crear Mesas (todas)</p>
+              <p>Crear Mesas</p>
             </button>
 
             <button
@@ -936,9 +941,71 @@ const MesasExamen = () => {
               <FaFileExcel className="glob-profesor-icon-button" />
               <p>Exportar a Excel</p>
             </button>
+
+            <button
+              className="glob-profesor-button glob-hover-effect"
+              onClick={() => setAbrirEliminar(true)}
+              aria-label="Eliminar"
+              title="Eliminar mesas (confirmar)"
+              style={{ background: "var(--glob-danger, #c0392b)" }}
+            >
+              <FaEraser className="glob-profesor-icon-button" />
+              <p>Eliminar Mesas</p>
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Modales */}
+      {abrirCrear && (
+        <ModalCrearMesas
+          open={abrirCrear}
+          onClose={() => setAbrirCrear(false)}
+          onSuccess={() => {
+            setAbrirCrear(false);
+            fetchMesas();
+            notify({ tipo: "exito", mensaje: "Mesas creadas correctamente." });
+          }}
+          listas={listas}
+        />
+      )}
+
+      {abrirEliminar && (
+        <ModalEliminarMesas
+          open={abrirEliminar}
+          onClose={() => setAbrirEliminar(false)}
+          onSuccess={() => {
+            setAbrirEliminar(false);
+            fetchMesas();
+            notify({ tipo: "exito", mensaje: "Mesas eliminadas correctamente" });
+          }}
+          onError={(mensaje) =>
+            notify({
+              tipo: "error",
+              mensaje: mensaje || "No se pudieron eliminar las mesas.",
+            })
+          }
+          listas={listas}
+        />
+      )}
+
+      {abrirInfo && (
+        <ModalInfoMesas
+          open={abrirInfo}
+          mesa={mesaSel}
+          onClose={() => setAbrirInfo(false)}
+        />
+      )}
+
+      {/* 🔔 Toast */}
+      {toast && (
+        <Toast
+          tipo={toast.tipo}
+          mensaje={toast.mensaje}
+          duracion={toast.duracion}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };
