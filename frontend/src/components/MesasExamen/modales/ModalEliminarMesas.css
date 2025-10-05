@@ -1,0 +1,13 @@
+/* Podés duplicar estilos del crear para mantener consistencia */
+@import url("./ModalCrearMesas.css");
+
+/* Diferencial para énfasis de peligro en este modal */
+
+.glob-modal .glob-btn.danger {
+  background: var(--glob-danger);
+  border-color: var(--glob-danger-700);
+}
+
+.glob-modal .glob-input.confirm-danger {
+  border-color: rgba(231, 76, 60, .45);
+}

@@ -200,6 +200,13 @@ try {
             include_module($MODULES_DIR . '/mesas/armar_mesas_lote.php');
             break;
 
+        case 'mesas_eliminar_todas':
+            include_module($MODULES_DIR . '/mesas/eliminar_mesas.php');
+            break;
+
+         case 'obtener_info_mesa':
+            include_module($MODULES_DIR . '/mesas/obtener_info_mesas.php');
+            break;
 
         
         // -------- Default --------
