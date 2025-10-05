@@ -74,7 +74,7 @@ if ($id_turno !== null && $id_turno !== '' && $id_turno !== false) {
 // Ejecutar DELETE/TRUNCATE
 try {
   // Si ya seleccionás la DB mesas_examen en la conexión, podés usar solo "mesas".
-  $tabla = 'mesas_examen.mesas';
+  $tabla = 'mesas';
 
   // Si no hay filtros -> TRUNCATE para resetear AUTO_INCREMENT
   if (empty($where)) {

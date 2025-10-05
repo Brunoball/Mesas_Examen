@@ -1,30 +1,34 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+// src/App.jsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 /* Login / Registro / Panel */
-import Inicio from './components/Login/Inicio';
-import Principal from './components/Principal/Principal';
-import Registro from './components/Login/Registro';
+import Inicio from "./components/Login/Inicio";
+import Principal from "./components/Principal/Principal";
+import Registro from "./components/Login/Registro";
 
 /* Profesores (admin) */
-import Profesores from './components/Profesores/Profesores';
-import AgregarProfesor from './components/Profesores/AgregarProfesor';
-import EditarProfesor from './components/Profesores/EditarProfesor';
-import ProfesorBaja from './components/Profesores/ProfesorBaja';
+import Profesores from "./components/Profesores/Profesores";
+import AgregarProfesor from "./components/Profesores/AgregarProfesor";
+import EditarProfesor from "./components/Profesores/EditarProfesor";
+import ProfesorBaja from "./components/Profesores/ProfesorBaja";
 
 /* Previas */
-import Previas from './components/Previas/Previas';
-import AgregarPrevia from './components/Previas/AgregarPrevia';
-import EditarPrevia from './components/Previas/EditarPrevia';
+import Previas from "./components/Previas/Previas";
+import AgregarPrevia from "./components/Previas/AgregarPrevia";
+import EditarPrevia from "./components/Previas/EditarPrevia";
 
 /* Cátedras */
-import Catedras from './components/Catedras/Catedras';
+import Catedras from "./components/Catedras/Catedras";
 
 /* Configurar Formulario (admin) */
-import ConfigForm from './components/ConfigFormulario/ConfigForm';
+import ConfigForm from "./components/ConfigFormulario/ConfigForm";
 
-/* ✅ Mesas de Examen (NUEVO) */
-import MesasExamen from './components/MesasExamen/MesasExamen';
+/* ✅ Mesas de Examen */
+import MesasExamen from "./components/MesasExamen/MesasExamen";
+
+/* 🆕 Playground del Loader (pestaña aparte para tunear el loader) */
+import LoaderPlayground from "./components/Global/LoaderPlayground";
 
 function App() {
   return (
@@ -57,6 +61,10 @@ function App() {
         {/* Configurar Formulario (solo ADMIN) */}
         <Route path="/config-formulario" element={<RutaAdmin componente={<ConfigForm />} />} />
 
+        {/* 🆕 Ruta pública para abrir el loader en OTRA PESTAÑA y probarlo */}
+        {/* Ej: /dev/loader?title=Generando%20mesas&subtitle=Aguarde... */}
+        <Route path="/dev/loader" element={<LoaderPlayground />} />
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -66,7 +74,7 @@ function App() {
 
 function getUsuario() {
   try {
-    return JSON.parse(localStorage.getItem('usuario'));
+    return JSON.parse(localStorage.getItem("usuario"));
   } catch {
     return null;
   }
@@ -79,9 +87,9 @@ function RutaProtegida({ componente }) {
 
 function RutaAdmin({ componente }) {
   const usuario = getUsuario();
-  const rol = (usuario?.rol || '').toLowerCase();
+  const rol = (usuario?.rol || "").toLowerCase();
   if (!usuario) return <Navigate to="/" replace />;
-  return rol === 'admin' ? componente : <Navigate to="/panel" replace />;
+  return rol === "admin" ? componente : <Navigate to="/panel" replace />;
 }
 
 export default App;

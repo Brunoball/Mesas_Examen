@@ -1,130 +1,151 @@
 <?php
 // backend/modules/mesas/obtener_mesas.php
-require_once __DIR__ . '/../../config/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+  http_response_code(204);
+  exit;
+}
+
+require_once __DIR__ . '/../../config/db.php'; // Debe definir $pdo (PDO)
+
+function respond($ok, $payload = null, $status = 200) {
+  http_response_code($status);
+  if ($ok) {
+    echo json_encode(['exito' => true, 'data' => $payload], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  } else {
+    $msg = is_string($payload) ? $payload : 'Error desconocido';
+    echo json_encode(['exito' => false, 'mensaje' => $msg], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+  }
+  exit;
+}
 
 try {
-    if (!($pdo instanceof PDO)) {
-        throw new RuntimeException('Conexión PDO no disponible.');
-    }
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+  if (!($pdo instanceof PDO)) {
+    respond(false, 'Conexión PDO no disponible.', 500);
+  }
+  $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    /**
-     * Tablas (según describes):
-     * mesas_examen.mesas:     id_mesa, id_catedra, id_previa, id_docente_1..3, fecha_mesa, id_turno
-     * mesas_examen.catedras:  id_catedra, id_curso, id_division, id_materia, id_docente
-     * mesas_examen.previas:   id_previa, id_materia, cursando_id_curso, cursando_id_division, ...
-     * mesas_examen.materias:  id_materia, materia
-     * mesas_examen.turnos:    id_turno, turno
-     * mesas_examen.docentes:  id_docente, docente
-     *
-     * Tablas de nombre/etiqueta (ajusta si difieren en tu BD real):
-     * curso:    id_curso, nombre_curso
-     * division: id_division, nombre_division
-     */
+  /**
+   * IMPORTANTE:
+   * - No se referencia el nombre del schema/base de datos en ningún lado.
+   * - Ajusta los nombres de TABLAS si en tu esquema difieren:
+   *     mesas, catedras, previas, materias, turnos, docentes, curso, division
+   *
+   * id_materia se toma DESDE PREVIAS (pedido explícito).
+   */
+  $sql = "
+    SELECT
+      -- Mesas
+      m.id_mesa,
+      m.id_catedra,
+      m.id_previa,
+      m.fecha_mesa,
+      m.id_turno,
 
-    $sql = "
-        SELECT
-            -- mesas
-            m.id_mesa,
-            m.id_catedra,
-            m.id_previa,
-            m.fecha_mesa,
-            m.id_turno,
+      -- Turno
+      t.turno,
 
-            -- turno
-            t.turno,
+      -- Cátedra (curso/div de la mesa)
+      c.id_curso,
+      c.id_division,
 
-            -- cátedra (ubicación curso/div)
-            c.id_curso,
-            c.id_division,
+      -- PREVIA -> id_materia (clave del requerimiento)
+      p.id_materia AS id_materia_previa,
 
-            -- PREVIA -> id_materia (lo que pediste)
-            p.id_materia AS id_materia_previa,
+      -- Materia legible
+      mat.materia AS materia,
 
-            -- materia (desde previas -> materias)
-            mat.materia  AS materia,
+      -- Nombres de curso/división
+      cur.nombre_curso   AS curso,
+      dv.nombre_division AS division,
 
-            -- nombres de curso/división (ajustar nombres de tablas si es necesario)
-            cur.nombre_curso   AS curso,
-            dv.nombre_division AS division,
+      -- Tribunal (ids y nombres)
+      m.id_docente_1, d1.docente AS docente_1,
+      m.id_docente_2, d2.docente AS docente_2,
+      m.id_docente_3, d3.docente AS docente_3
 
-            -- tribunal
-            m.id_docente_1, d1.docente AS docente_1,
-            m.id_docente_2, d2.docente AS docente_2,
-            m.id_docente_3, d3.docente AS docente_3
+    FROM mesas      AS m
+    INNER JOIN catedras  AS c   ON c.id_catedra   = m.id_catedra
+    INNER JOIN turnos    AS t   ON t.id_turno     = m.id_turno
 
-        FROM mesas_examen.mesas       AS m
-        INNER JOIN mesas_examen.catedras  AS c   ON c.id_catedra = m.id_catedra
-        INNER JOIN mesas_examen.turnos    AS t   ON t.id_turno   = m.id_turno
+    -- Traer id_materia desde PREVIAS
+    INNER JOIN previas   AS p   ON p.id_previa    = m.id_previa
+    INNER JOIN materias  AS mat ON mat.id_materia = p.id_materia
 
-        -- *** clave del cambio: traer id_materia desde PREVIAS ***
-        INNER JOIN mesas_examen.previas   AS p   ON p.id_previa  = m.id_previa
-        INNER JOIN mesas_examen.materias  AS mat ON mat.id_materia = p.id_materia
+    -- Nombres de curso/división (si existen estas tablas)
+    LEFT  JOIN curso     AS cur ON cur.id_curso   = c.id_curso
+    LEFT  JOIN division  AS dv  ON dv.id_division = c.id_division
 
-        -- nombres de curso/división (si tus tablas están en otro schema, ajusta)
-        LEFT  JOIN curso                  AS cur ON cur.id_curso     = c.id_curso
-        LEFT  JOIN division               AS dv  ON dv.id_division   = c.id_division
+    -- Docentes del tribunal
+    LEFT  JOIN docentes  AS d1  ON d1.id_docente  = m.id_docente_1
+    LEFT  JOIN docentes  AS d2  ON d2.id_docente  = m.id_docente_2
+    LEFT  JOIN docentes  AS d3  ON d3.id_docente  = m.id_docente_3
 
-        -- docentes del tribunal
-        LEFT  JOIN mesas_examen.docentes  AS d1  ON d1.id_docente    = m.id_docente_1
-        LEFT  JOIN mesas_examen.docentes  AS d2  ON d2.id_docente    = m.id_docente_2
-        LEFT  JOIN mesas_examen.docentes  AS d3  ON d3.id_docente    = m.id_docente_3
+    ORDER BY
+      m.fecha_mesa ASC,
+      t.turno ASC,
+      cur.nombre_curso ASC,
+      dv.nombre_division ASC,
+      mat.materia ASC,
+      m.id_mesa ASC
+  ";
 
-        ORDER BY m.fecha_mesa ASC, t.turno ASC, cur.nombre_curso ASC, dv.nombre_division ASC, mat.materia ASC, m.id_mesa ASC
-    ";
+  $stmt = $pdo->query($sql);
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $stmt = $pdo->query($sql);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $toIntOrNull = function ($v) {
+    if ($v === null || $v === '' || !is_numeric($v)) return null;
+    return (int)$v;
+  };
 
-    // Normalizo salida a lo que espera el frontend
-    $data = array_map(function ($r) {
-        // “Profesor” para la grilla: muestro el primero; también devuelvo el tribunal completo
-        $prof_principal = $r['docente_1'] ?: ($r['docente_2'] ?: $r['docente_3']);
+  // Normalización para el frontend
+  $data = array_map(function ($r) use ($toIntOrNull) {
+    $prof_principal = $r['docente_1'] ?: ($r['docente_2'] ?: $r['docente_3']);
+    $idMateria = isset($r['id_materia_previa']) ? (int)$r['id_materia_previa'] : null;
 
-        // id_materia: lo que viene desde PREVIAS
-        $idMateria = isset($r['id_materia_previa']) ? (int)$r['id_materia_previa'] : null;
+    return [
+      'id'            => $toIntOrNull($r['id_mesa']),
+      'id_mesa'       => $toIntOrNull($r['id_mesa']),
+      'id_catedra'    => $toIntOrNull($r['id_catedra']),
+      'id_previa'     => $toIntOrNull($r['id_previa']),
 
-        return [
-            'id'         => (int)$r['id_mesa'],
-            'id_mesa'    => (int)$r['id_mesa'],
-            'id_catedra' => (int)$r['id_catedra'],
-            'id_previa'  => (int)$r['id_previa'],
+      'fecha'         => (string)($r['fecha_mesa'] ?? ''),
+      'id_turno'      => $toIntOrNull($r['id_turno']),
+      'turno'         => (string)($r['turno'] ?? ''),
 
-            'fecha'      => (string)$r['fecha_mesa'],
-            'id_turno'   => (int)$r['id_turno'],
-            'turno'      => (string)$r['turno'],
+      // Curso / División legibles
+      'curso'         => (string)($r['curso'] ?? ''),
+      'division'      => (string)($r['division'] ?? ''),
 
-            // curso/división legibles
-            'curso'      => (string)($r['curso'] ?? ''),
-            'division'   => (string)($r['division'] ?? ''),
+      // Materia tomada desde PREVIAS -> MATERIAS
+      'id_materia'    => $idMateria,
+      'materia'       => (string)($r['materia'] ?? ''),
 
-            // materia por PREVIA -> MATERIAS
-            'id_materia' => $idMateria,
-            'materia'    => (string)($r['materia'] ?? ''),
+      // Tribunal
+      'id_docente_1'  => $toIntOrNull($r['id_docente_1'] ?? null),
+      'id_docente_2'  => $toIntOrNull($r['id_docente_2'] ?? null),
+      'id_docente_3'  => $toIntOrNull($r['id_docente_3'] ?? null),
 
-            // tribunal
-            'id_docente_1' => isset($r['id_docente_1']) ? (int)$r['id_docente_1'] : null,
-            'id_docente_2' => isset($r['id_docente_2']) ? (int)$r['id_docente_2'] : null,
-            'id_docente_3' => isset($r['id_docente_3']) ? (int)$r['id_docente_3'] : null,
+      'docente_1'     => (string)($r['docente_1'] ?? ''),
+      'docente_2'     => (string)($r['docente_2'] ?? ''),
+      'docente_3'     => (string)($r['docente_3'] ?? ''),
 
-            'docente_1'  => (string)($r['docente_1'] ?? ''),
-            'docente_2'  => (string)($r['docente_2'] ?? ''),
-            'docente_3'  => (string)($r['docente_3'] ?? ''),
+      'profesor'      => (string)($prof_principal ?? ''),
+      'tribunal'      => array_values(array_filter([
+                          $r['docente_1'] ?? null,
+                          $r['docente_2'] ?? null,
+                          $r['docente_3'] ?? null,
+                        ])),
+    ];
+  }, $rows);
 
-            'profesor'   => (string)($prof_principal ?? ''),
-            'tribunal'   => array_values(array_filter([
-                                $r['docente_1'] ?? null,
-                                $r['docente_2'] ?? null,
-                                $r['docente_3'] ?? null,
-                            ])),
-        ];
-    }, $rows ?: []);
-
-    echo json_encode(['exito' => true, 'data' => $data], JSON_UNESCAPED_UNICODE);
+  respond(true, $data, 200);
 
 } catch (Throwable $e) {
-    http_response_code(500);
-    echo json_encode(['exito' => false, 'mensaje' => 'Error: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+  respond(false, 'Error: ' . $e->getMessage(), 500);
 }

@@ -36,6 +36,9 @@ import "../Global/section-ui.css";
 // 🔔 Toast
 import Toast from "../Global/Toast";
 
+// 🆕 Loader pantalla completa (escudo)
+import FullScreenLoader from "../Global/FullScreenLoader";
+
 // Modales
 import ModalCrearMesas from "./modales/ModalCrearMesas";
 import ModalEliminarMesas from "./modales/ModalEliminarMesas";
@@ -70,6 +73,9 @@ const MesasExamen = () => {
   const [mesas, setMesas] = useState([]);
   const [mesasDB, setMesasDB] = useState([]);
   const [cargando, setCargando] = useState(true);
+
+  // 🆕 loader global durante creación
+  const [creandoMesas, setCreandoMesas] = useState(false);
 
   // listas básicas (para filtros / combos)
   const [listas, setListas] = useState({
@@ -260,8 +266,8 @@ const MesasExamen = () => {
   const dispararCascadaUnaVez = useCallback(
     (duracionMs) => {
       const safeMs = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
-      const total = typeof duracionMs === "number" ? duracionMs : safeMs;
       if (animacionActiva) return;
+      const total = typeof duracionMs === "number" ? duracionMs : safeMs;
       setAnimacionActiva(true);
       window.setTimeout(() => setAnimacionActiva(false), total);
     },
@@ -410,6 +416,12 @@ const MesasExamen = () => {
 
   return (
     <div className="glob-profesor-container">
+      {/* 🆕 Loader global con el escudo */}
+      <FullScreenLoader
+        visible={creandoMesas}
+        title="Creando mesas…"
+      />
+
       <div className="glob-profesor-box">
         {/* Header */}
         <div className="glob-front-row-pro">
@@ -961,10 +973,35 @@ const MesasExamen = () => {
         <ModalCrearMesas
           open={abrirCrear}
           onClose={() => setAbrirCrear(false)}
-          onSuccess={() => {
+          /* 🆕 flujo: el modal entrega fechas, acá cerramos modal, mostramos loader y hacemos el POST */
+          onCreate={async ({ fecha_inicio, fecha_fin }) => {
             setAbrirCrear(false);
-            fetchMesas();
-            notify({ tipo: "exito", mensaje: "Mesas creadas correctamente." });
+            setCreandoMesas(true);
+            try {
+              const resp = await fetch(
+                `${BASE_URL}/api.php?action=mesas_crear_todas`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ fecha_inicio, fecha_fin }),
+                }
+              );
+              const json = await resp.json().catch(() => ({}));
+
+              if (!resp.ok || !json?.exito) {
+                const msg =
+                  json?.mensaje || `No se pudo crear el lote [HTTP ${resp.status}]`;
+                notify({ tipo: "error", mensaje: msg });
+              } else {
+                // Actualizamos listado y luego cerramos loader + mostramos toast
+                await fetchMesas();
+                setCreandoMesas(false);
+                notify({ tipo: "exito", mensaje: "Mesas creadas correctamente." });
+              }
+            } catch (e) {
+              notify({ tipo: "error", mensaje: "Error de red al crear las mesas." });
+              setCreandoMesas(false);
+            }
           }}
           listas={listas}
         />

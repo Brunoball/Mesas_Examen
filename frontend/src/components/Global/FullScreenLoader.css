@@ -1,0 +1,96 @@
+.fsloader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+  background: rgba(15, 20, 30, 0.45);
+  color: #f6f6f6;
+}
+
+.fsloader-center {
+  text-align: center;
+  padding: 28px 24px 22px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.35);
+  width: min(420px, 90vw);
+}
+
+/* Escudo con flotación y brillo */
+.fsloader-logo-wrap {
+  position: relative;
+  display: inline-block;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 16px;
+}
+
+.fsloader-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation:
+    fs-float 3.2s ease-in-out infinite,
+    fs-glow 4.2s ease-in-out infinite alternate;
+}
+
+@keyframes fs-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+@keyframes fs-glow {
+  0%   { filter: drop-shadow(0 0 0 rgba(255, 184, 72, 0)); }
+  50%  { filter: drop-shadow(0 0 14px rgba(255, 184, 72, 0.45)); }
+  100% { filter: drop-shadow(0 0 0 rgba(255, 184, 72, 0)); }
+}
+
+/* Texto con animación de puntitos */
+.fsloader-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.95),
+    rgba(255,210,120,0.95),
+    rgba(255,255,255,0.95)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  background-size: 200% 100%;
+  animation: fs-shimmer 3.2s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+@keyframes fs-shimmer {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Puntos animados */
+.fsloader-dots {
+  display: inline-flex;
+}
+
+.fsloader-dots span {
+  animation: dot-blink 1.4s infinite;
+  opacity: 0;
+}
+
+.fsloader-dots span:nth-child(1) { animation-delay: 0s; }
+.fsloader-dots span:nth-child(2) { animation-delay: 0.2s; }
+.fsloader-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dot-blink {
+  0%, 80%, 100% { opacity: 0; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
