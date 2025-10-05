@@ -56,7 +56,6 @@ const AgregarPrevia = () => {
     setToastTipo(tipo);
     setToastMsg(mensaje);
     setShowToast(true);
-    // el propio Toast se autocierra con su prop `duracion`
   };
 
   // Ref para el input de fecha (abrir el almanaque programáticamente)
@@ -206,10 +205,7 @@ const AgregarPrevia = () => {
       const json = await res.json();
       if (!json?.exito) throw new Error(json?.mensaje || 'No se pudo agregar');
 
-      // ✅ Toast de éxito arriba
       lanzarToast('exito', 'Previa agregada correctamente.', 2000);
-
-      // Navego después de que se vea el toast
       setTimeout(() => navigate('/previas'), 900);
     } catch (e2) {
       lanzarToast('error', e2.message || 'Error desconocido');
@@ -220,7 +216,6 @@ const AgregarPrevia = () => {
 
   // ---------- Render ----------
   const materiaSelectDisabled = !puedeCargarMaterias || materiasLoading || materias.length === 0;
-
   const hasVal = (v) => (v !== null && v !== undefined && String(v).trim() !== '');
 
   const openCalendar = (e) => {
@@ -274,215 +269,281 @@ const AgregarPrevia = () => {
           </div>
 
           <div className="prev-add-form-wrapper">
-            {/* Todos los mensajes se manejan por Toast */}
             <form onSubmit={guardar} className="prev-add-form">
+              {/* ================= Grid con 3 secciones ================= */}
               <div className="prev-add-grid">
 
-                {/* DNI */}
-                <div className={`prev-input-wrapper ${hasVal(form.dni) ? 'has-value' : ''}`}>
-                  <label className="prev-label">DNI</label>
-                  <input
-                    className="prev-input"
-                    name="dni"
-                    value={form.dni}
-                    onChange={onChange}
-                    placeholder="Ej: 40123456"
-                  />
-                  <span className="prev-input-highlight" />
+                {/* ============ Col 1: Datos del alumno ============ */}
+                <div className="prev-section">
+                  <h3 className="prev-section-title">Datos del alumno</h3>
+
+                  {/* DNI (always-active) */}
+                  <div className={`prev-input-wrapper always-active ${hasVal(form.dni) ? 'has-value' : ''}`}>
+                    <label className="prev-label">DNI</label>
+                    <input
+                      className="prev-input"
+                      name="dni"
+                      value={form.dni}
+                      onChange={onChange}
+                      placeholder="Ej: 40123456"
+                    />
+                    <span className="prev-input-highlight" />
+                  </div>
+
+                  {/* Apellido (always-active) */}
+                  <div className={`prev-input-wrapper always-active ${hasVal(form.apellido) ? 'has-value' : ''}`}>
+                    <label className="prev-label">Apellido</label>
+                    <input
+                      className="prev-input"
+                      name="apellido"
+                      value={form.apellido}
+                      onChange={onChange}
+                      placeholder="Ej: PÉREZ"
+                    />
+                    <span className="prev-input-highlight" />
+                  </div>
+
+                  {/* Nombre (always-active) */}
+                  <div className={`prev-input-wrapper always-active ${hasVal(form.nombre) ? 'has-value' : ''}`}>
+                    <label className="prev-label">Nombre</label>
+                    <input
+                      className="prev-input"
+                      name="nombre"
+                      value={form.nombre}
+                      onChange={onChange}
+                      placeholder="Ej: ANA MARÍA"
+                    />
+                    <span className="prev-input-highlight" />
+                  </div>
                 </div>
 
-                {/* Apellido */}
-                <div className={`prev-input-wrapper ${hasVal(form.apellido) ? 'has-value' : ''}`}>
-                  <label className="prev-label">Apellido</label>
-                  <input
-                    className="prev-input"
-                    name="apellido"
-                    value={form.apellido}
-                    onChange={onChange}
-                    placeholder="Ej: PÉREZ"
-                  />
-                  <span className="prev-input-highlight" />
+                {/* ============ Col 2: Cursado y Materia ============ */}
+                <div className="prev-section">
+                  <h3 className="prev-section-title">Cursado</h3>
+
+                  {/* ⬇️ NUEVO: Curso + División en la MISMA FILA */}
+                  <div className="prev-row">
+                    {/* Cursando: curso */}
+                    <div className="prev-col">
+                      <div className="prev-input-wrapper always-active">
+                        <label className="prev-label">Curso</label>
+                        <select
+                          className="prev-input"
+                          name="cursando_id_curso"
+                          value={form.cursando_id_curso}
+                          onChange={onChange}
+                          disabled={listasLoading}
+                        >
+                          <option value="">Seleccionar…</option>
+                          {listas.cursos.map((c) => (
+                            <option key={`cur-${c.id}`} value={c.id}>{c.nombre}</option>
+                          ))}
+                        </select>
+                        <span className="prev-input-highlight" />
+                      </div>
+                    </div>
+
+                    {/* Cursando: división */}
+                    <div className="prev-col">
+                      <div className="prev-input-wrapper always-active">
+                        <label className="prev-label">División</label>
+                        <select
+                          className="prev-input"
+                          name="cursando_id_division"
+                          value={form.cursando_id_division}
+                          onChange={onChange}
+                          disabled={listasLoading}
+                        >
+                          <option value="">Seleccionar…</option>
+                          {listas.divisiones.map((d) => (
+                            <option key={`cdiv-${d.id}`} value={d.id}>{d.nombre}</option>
+                          ))}
+                        </select>
+                        <span className="prev-input-highlight" />
+                      </div>
+                    </div>
+                  </div>
+                  {/* ⬇️ NUEVO: Materia: curso + división en la MISMA FILA */}
+                  <div className="prev-row">
+                    {/* Materia: curso */}
+                    <div className="prev-col">
+                      <div className="prev-input-wrapper always-active">
+                        <label className="prev-label">Materia: curso</label>
+                        <select
+                          className="prev-input"
+                          name="materia_id_curso"
+                          value={form.materia_id_curso}
+                          onChange={onChange}
+                          disabled={listasLoading}
+                        >
+                          <option value="">Seleccionar…</option>
+                          {listas.cursos.map((c) => (
+                            <option key={`mcur-${c.id}`} value={c.id}>{c.nombre}</option>
+                          ))}
+                        </select>
+                        <span className="prev-input-highlight" />
+                      </div>
+                    </div>
+
+                    {/* Materia: división */}
+                    <div className="prev-col">
+                      <div className="prev-input-wrapper always-active">
+                        <label className="prev-label">Materia: división</label>
+                        <select
+                          className="prev-input"
+                          name="materia_id_division"
+                          value={form.materia_id_division}
+                          onChange={onChange}
+                          disabled={listasLoading}
+                        >
+                          <option value="">Seleccionar…</option>
+                          {listas.divisiones.map((d) => (
+                            <option key={`mdiv-${d.id}`} value={d.id}>{d.nombre}</option>
+                          ))}
+                        </select>
+                        <span className="prev-input-highlight" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Materia (dependiente) */}
+                  <div className="prev-input-wrapper always-active">
+                    <label className="prev-label">Materia</label>
+                    <select
+                      className="prev-input"
+                      name="id_materia"
+                      value={form.id_materia}
+                      onChange={onChange}
+                      disabled={materiaSelectDisabled}
+                    >
+                      {!puedeCargarMaterias && (
+                        <option value="">Elegí curso y división de materia</option>
+                      )}
+                      {puedeCargarMaterias && materiasLoading && (
+                        <option value="">Cargando materias…</option>
+                      )}
+                      {puedeCargarMaterias && !materiasLoading && materias.length === 0 && (
+                        <option value="">Sin materias para esa combinación</option>
+                      )}
+                      {puedeCargarMaterias && !materiasLoading && materias.length > 0 && (
+                        <>
+                          <option value="">Seleccionar…</option>
+                          {materias.map((m) => (
+                            <option key={`mat-${m.id}`} value={m.id}>{m.nombre}</option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                    <span className="prev-input-highlight" />
+                  </div>
                 </div>
 
-                {/* Nombre */}
-                <div className={`prev-input-wrapper ${hasVal(form.nombre) ? 'has-value' : ''}`}>
-                  <label className="prev-label">Nombre</label>
-                  <input
-                    className="prev-input"
-                    name="nombre"
-                    value={form.nombre}
-                    onChange={onChange}
-                    placeholder="Ej: ANA MARÍA"
-                  />
-                  <span className="prev-input-highlight" />
+                {/* ============ Col 3: Administrativo ============ */}
+                <div className="prev-section">
+                  <h3 className="prev-section-title">Administrativo</h3>
+
+                  {/* Condición */}
+                  <div className="prev-input-wrapper always-active">
+                    <label className="prev-label">Condición</label>
+                    <select
+                      className="prev-input"
+                      name="id_condicion"
+                      value={form.id_condicion}
+                      onChange={onChange}
+                      disabled={listasLoading}
+                    >
+                      <option value="">Seleccionar…</option>
+                      {listas.condiciones.map((c) => (
+                        <option key={`cond-${c.id}`} value={c.id}>{c.nombre}</option>
+                      ))}
+                    </select>
+                    <span className="prev-input-highlight" />
+                  </div>
+
+                  {/* (Opcional) Año + Fecha juntos: descomentar si lo querés en la misma fila */}
+                  {/* 
+                  <div className="prev-row">
+                    <div className="prev-col">
+                      <div className={`prev-input-wrapper ${hasVal(form.anio) ? 'has-value' : ''}`}>
+                        <label className="prev-label">Año (previa)</label>
+                        <input
+                          className="prev-input"
+                          type="number"
+                          name="anio"
+                          value={form.anio}
+                          onChange={onChange}
+                          min="2000"
+                          max="2100"
+                        />
+                        <span className="prev-input-highlight" />
+                      </div>
+                    </div>
+                    <div className="prev-col">
+                      <div className={`prev-input-wrapper ${hasVal(form.fecha_carga) ? 'has-value' : ''}`}>
+                        <label className="prev-label">Fecha carga</label>
+                        <input
+                          ref={fechaRef}
+                          className="prev-input"
+                          type="date"
+                          name="fecha_carga"
+                          value={form.fecha_carga}
+                          onChange={onChange}
+                          onMouseDown={openCalendar}
+                          onFocus={openCalendar}
+                        />
+                        <span className="prev-input-highlight" />
+                      </div>
+                    </div>
+                  </div>
+                  */}
+
+                  {/* Año (por separado, si no usás el bloque junto) */}
+                  <div className={`prev-input-wrapper ${hasVal(form.anio) ? 'has-value' : ''}`}>
+                    <label className="prev-label">Año (previa)</label>
+                    <input
+                      className="prev-input"
+                      type="number"
+                      name="anio"
+                      value={form.anio}
+                      onChange={onChange}
+                      min="2000"
+                      max="2100"
+                    />
+                    <span className="prev-input-highlight" />
+                  </div>
+
+                  {/* Fecha carga */}
+                  <div className={`prev-input-wrapper ${hasVal(form.fecha_carga) ? 'has-value' : ''}`}>
+                    <label className="prev-label">Fecha carga</label>
+                    <input
+                      ref={fechaRef}
+                      className="prev-input"
+                      type="date"
+                      name="fecha_carga"
+                      value={form.fecha_carga}
+                      onChange={onChange}
+                      onMouseDown={openCalendar}
+                      onFocus={openCalendar}
+                    />
+                    <span className="prev-input-highlight" />
+                  </div>
+
+                  {/* Inscripción */}
+                  <div className="prev-input-wrapper always-active">
+                    <label className="prev-label">Inscripción</label>
+                    <select
+                      className="prev-input"
+                      name="inscripcion"
+                      value={form.inscripcion}
+                      onChange={onChange}
+                    >
+                      <option value={0}>No</option>
+                      <option value={1}>Sí</option>
+                    </select>
+                    <span className="prev-input-highlight" />
+                  </div>
                 </div>
 
-                {/* Cursando: curso */}
-                <div className="prev-input-wrapper always-active">
-                  <label className="prev-label">Cursando: curso</label>
-                  <select
-                    className="prev-input"
-                    name="cursando_id_curso"
-                    value={form.cursando_id_curso}
-                    onChange={onChange}
-                    disabled={listasLoading}
-                  >
-                    <option value="">Seleccionar…</option>
-                    {listas.cursos.map((c) => (
-                      <option key={`cur-${c.id}`} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Cursando: división */}
-                <div className="prev-input-wrapper always-active">
-                  <label className="prev-label">Cursando: división</label>
-                  <select
-                    className="prev-input"
-                    name="cursando_id_division"
-                    value={form.cursando_id_division}
-                    onChange={onChange}
-                    disabled={listasLoading}
-                  >
-                    <option value="">Seleccionar…</option>
-                    {listas.divisiones.map((d) => (
-                      <option key={`cdiv-${d.id}`} value={d.id}>{d.nombre}</option>
-                    ))}
-                  </select>
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Materia: curso */}
-                <div className="prev-input-wrapper always-active">
-                  <label className="prev-label">Materia: curso</label>
-                  <select
-                    className="prev-input"
-                    name="materia_id_curso"
-                    value={form.materia_id_curso}
-                    onChange={onChange}
-                    disabled={listasLoading}
-                  >
-                    <option value="">Seleccionar…</option>
-                    {listas.cursos.map((c) => (
-                      <option key={`mcur-${c.id}`} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Materia: división */}
-                <div className="prev-input-wrapper always-active">
-                  <label className="prev-label">Materia: división</label>
-                  <select
-                    className="prev-input"
-                    name="materia_id_division"
-                    value={form.materia_id_division}
-                    onChange={onChange}
-                    disabled={listasLoading}
-                  >
-                    <option value="">Seleccionar…</option>
-                    {listas.divisiones.map((d) => (
-                      <option key={`mdiv-${d.id}`} value={d.id}>{d.nombre}</option>
-                    ))}
-                  </select>
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Materia (dependiente) */}
-                <div className="prev-input-wrapper always-active">
-                  <label className="prev-label">Materia</label>
-                  <select
-                    className="prev-input"
-                    name="id_materia"
-                    value={form.id_materia}
-                    onChange={onChange}
-                    disabled={materiaSelectDisabled}
-                  >
-                    {!puedeCargarMaterias && (
-                      <option value="">Elegí curso y división de materia</option>
-                    )}
-                    {puedeCargarMaterias && materiasLoading && (
-                      <option value="">Cargando materias…</option>
-                    )}
-                    {puedeCargarMaterias && !materiasLoading && materias.length === 0 && (
-                      <option value="">Sin materias para esa combinación</option>
-                    )}
-                    {puedeCargarMaterias && !materiasLoading && materias.length > 0 && (
-                      <>
-                        <option value="">Seleccionar…</option>
-                        {materias.map((m) => (
-                          <option key={`mat-${m.id}`} value={m.id}>{m.nombre}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Condición */}
-                <div className="prev-input-wrapper always-active">
-                  <label className="prev-label">Condición</label>
-                  <select
-                    className="prev-input"
-                    name="id_condicion"
-                    value={form.id_condicion}
-                    onChange={onChange}
-                    disabled={listasLoading}
-                  >
-                    <option value="">Seleccionar…</option>
-                    {listas.condiciones.map((c) => (
-                      <option key={`cond-${c.id}`} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Año */}
-                <div className={`prev-input-wrapper ${hasVal(form.anio) ? 'has-value' : ''}`}>
-                  <label className="prev-label">Año (previa)</label>
-                  <input
-                    className="prev-input"
-                    type="number"
-                    name="anio"
-                    value={form.anio}
-                    onChange={onChange}
-                    min="2000"
-                    max="2100"
-                  />
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Fecha carga */}
-                <div className={`prev-input-wrapper ${hasVal(form.fecha_carga) ? 'has-value' : ''}`}>
-                  <label className="prev-label">Fecha carga</label>
-                  <input
-                    ref={fechaRef}
-                    className="prev-input"
-                    type="date"
-                    name="fecha_carga"
-                    value={form.fecha_carga}
-                    onChange={onChange}
-                    onMouseDown={openCalendar}
-                    onFocus={openCalendar}
-                  />
-                  <span className="prev-input-highlight" />
-                </div>
-
-                {/* Inscripción */}
-                <div className="prev-input-wrapper always-active">
-                  <label className="prev-label">Inscripción</label>
-                  <select
-                    className="prev-input"
-                    name="inscripcion"
-                    value={form.inscripcion}
-                    onChange={onChange}
-                  >
-                    <option value={0}>No</option>
-                    <option value={1}>Sí</option>
-                  </select>
-                  <span className="prev-input-highlight" />
-                </div>
               </div>
 
               {/* Botonera inferior */}

@@ -1,116 +1,112 @@
-import React, { useEffect, useState } from "react";
-import { FaUserMinus, FaTimes } from "react-icons/fa";
-import "./ModalDarBajaProfesor.css";
-
-const MAX_LEN = 250;
+// src/components/Profesores/modales/ModalDarBajaProfesor.jsx
+import React, { useEffect, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUserMinus } from "@fortawesome/free-solid-svg-icons";
 
 const ModalDarBajaProfesor = ({ mostrar, profesor, onClose, onDarBaja }) => {
+  const cancelBtnRef = useRef(null);
+  const motivoRef = useRef(null);
   const [motivo, setMotivo] = useState("");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (mostrar) {
-      setMotivo("");
-      setError("");
-    }
-  }, [mostrar]);
 
   useEffect(() => {
     if (!mostrar) return;
+    setMotivo("");
+    cancelBtnRef.current?.focus();
+
     const onKeyDown = (e) => {
-      if (e.key === "Escape" || e.key === "Esc" || e.keyCode === 27) {
-        e.preventDefault();
-        onClose?.();
-      }
+      if (e.key === "Escape") onClose?.();
+      if (e.key === "Enter") handleConfirm();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [mostrar, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mostrar]);
 
-  if (!mostrar || !profesor) return null;
+  if (!mostrar) return null;
 
-  const confirmar = () => {
+  const handleConfirm = () => {
     const txt = motivo.trim();
+    // Si tu backend requiere motivo obligatorio, validamos:
     if (!txt) {
-      setError("Por favor, escribí el motivo de la baja.");
+      // feedback mínimo accesible (sin romper estilos existentes)
+      motivoRef.current?.focus();
       return;
     }
-    onDarBaja(profesor.id_profesor, txt); // <- este id_profesor corresponde a id_docente en la DB
+    onDarBaja?.(profesor?.id_profesor, txt);
   };
-
-  const nombreProfesor = profesor?.nombre_completo ?? profesor?.nombre ?? "—";
 
   return (
     <div
-      className="pro-modal-overlay"
+      className="logout-modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="probaja-title"
-      onClick={onClose}
+      aria-labelledby="baja-modal-title"
+      onMouseDown={onClose}
     >
       <div
-        className="pro-modal-card pro-modal-card--baja"
-        onClick={(e) => e.stopPropagation()}
+        className="logout-modal-container logout-modal--danger"
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="pro-modal-header">
-          <h3 id="probaja-title" className="pro-modal-title">
-            Dar de baja profesor
-          </h3>
-          <button className="pro-modal-close" onClick={onClose} aria-label="Cerrar">
-            <FaTimes />
-          </button>
+        <div className="logout-modal__icon" aria-hidden="true">
+          <FontAwesomeIcon icon={faUserMinus} />
         </div>
 
-        <div className="pro-modal-body">
-          <div className="pro-baja-icon-container">
-            <FaUserMinus className="pro-baja-icon" />
-          </div>
+        <h3 id="baja-modal-title" className="logout-modal-title logout-modal-title--danger">
+          Dar de baja profesor
+        </h3>
 
-          <p className="pro-baja-text">
-            ¿Estás seguro de que querés dar de baja a{" "}
-            <strong>{nombreProfesor}</strong>?
-          </p>
-
-          {profesor.id_profesor && (
-            <p className="pro-modal-muted">
-              ID docente: <span className="pro-mono">{profesor.id_profesor}</span>
-            </p>
+        <p className="logout-modal-text">
+          ¿Confirmás que querés <strong>dar de baja</strong> al profesor
+          {profesor?.nombre_completo ? (
+            <> <strong> “{profesor.nombre_completo}”</strong> (ID {profesor.id_profesor})</>
+          ) : (
+            <> con ID <strong>{profesor?.id_profesor}</strong></>
           )}
+          ?
+        </p>
 
-          <div className="pro-baja-field">
-            <label htmlFor="probaja-motivo" className="pro-baja-label">
-              Motivo de la baja <span className="pro-baja-asterisk">*</span>
-            </label>
-            <textarea
-              id="probaja-motivo"
-              className="pro-baja-textarea"
-              placeholder="Escribí el motivo (obligatorio)"
-              value={motivo}
-              onChange={(e) => {
-                setMotivo(e.target.value);
-                if (error) setError("");
-              }}
-              rows={4}
-              maxLength={MAX_LEN}
-            />
-            <div className="pro-baja-helper">
-              {motivo.length}/{MAX_LEN}
-            </div>
-            {error && <div className="pro-baja-error">{error}</div>}
-          </div>
+        {/* Campo motivo (mantiene la estética general del modal) */}
+        <div style={{ textAlign: "left", marginBottom: 16 }}>
+          <label
+            htmlFor="motivo-baja"
+            style={{ display: "block", fontWeight: 600, marginBottom: 6 }}
+          >
+            Motivo de la baja <span style={{ color: "#d32f2f" }}>*</span>
+          </label>
+          <textarea
+            id="motivo-baja"
+            ref={motivoRef}
+            rows={3}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Escribí el motivo…"
+            style={{
+              width: "100%",
+              borderRadius: "12px",
+              border: "1px solid #e5e7eb",
+              padding: "10px 12px",
+              resize: "vertical",
+              outline: "none",
+              boxShadow: "none",
+            }}
+          />
         </div>
 
-        <div className="pro-modal-actions">
-          <button className="pro-btn" onClick={onClose}>
+        <div className="logout-modal-buttons">
+          <button
+            type="button"
+            className="logout-btn logout-btn--ghost"
+            onClick={onClose}
+            ref={cancelBtnRef}
+          >
             Cancelar
           </button>
           <button
-            className="pro-btn danger"
-            onClick={confirmar}
-            aria-label="Dar de baja definitivamente"
+            type="button"
+            className="logout-btn logout-btn--solid-danger"
+            onClick={handleConfirm}
           >
-            <FaUserMinus style={{ marginRight: 6 }} />
-            Dar de baja
+            Confirmar baja
           </button>
         </div>
       </div>

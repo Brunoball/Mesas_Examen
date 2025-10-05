@@ -242,6 +242,7 @@ const Catedras = () => {
       <div
         style={{
           ...style,
+          gridTemplateColumns: "0.5fr 1.6fr 0.8fr 0.8fr 1fr 0.8fr",
           animationDelay: willAnimate ? `${index * 0.03}s` : "0s",
           opacity: preMask ? 0 : undefined,
           transform: preMask ? "translateY(8px)" : undefined,

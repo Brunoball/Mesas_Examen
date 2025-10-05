@@ -28,9 +28,13 @@ import {
 } from 'react-icons/fa';
 
 // Modales
+// index.js o Profesores.jsx (arriba del todo de los imports de React)
+import '../Global/modal-base.css'; // ajustá la ruta según dónde lo guardaste
+
 import ModalEliminarProfesor from './modales/ModalEliminarProfesor';
-import ModalInfoProfesor from './modales/ModalInfoProfesor';
-import ModalDarBajaProfesor from './modales/ModalDarBajaProfesor';
+import ModalInfoProfesor     from './modales/ModalInfoProfesor';
+import ModalDarBajaProfesor  from './modales/ModalDarBajaProfesor';
+
 
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -665,6 +669,7 @@ const Profesores = () => {
         onClick={() => manejarSeleccion(profesor)}
         style={{
           ...style,
+          gridTemplateColumns: "0.5fr 1.6fr 0.8fr 0.8fr",
           animationDelay: willAnimate ? `${index * 0.03}s` : '0s',
           opacity: preMask ? 0 : undefined,
           transform: preMask ? 'translateY(8px)' : undefined,
@@ -957,7 +962,8 @@ const Profesores = () => {
           {/* TABLA (solo desktop) */}
           {!isMobile && (
             <div className="glob-box-table">
-              <div className="glob-header">
+              <div className="glob-header"
+              style={{ gridTemplateColumns: "0.5fr 1.6fr 0.8fr 0.8fr" }} >
                 <div className="glob-column-header">ID Docente</div>
                 <div className="glob-column-header">Apellido y Nombre</div>
                 <div className="glob-column-header">Materia</div>

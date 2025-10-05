@@ -29,7 +29,7 @@ import {
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import Toast from '../Global/Toast';
-import InscribirModal from './InscribirModal';
+import InscribirModal from './modales/InscribirModal'; // <— variante success (verde)
 import ModalInfoPrevia from './modales/ModalInfoPrevia';
 import '../Global/roots.css';
 
@@ -75,6 +75,96 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
+/* ========= Modal de confirmación (Eliminar / Desinscribir) 
+           — Misma estética que “Cerrar sesión” ========= */
+const ConfirmActionModal = ({
+  open,
+  mode,         // 'eliminar' | 'desinscribir'
+  item,
+  loading,
+  error,
+  onCancel,
+  onConfirm,
+}) => {
+  const cancelRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    cancelRef.current?.focus();
+    const onKeyDown = (e) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  const isWarn = mode === 'desinscribir';
+  const titulo = isWarn ? 'Marcar como NO inscripto' : 'Confirmar eliminación';
+  const subtitulo = isWarn
+    ? '¿Confirmás pasar este alumno a NO inscripto?'
+    : 'Esta acción eliminará el registro de forma definitiva.';
+
+  return (
+    <div
+      className="logout-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+      onMouseDown={onCancel}
+    >
+      <div
+        className={`logout-modal-container ${isWarn ? 'logout-modal--warn' : 'logout-modal--danger'}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className={`logout-modal__icon ${isWarn ? 'is-warn' : 'is-danger'}`} aria-hidden="true">
+          <FaTrash />
+        </div>
+
+        <h3 id="confirm-modal-title" className={`logout-modal-title ${isWarn ? 'logout-modal-title--warn' : 'logout-modal-title--danger'}`}>
+          {titulo}
+        </h3>
+
+        <p className="logout-modal-text">{subtitulo}</p>
+
+        {item && (
+          <div className="prev-modal-item" style={{ marginTop: 12 }}>
+            <strong>{item.alumno}</strong> — DNI {item.dni}
+            <br />
+            Materia: {item.materia_nombre}
+          </div>
+        )}
+
+        {error && (
+          <div className="prev-modal-error" role="alert">
+            {error}
+          </div>
+        )}
+
+        <div className="logout-modal-buttons">
+          <button
+            type="button"
+            className="logout-btn logout-btn--ghost"
+            onClick={onCancel}
+            ref={cancelRef}
+            disabled={loading}
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="button"
+            className={`logout-btn ${isWarn ? 'logout-btn--solid-warn' : 'logout-btn--solid-danger'}`}
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? 'Procesando...' : (isWarn ? 'Confirmar' : 'Eliminar')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ================================
    Componente Previas
 ================================ */
@@ -114,7 +204,7 @@ const Previas = () => {
     error: '',
   });
 
-  // Modal INSCRIBIR
+  // Modal INSCRIBIR (estética success)
   const [modalIns, setModalIns] = useState({
     open: false,
     item: null,
@@ -677,49 +767,17 @@ const Previas = () => {
         )}
 
         {/* Modal Confirmación (eliminar / desinscribir) */}
-        {modal.open && (
-          <div className="glob-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="glob-modal">
-              <div className="glob-modal-header">
-                <h3>
-                  {modal.mode === 'desinscribir' ? 'Marcar como NO inscripto' : 'Eliminar registro'}
-                </h3>
-              </div>
-              <div className="glob-modal-body">
-                <p>
-                  {modal.mode === 'desinscribir'
-                    ? '¿Confirmás pasar este alumno a NO inscripto?'
-                    : '¿Confirmás eliminar definitivamente este registro?'}
-                </p>
-                {modal.item && (
-                  <div className="glob-modal-item">
-                    <strong>{modal.item.alumno}</strong> — DNI {modal.item.dni}<br />
-                    Materia: {modal.item.materia_nombre}
-                  </div>
-                )}
-                {modal.error && <div className="glob-modal-error">{modal.error}</div>}
-              </div>
-              <div className="glob-modal-actions">
-                <button
-                  className="glob-profesor-button glob-hover-effect"
-                  onClick={cancelarModal}
-                  disabled={modal.loading}
-                >
-                  Cancelar
-                </button>
-                <button
-                  className={`glob-profesor-button glob-hover-effect ${modal.mode === 'desinscribir' ? 'glob-btn-warn' : 'glob-btn-danger'}`}
-                  onClick={confirmarAccion}
-                  disabled={modal.loading}
-                >
-                  {modal.loading ? 'Procesando...' : (modal.mode === 'desinscribir' ? 'Confirmar' : 'Eliminar')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmActionModal
+          open={modal.open}
+          mode={modal.mode}
+          item={modal.item}
+          loading={modal.loading}
+          error={modal.error}
+          onCancel={cancelarModal}
+          onConfirm={confirmarAccion}
+        />
 
-        {/* Modal Inscribir */}
+        {/* Modal Inscribir (variante success) */}
         <InscribirModal
           open={modalIns.open}
           item={modalIns.item}
@@ -740,7 +798,7 @@ const Previas = () => {
         <div className="glob-front-row-pro">
           <span className="glob-profesor-title">Gestión de Previas</span>
 
-          {/* Tabs (estilo chip global) */}
+          {/* Tabs */}
           <div className="glob-grid-filtros" style={{ gap: 8, alignItems: 'center' }}>
             <button
               className={`glob-chip-filtro ${tab === 'todos' ? 'glob-active' : ''}`}
@@ -893,7 +951,7 @@ const Previas = () => {
               </div>
 
               {/* Chips */}
-              {hayFiltros && (
+              {hayChips && (
                 <div className="glob-chips-container">
                   {busqueda && (
                     <div className="glob-chip-mini" title="Filtro activo">
@@ -962,7 +1020,7 @@ const Previas = () => {
                 <div className="glob-column-header">DNI</div>
                 <div className="glob-column-header">Materia</div>
                 <div className="glob-column-header">Condición</div>
-                <div className="glob-column-header">Cur y Div (Mat)</div>
+                <div className="glob-column-header">Cur y Div</div>
                 <div className="glob-column-header">Inscripción</div>
                 <div className="glob-column-header">Acciones</div>
               </div>

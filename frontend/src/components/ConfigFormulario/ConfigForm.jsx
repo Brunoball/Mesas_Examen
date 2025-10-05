@@ -250,7 +250,8 @@ const ConfigForm = () => {
           )}
 
           <div className="form-grid">
-            <label className="form-field">
+            {/* === MISMA FILA: Título / Inicio / Fin === */}
+            <label className="form-field col-4">
               <span className="form-label">Título</span>
               <input
                 type="text"
@@ -263,7 +264,7 @@ const ConfigForm = () => {
               />
             </label>
 
-            <label className="form-field">
+            <label className="form-field col-4">
               <span className="form-label">Inicio</span>
               <input
                 type="datetime-local"
@@ -275,7 +276,7 @@ const ConfigForm = () => {
               />
             </label>
 
-            <label className="form-field">
+            <label className="form-field col-4">
               <span className="form-label">Fin</span>
               <input
                 type="datetime-local"

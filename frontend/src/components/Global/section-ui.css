@@ -257,7 +257,7 @@ input:-webkit-autofill { background-color: transparent !important; }
   position: absolute;
   top: 100%;
   right: 0;
-  min-width: 280px;
+  max-width: 280px;
   background: white;
   border: 1px solid var(--pro-red-200);
   border-radius: var(--border-radius);
@@ -328,8 +328,7 @@ input:-webkit-autofill { background-color: transparent !important; }
 
 /* Grid de filtros */
 .glob-grid-filtros {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
   gap: 0.5rem;
 }
 .glob-chip-filtro {
@@ -432,7 +431,7 @@ input:-webkit-autofill { background-color: transparent !important; }
 /* Header como grid */
 .glob-header {
   display: grid;
-  grid-template-columns: 1.5fr 0.8fr 1.2fr 1fr 0.7fr 0.7fr 0.8fr;
+  grid-template-columns: 1.5fr 0.5fr 1.2fr 1fr 0.7fr 0.7fr 0.8fr;
   background: var(--pro-primary);
   position: sticky; top: 0; z-index: 10; overflow: hidden; scrollbar-gutter: stable;
 }
@@ -461,12 +460,11 @@ input:-webkit-autofill { background-color: transparent !important; }
 /* Filas como grid */
 .glob-row {
   display: grid;
-  grid-template-columns: 1.5fr 0.8fr 1.2fr 1fr 0.7fr 0.7fr 0.8fr;
+  grid-template-columns: 1.5fr 0.5fr 1.2fr 1fr 0.7fr 0.7fr 0.8fr;
   align-items: center;
   padding: 0;
   position: relative;
   transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
-  border-bottom:1px solid var(--border-color);
   cursor: pointer;
   backface-visibility: hidden; transform: translateZ(0); will-change: transform, opacity; contain: content;
 }

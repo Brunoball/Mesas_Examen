@@ -636,3 +636,154 @@ input:-webkit-autofill { background-color: transparent !important; }
   background: #ef4444;
   color: white;
 }
+/* ====== Estilos compartidos del modal (misma estética que Cerrar Sesión) ====== */
+@keyframes logout-modal-fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes logout-modal-pop { from { transform: translateY(4px); opacity: .98 } to { transform: translateY(0); opacity: 1 } }
+
+.logout-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+  animation: logout-modal-fadeIn 0.2s ease-out;
+  padding: 20px;
+}
+
+.logout-modal-container {
+  background-color: #fff;
+  border-radius: var(--reg-border-radius-lg, 16px);
+  width: 90%;
+  max-width: 500px;
+  padding: 28px;
+  box-shadow: var(--reg-shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04));
+  text-align: center;
+  position: relative;
+  border-top: 4px solid transparent;
+  animation: logout-modal-pop .18s ease-out;
+  border: 3px solid var(--reg-gray-200, #E2E8F0);
+}
+
+/* Variantes por severidad */
+.logout-modal--danger { border-top-color: var(--reg-danger, #D32F2F); }
+.logout-modal--warn   { border-top-color: var(--reg-warning, #F59E0B); }
+
+.logout-modal__icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+.logout-modal__icon.is-danger { color: var(--reg-danger, #D32F2F); }
+.logout-modal__icon.is-warn   { color: var(--reg-warning, #F59E0B); }
+
+.logout-modal-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--reg-dark, #0F172A);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.logout-modal-title--danger { color: var(--reg-danger, #D32F2F); }
+.logout-modal-title--warn   { color: var(--reg-warning, #F59E0B); }
+
+.logout-modal-text {
+  font-size: 1rem;
+  color: var(--reg-gray-700, #334155);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.logout-modal-buttons {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.logout-btn {
+  padding: .75rem 1.25rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: .95rem;
+  cursor: pointer;
+  transition: var(--reg-transition, all .3s ease);
+  flex: 1;
+  max-width: 200px;
+  min-width: 120px;
+  border: 1px solid transparent;
+}
+
+.logout-btn--ghost {
+  background: #fff;
+  color: var(--reg-gray-800, #1E293B);
+  border-color: var(--reg-gray-300, #CBD5E1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .logout-btn--ghost:hover {
+    background: var(--reg-gray-100, #F1F5F9);
+    transform: translateY(-2px);
+    box-shadow: var(--reg-shadow-md, 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06));
+  }
+}
+
+/* Botón sólido según variante */
+.logout-btn--solid-danger {
+  background: var(--reg-danger, #D32F2F);
+  color: #fff;
+  border-color: var(--reg-danger, #D32F2F);
+}
+.logout-btn--solid-warn {
+  background: var(--reg-warning, #F59E0B);
+  color: #fff;
+  border-color: var(--reg-warning, #F59E0B);
+}
+@media (hover: hover) and (pointer: fine) {
+  .logout-btn--solid-danger:hover,
+  .logout-btn--solid-warn:hover {
+    filter: brightness(.95);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 18px rgba(0,0,0,.15);
+  }
+}
+
+/* Ajustes responsivos del modal (igual a Principal) */
+@media (max-width: 480px) {
+  .logout-modal-overlay { padding: 15px; }
+  .logout-modal-container {
+    padding: 20px;
+    width: 90%;
+    max-width: 350px;
+    border-radius: 16px;
+    margin: 0;
+    animation: logout-modal-pop .18s ease-out;
+  }
+  .logout-modal__icon { font-size: 2rem; }
+  .logout-modal-title { font-size: 1.1rem; margin-bottom: 10px; }
+  .logout-modal-text { font-size: 0.9rem; margin-bottom: 18px; }
+  .logout-modal-buttons { gap: 12px; }
+  .logout-btn { padding: .7rem .8rem; font-size: .85rem; min-width: 100px; border-radius: 12px; }
+}
+/* SUCCESS para Inscribir */
+.logout-modal--success { border-top-color: var(--reg-success, #16A34A); }
+.logout-modal__icon.is-success { color: var(--reg-success, #16A34A); }
+.logout-modal-title--success { color: var(--reg-success, #16A34A); }
+
+.logout-btn--solid-success {
+  background: var(--reg-success, #16A34A);
+  color: #fff;
+  border-color: var(--reg-success, #16A34A);
+}
+@media (hover: hover) and (pointer: fine) {
+  .logout-btn--solid-success:hover {
+    filter: brightness(.95);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 18px rgba(0,0,0,.15);
+  }
+}
+
+/* Por si no existe la variable */
+:root {
+  --reg-success: #16A34A; /* verde 600 */
+}

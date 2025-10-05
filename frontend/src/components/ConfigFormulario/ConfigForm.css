@@ -196,3 +196,16 @@
 .btn-primary:hover {
   background: var(--esc-rojo-oscuro);
 }
+
+/* 3 campos en una fila: 4 columnas cada uno (4 x 3 = 12) */
+.form-field.col-4 { 
+  grid-column: span 4; 
+}
+
+/* Mantener responsive: en pantallas chicas se apilan */
+@media (max-width: 720px) {
+  .form-field,
+  .form-field.col-4 {
+    grid-column: 1 / -1; /* ocupar toda la fila */
+  }
+}

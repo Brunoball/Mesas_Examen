@@ -1,0 +1,161 @@
+/* =======================
+   MODAL BASE (reutilizable)
+   Clases: logout-modal-*
+   ======================= */
+
+/* Variables de color (usa las tuyas si existen) */
+:root {
+  --m-danger: var(--reg-danger, #D32F2F);
+  --m-danger-weak: rgba(211, 47, 47, .20);
+  --m-bg: #ffffff;
+  --m-text: var(--reg-dark, #0F172A);
+  --m-muted: var(--reg-gray-700, #334155);
+  --m-border: var(--reg-gray-200, #E5E7EB);
+  --m-border-strong: var(--reg-gray-300, #CBD5E1);
+  --m-shadow-xl: 0 20px 25px -5px rgba(0,0,0,.1), 0 10px 10px -5px rgba(0,0,0,.04);
+  --m-radius: 16px;
+  --m-radius-lg: 20px;
+  --m-transition: all .25s ease;
+}
+
+/* Overlay */
+.logout-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.5);          /* capa oscura */
+  backdrop-filter: blur(4px);                        /* blur sutil */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+  animation: logout-modal-fadeIn 0.2s ease-out;
+  padding: 20px;
+}
+
+/* Contenedor */
+.logout-modal-container {
+  background-color: var(--m-bg);
+  border-radius: var(--m-radius);
+  width: 90%;
+  max-width: 500px;
+  padding: 28px;
+  box-shadow: var(--m-shadow-xl);
+  text-align: center;
+  position: relative;
+  border-top: 4px solid transparent;                /* variante por tema */
+  animation: logout-modal-pop .18s ease-out;
+  border: 3px solid var(--m-border);
+}
+
+/* Variantes (podes sumar más si querés: success, warning, info) */
+.logout-modal--danger { border-top-color: var(--m-danger); }
+
+/* Icono */
+.logout-modal__icon {
+  font-size: 2.5rem;
+  color: var(--m-danger);
+  margin-bottom: 1rem;
+}
+
+/* Títulos y texto */
+.logout-modal-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--m-text);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.logout-modal-title--danger { color: var(--m-danger); }
+
+.logout-modal-text {
+  font-size: 1rem;
+  color: var(--m-muted);
+  margin-bottom: 18px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* Botonera */
+.logout-modal-buttons {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Botones */
+.logout-btn {
+  padding: .75rem 1.25rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: .95rem;
+  cursor: pointer;
+  transition: var(--m-transition);
+  flex: 1;
+  max-width: 200px;
+  min-width: 120px;
+  border: 1px solid transparent;
+}
+
+/* Ghost */
+.logout-btn--ghost {
+  background: #fff;
+  color: var(--m-text);
+  border-color: var(--m-border-strong);
+}
+@media (hover: hover) and (pointer: fine) {
+  .logout-btn--ghost:hover {
+    background: #F8FAFC;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(15,23,42,.08);
+  }
+}
+
+/* Peligro */
+.logout-btn--solid-danger {
+  background: var(--m-danger);
+  color: #fff;
+  border-color: var(--m-danger);
+}
+@media (hover: hover) and (pointer: fine) {
+  .logout-btn--solid-danger:hover {
+    filter: brightness(.95);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 18px var(--m-danger-weak);
+  }
+}
+
+/* Accesibilidad: foco */
+.logout-btn:focus { outline: none; }
+.logout-btn:focus-visible {
+  outline: 3px solid rgba(211, 47, 47, .35); /* rojo con transparencia */
+  outline-offset: 2px;
+}
+
+/* Animaciones */
+@keyframes logout-modal-fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes logout-modal-pop { from { transform: translateY(4px); opacity: .98 } to { transform: translateY(0); opacity: 1 } }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .logout-modal-overlay { padding: 15px; }
+  .logout-modal-container {
+    padding: 20px;
+    width: 90%;
+    max-width: 350px;
+    border-radius: var(--m-radius-lg);
+    margin: 0;
+  }
+  .logout-modal__icon { font-size: 2rem; }
+  .logout-modal-title { font-size: 1.1rem; margin-bottom: 10px; }
+  .logout-modal-text  { font-size: .95rem; margin-bottom: 16px; }
+  .logout-modal-buttons { gap: 12px; }
+  .logout-btn { padding: .7rem .8rem; font-size: .9rem; min-width: 100px; border-radius: 12px; }
+}
+
+/* Móviles muy pequeños */
+@media (max-width: 360px) {
+  .logout-modal-container { padding: 18px; max-width: 320px; }
+  .logout-modal-title { font-size: 1rem; }
+  .logout-btn { padding: .6rem .6rem; font-size: .85rem; min-width: 90px; }
+}
