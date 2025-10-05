@@ -238,7 +238,7 @@ const EditarProfesor = () => {
                 </div>
               </div>
 
-              {/* Cargo */}
+              {/* Cargo + Fecha de carga (MISMA FILA) */}
               <div className="edit-socio-input-group">
                 <div className="edit-fl-wrapper always-active" style={{ width: '100%' }}>
                   <label htmlFor="id_cargo" className="edit-fl-label">
@@ -256,9 +256,29 @@ const EditarProfesor = () => {
                     ))}
                   </select>
                 </div>
+
+                <div
+                  className="edit-socio-floating-label-wrapper"
+                  onClick={fechaCargaCtl.onContainerClick}
+                  style={{ width: '100%' }}
+                >
+                  <input
+                    ref={fechaCargaCtl.ref}
+                    type="date"
+                    value={fechaCarga || ''}
+                    onChange={(e) => setFechaCarga(e.target.value)}
+                    placeholder=" "
+                    className="edit-socio-input"
+                    id="fecha_carga"
+                    required
+                  />
+                  <label htmlFor="fecha_carga" className={`edit-socio-floating-label ${fechaCarga ? 'edit-socio-floating-label-filled' : ''}`}>
+                    Fecha de carga
+                  </label>
+                </div>
               </div>
 
-              {/* 🔹 Turnos y Fechas */}
+              {/* Turno SÍ + Fecha SÍ */}
               <div className="edit-socio-input-group">
                 <div className="edit-fl-wrapper always-active">
                   <label htmlFor="id_turno_si" className="edit-fl-label">Turno SÍ</label>
@@ -294,6 +314,7 @@ const EditarProfesor = () => {
                 </div>
               </div>
 
+              {/* Turno NO + Fecha NO */}
               <div className="edit-socio-input-group">
                 <div className="edit-fl-wrapper always-active">
                   <label htmlFor="id_turno_no" className="edit-fl-label">Turno NO</label>
@@ -325,29 +346,6 @@ const EditarProfesor = () => {
                   />
                   <label htmlFor="fecha_no" className={`edit-socio-floating-label ${fechaNo ? 'edit-socio-floating-label-filled' : ''}`}>
                     Fecha NO
-                  </label>
-                </div>
-              </div>
-
-              {/* 🔹 Fecha de carga (editable) */}
-              <div className="edit-socio-input-group">
-                <div
-                  className="edit-socio-floating-label-wrapper"
-                  onClick={fechaCargaCtl.onContainerClick}
-                  style={{ width: '100%' }}
-                >
-                  <input
-                    ref={fechaCargaCtl.ref}
-                    type="date"
-                    value={fechaCarga || ''}
-                    onChange={(e) => setFechaCarga(e.target.value)}
-                    placeholder=" "
-                    className="edit-socio-input"
-                    id="fecha_carga"
-                    required
-                  />
-                  <label htmlFor="fecha_carga" className={`edit-socio-floating-label ${fechaCarga ? 'edit-socio-floating-label-filled' : ''}`}>
-                    Fecha de carga
                   </label>
                 </div>
               </div>

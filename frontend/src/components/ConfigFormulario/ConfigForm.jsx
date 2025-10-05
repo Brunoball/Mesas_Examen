@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import BASE_URL from "../../config/config";
 import "../Global/roots.css";
 import "./ConfigForm.css";
-import Toast from "../Global/Toast"; // ✅ Notificaciones
+import Toast from "../Global/Toast";
 
 /* ================= Utils ================= */
 const isoToLocalInput = (iso) => {
@@ -18,7 +18,6 @@ const isoToLocalInput = (iso) => {
 
 const localInputToMySQL = (local) => {
   if (!local) return null;
-  // "YYYY-MM-DDTHH:MM" -> "YYYY-MM-DD HH:MM:00"
   return local.replace("T", " ") + ":00";
 };
 
@@ -42,7 +41,7 @@ const ConfigForm = () => {
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
 
-  // ✅ Slot único de toast (si llega uno nuevo, reemplaza)
+  // Slot único de toast
   const [toast, setToast] = useState(null);
   const pushToast = useCallback((t) => {
     setToast({
@@ -63,7 +62,6 @@ const ConfigForm = () => {
     activo: 1,
   });
 
-  // 🔇 silent=true => no mostrar toast de éxito al cargar
   const fetchConfig = useCallback(async (silent = true) => {
     setCargando(true);
     setError("");
@@ -117,7 +115,7 @@ const ConfigForm = () => {
   }, [pushToast]);
 
   useEffect(() => {
-    fetchConfig(true); // 🔇 primer load sin toast
+    fetchConfig(true);
   }, [fetchConfig]);
 
   const abiertaPreview = useMemo(() => {
@@ -166,12 +164,11 @@ const ConfigForm = () => {
 
     setError("");
     setGuardando(true);
-    // 👉 mostramos solo "guardando…" y luego lo reemplazamos por éxito/ error
     pushToast({ tipo: "cargando", mensaje: "Guardando configuración…", duracion: 2500 });
 
     try {
       const payload = {
-        id_config: form.id_config, // null/0 => inserta (historial)
+        id_config: form.id_config,
         nombre: form.nombre.trim(),
         insc_inicio: localInputToMySQL(form.insc_inicio_local),
         insc_fin: localInputToMySQL(form.insc_fin_local),
@@ -197,10 +194,7 @@ const ConfigForm = () => {
       }
 
       setOkMsg("Configuración guardada correctamente.");
-      // ✅ reemplaza el toast anterior
       pushToast({ tipo: "exito", mensaje: "Actualizado correctamente", duracion: 3000 });
-
-      // 🔇 recargar sin toasts extra
       await fetchConfig(true);
     } catch {
       setError("Error de red al guardar la configuración.");
@@ -211,7 +205,7 @@ const ConfigForm = () => {
   };
 
   return (
-    <div className="page-wrap">
+    <div className="config-page-bg">
       {/* ===== Toast (slot único) ===== */}
       <div style={{ position: "fixed", top: 12, right: 12, zIndex: 9999 }}>
         {toast && (
@@ -225,117 +219,133 @@ const ConfigForm = () => {
         )}
       </div>
 
-      <form className="card" onSubmit={onGuardar} noValidate>
-        <div className="card-header">
-          <h1 className="page-title">Configurar formulario</h1>
-          <p className="page-subtitle">
-            Definí el período de inscripción, mensaje de cierre y estado.
-          </p>
-        </div>
-
-        <div className="card-body">
-          {cargando && (
-            <div className="alert" role="status">Cargando configuración…</div>
-          )}
-
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          )}
-          {okMsg && (
-            <div className="alert alert-success" role="alert">
-              {okMsg}
-            </div>
-          )}
-
-          <div className="form-grid">
-            {/* === MISMA FILA: Título / Inicio / Fin === */}
-            <label className="form-field col-4">
-              <span className="form-label">Título</span>
-              <input
-                type="text"
-                className="form-input"
-                name="nombre"
-                value={form.nombre}
-                onChange={handleChange}
-                placeholder="Mesas Examen Noviembre"
-                required
-              />
-            </label>
-
-            <label className="form-field col-4">
-              <span className="form-label">Inicio</span>
-              <input
-                type="datetime-local"
-                className="form-input clickable"
-                name="insc_inicio_local"
-                value={form.insc_inicio_local}
-                onChange={handleChange}
-                required
-              />
-            </label>
-
-            <label className="form-field col-4">
-              <span className="form-label">Fin</span>
-              <input
-                type="datetime-local"
-                className="form-input clickable"
-                name="insc_fin_local"
-                value={form.insc_fin_local}
-                onChange={handleChange}
-                required
-              />
-            </label>
-
-            <label className="form-field form-field--full">
-              <span className="form-label">Mensaje cuando está cerrado</span>
-              <input
-                type="text"
-                className="form-input"
-                name="mensaje_cerrado"
-                value={form.mensaje_cerrado}
-                onChange={handleChange}
-              />
-            </label>
-
-            <label className="form-field form-switch">
-              <input
-                type="checkbox"
-                name="activo"
-                checked={!!Number(form.activo)}
-                onChange={handleChange}
-              />
-              <span>Config activa</span>
-            </label>
+      <div className="shell">
+        <header className="topbar">
+          <div className="topbar-left">
+            <h1>Configurar Formulario</h1>
+            <p>Definí el período de inscripción, el mensaje de cierre y el estado.</p>
           </div>
-
-          <div className="preview-box">
-            <p><strong>Previsualización:</strong></p>
-            <ul>
-              <li><strong>Desde: </strong>{fmtLargo(form.insc_inicio_local)}</li>
-              <li><strong>Hasta: </strong>{fmtLargo(form.insc_fin_local)}</li>
-              <li><strong>Estado (según ahora): </strong>{abiertaPreview ? "ABIERTA" : "CERRADA"}</li>
-            </ul>
+          <div className="topbar-right">
+            <span className={`status-dot ${abiertaPreview ? "ok" : "off"}`} />
+            <span className="status-text">
+              {abiertaPreview ? "Inscripción abierta" : "Inscripción cerrada"}
+            </span>
           </div>
-        </div>
+        </header>
 
-        <div className="card-footer">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              pushToast({ tipo: "info", mensaje: "Volviendo…", duracion: 1200 });
-              navigate(-1);
-            }}
-          >
-            Volver
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={guardando || !!validar()}>
-            {guardando ? "Guardando…" : "Guardar"}
-          </button>
+        <div className="content-grid">
+          {/* MAIN */}
+          <form className="panel" onSubmit={onGuardar} noValidate>
+            {(cargando || error || okMsg) && (
+              <div className="stack">
+                {cargando && <div className="notice">Cargando configuración…</div>}
+                {error && <div className="notice danger">{error}</div>}
+                {okMsg && <div className="notice success">{okMsg}</div>}
+              </div>
+            )}
+
+            <div className="form-grid">
+              <label className="field col-12">
+                <span className="label">Título</span>
+                <input
+                  type="text"
+                  className="input"
+                  name="nombre"
+                  value={form.nombre}
+                  onChange={handleChange}
+                  placeholder="Mesas Examen Noviembre"
+                  required
+                />
+              </label>
+
+              <label className="field col-6">
+                <span className="label">Inicio</span>
+                <input
+                  type="datetime-local"
+                  className="input input-click"
+                  name="insc_inicio_local"
+                  value={form.insc_inicio_local}
+                  onChange={handleChange}
+                  required
+                />
+              </label>
+
+              <label className="field col-6">
+                <span className="label">Fin</span>
+                <input
+                  type="datetime-local"
+                  className="input input-click"
+                  name="insc_fin_local"
+                  value={form.insc_fin_local}
+                  onChange={handleChange}
+                  required
+                />
+              </label>
+
+              <label className="field col-12">
+                <span className="label">Mensaje cuando está cerrado</span>
+                <input
+                  type="text"
+                  className="input"
+                  name="mensaje_cerrado"
+                  value={form.mensaje_cerrado}
+                  onChange={handleChange}
+                />
+              </label>
+
+              <label className="switch field col-12">
+                <input
+                  type="checkbox"
+                  name="activo"
+                  checked={!!Number(form.activo)}
+                  onChange={handleChange}
+                />
+                <span className="switch-track">
+                  <span className="switch-thumb" />
+                </span>
+                <span className="switch-text">Config activa</span>
+              </label>
+            </div>
+
+            <div className="panel-footer">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  pushToast({ tipo: "info", mensaje: "Volviendo…", duracion: 1200 });
+                  navigate(-1);
+                }}
+              >
+                Volver
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={guardando || !!validar()}>
+                {guardando ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </form>
+
+          {/* ASIDE PREVIEW */}
+          <aside className="aside">
+            <div className="aside-card">
+              <div className="aside-title">Previsualización</div>
+              <ul className="meta">
+                <li><b>Desde</b><span>{fmtLargo(form.insc_inicio_local)}</span></li>
+                <li><b>Hasta</b><span>{fmtLargo(form.insc_fin_local)}</span></li>
+                <li>
+                  <b>Estado</b>
+                  <span className={`chip ${abiertaPreview ? "chip-ok" : "chip-off"}`}>
+                    {abiertaPreview ? "ABIERTA" : "CERRADA"}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="aside-tip">
+              <p>Consejo: usá rangos cortos y mantené la “config activa” solo cuando el formulario esté listo.</p>
+            </div>
+          </aside>
         </div>
-      </form>
+      </div>
     </div>
   );
 };

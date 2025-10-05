@@ -10,18 +10,13 @@ import './AgregarProfesor.css';
 const toUpper = (v) => (typeof v === 'string' ? v.toUpperCase() : v);
 const trimSpaces = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
-// helper para abrir el datepicker al clickear el contenedor
 const useClickOpensDatepicker = () => {
   const ref = useRef(null);
   const onClick = () => {
     const el = ref.current;
     if (!el) return;
-    try {
-      if (typeof el.showPicker === 'function') el.showPicker();
-      else el.focus();
-    } catch {
-      el.focus();
-    }
+    try { if (typeof el.showPicker === 'function') el.showPicker(); else el.focus(); }
+    catch { el.focus(); }
   };
   return { ref, onClick };
 };
@@ -29,17 +24,14 @@ const useClickOpensDatepicker = () => {
 export default function AgregarProfesor() {
   const navigate = useNavigate();
 
-  // Listas
   const [cargos, setCargos] = useState([]);
-  const [turnos, setTurnos] = useState([]); // normalizados a {id_turno, turno}
+  const [turnos, setTurnos] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Form mínimo
   const [apellido, setApellido] = useState('');
   const [nombre, setNombre] = useState('');
   const [idCargo, setIdCargo] = useState('');
 
-  // 🔹 Nuevos campos
   const [idTurnoSi, setIdTurnoSi] = useState('');
   const [idTurnoNo, setIdTurnoNo] = useState('');
   const [fechaSi, setFechaSi] = useState('');
@@ -60,66 +52,41 @@ export default function AgregarProfesor() {
         setLoading(true);
         const res = await fetch(`${BASE_URL}/api.php?action=obtener_listas`);
         const json = await res.json();
-
-        if (!json?.exito) {
-          showToast(json?.mensaje || 'No se pudieron cargar las listas.', 'error');
-          return;
-        }
-
-        // cargos: [{id, nombre}]
+        if (!json?.exito) { showToast(json?.mensaje || 'No se pudieron cargar las listas.', 'error'); return; }
         const cargosLista = Array.isArray(json?.listas?.cargos) ? json.listas.cargos : [];
         setCargos(cargosLista);
-
-        // turnos puede venir como [{id, nombre}] o [{id_turno, turno}]
         const turnosRaw = Array.isArray(json?.listas?.turnos) ? json.listas.turnos : [];
-        const turnosNorm = turnosRaw
-          .map(t => ({
-            id_turno: t.id_turno ?? t.id ?? null,
-            turno: t.turno ?? t.nombre ?? '',
-          }))
-          .filter(t => t.id_turno !== null && t.turno !== '');
+        const turnosNorm = turnosRaw.map(t => ({
+          id_turno: t.id_turno ?? t.id ?? null,
+          turno: t.turno ?? t.nombre ?? '',
+        })).filter(t => t.id_turno !== null && t.turno !== '');
         setTurnos(turnosNorm);
-      } catch (e) {
-        showToast('Error de conexión al cargar listas', 'error');
-      } finally {
-        setLoading(false);
-      }
+      } catch { showToast('Error de conexión al cargar listas', 'error'); }
+      finally { setLoading(false); }
     };
-
     fetchListas();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const validar = () => {
     const ap = trimSpaces(apellido);
     const no = trimSpaces(nombre);
-
     if (!ap) return 'El apellido es obligatorio.';
     if (!no) return 'El nombre es obligatorio.';
     if (!idCargo) return 'Seleccioná un cargo.';
-
-    // Validación simple
     if (!/^[A-ZÑÁÉÍÓÚÜ.\s-]+$/.test(ap)) return 'Apellido: solo letras y espacios.';
     if (!/^[A-ZÑÁÉÍÓÚÜ.\s-]+$/.test(no)) return 'Nombre: solo letras y espacios.';
-
-    // Validación de fechas (si vienen)
     const isDate = (d) => !d || /^\d{4}-\d{2}-\d{2}$/.test(d);
     if (!isDate(fechaSi) || !isDate(fechaNo)) return 'Formato de fecha inválido (use YYYY-MM-DD).';
-
     return null;
   };
 
   const onSubmit = async (e) => {
     e.preventDefault();
     const err = validar();
-    if (err) {
-      showToast(err, 'error');
-      return;
-    }
-
+    if (err) { showToast(err, 'error'); return; }
     const ap = toUpper(trimSpaces(apellido));
     const no = toUpper(trimSpaces(nombre));
-    const docente = `${ap}, ${no}`; // EXACTO como lo guarda la DB
-
+    const docente = `${ap}, ${no}`;
     try {
       setLoading(true);
       const resp = await fetch(`${BASE_URL}/api.php?action=agregar_profesor`, {
@@ -128,8 +95,6 @@ export default function AgregarProfesor() {
         body: JSON.stringify({
           docente,
           id_cargo: idCargo,
-
-          // 🔹 campos opcionales
           id_turno_si: idTurnoSi === '' ? null : Number(idTurnoSi),
           id_turno_no: idTurnoNo === '' ? null : Number(idTurnoNo),
           fecha_si: fechaSi || null,
@@ -137,18 +102,10 @@ export default function AgregarProfesor() {
         }),
       });
       const data = await resp.json();
-
-      if (data?.exito) {
-        showToast('Docente agregado correctamente', 'exito');
-        setTimeout(() => navigate('/profesores'), 800);
-      } else {
-        showToast(data?.mensaje || 'No se pudo agregar el docente.', 'error');
-      }
-    } catch (e) {
-      showToast('Error de red al guardar.', 'error');
-    } finally {
-      setLoading(false);
-    }
+      if (data?.exito) { showToast('Docente agregado correctamente', 'exito'); setTimeout(() => navigate('/profesores'), 800); }
+      else { showToast(data?.mensaje || 'No se pudo agregar el docente.', 'error'); }
+    } catch { showToast('Error de red al guardar.', 'error'); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -163,6 +120,7 @@ export default function AgregarProfesor() {
       )}
 
       <div className="add-alumno-box">
+        {/* Header (título general) */}
         <div className="add-header">
           <div className="add-icon-title">
             <FontAwesomeIcon icon={faUserPlus} className="add-icon" />
@@ -171,7 +129,6 @@ export default function AgregarProfesor() {
               <p>Completá los datos mínimos para crear el registro</p>
             </div>
           </div>
-
           <button className="add-back-btn" onClick={() => navigate('/profesores')} disabled={loading} type="button">
             <FontAwesomeIcon icon={faArrowLeft} />
             Volver
@@ -179,9 +136,12 @@ export default function AgregarProfesor() {
         </div>
 
         <form onSubmit={onSubmit} className="add-alumno-form">
+          {/* ✅ TÍTULO INTERMEDIO (debajo del header) */}
+          <h2 className="add-intertitle">Datos del docente</h2>
+
           <div className="add-alumno-section">
-            <h3 className="add-alumno-section-title">Identificación</h3>
             <div className="add-alumno-section-content">
+              {/* Identificación */}
               <div className="add-group">
                 <div className={`add-input-wrapper ${apellido ? 'has-value' : ''}`} style={{ flex: 1 }}>
                   <label className="add-label">Apellido *</label>
@@ -206,12 +166,8 @@ export default function AgregarProfesor() {
                   <span className="add-input-highlight" />
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="add-alumno-section">
-            <h3 className="add-alumno-section-title">Cargo</h3>
-            <div className="add-alumno-section-content">
+              {/* Cargo */}
               <div className="add-group">
                 <div className="add-input-wrapper always-active" style={{ flex: 1 }}>
                   <label className="add-label">Cargo *</label>
@@ -224,20 +180,13 @@ export default function AgregarProfesor() {
                   >
                     <option value="">Seleccionar cargo</option>
                     {cargos.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
                     ))}
                   </select>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* 🔹 Turnos y fechas (opcionales) */}
-          <div className="add-alumno-section">
-            <h3 className="add-alumno-section-title">Disponibilidad (opcional)</h3>
-            <div className="add-alumno-section-content">
+              {/* Disponibilidad (opcional) */}
               <div className="add-group">
                 <div className="add-input-wrapper always-active" style={{ flex: 1 }}>
                   <label className="add-label">Turno SÍ</label>
@@ -255,11 +204,8 @@ export default function AgregarProfesor() {
                   </select>
                 </div>
 
-                <div
-                  className={`add-input-wrapper ${fechaSi ? 'has-value' : ''}`}
-                  style={{ flex: 1 }}
-                  onClick={fechaSiCtl.onClick}
-                >
+                {/* Fecha SÍ (floating siempre activo) */}
+                <div className="add-input-wrapper always-active" style={{ flex: 1 }} onClick={fechaSiCtl.onClick}>
                   <label className="add-label">Fecha SÍ</label>
                   <input
                     ref={fechaSiCtl.ref}
@@ -290,11 +236,8 @@ export default function AgregarProfesor() {
                   </select>
                 </div>
 
-                <div
-                  className={`add-input-wrapper ${fechaNo ? 'has-value' : ''}`}
-                  style={{ flex: 1 }}
-                  onClick={fechaNoCtl.onClick}
-                >
+                {/* Fecha NO (floating siempre activo) */}
+                <div className="add-input-wrapper always-active" style={{ flex: 1 }} onClick={fechaNoCtl.onClick}>
                   <label className="add-label">Fecha NO</label>
                   <input
                     ref={fechaNoCtl.ref}

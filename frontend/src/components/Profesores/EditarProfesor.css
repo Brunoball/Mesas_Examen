@@ -194,6 +194,7 @@
   font-size: 1.85rem;
   font-weight: 700;
   letter-spacing: 0.2px;
+  margin: 0;
   margin-bottom: 0.25rem;
 }
 .edit-socio-subtitle { font-size: 1rem; opacity: 0.95; }
@@ -382,7 +383,6 @@ select.edit-socio-input:focus {
   gap: 0.8rem;
   justify-content: flex-end;
   padding-top: 1rem;
-  border-top: 1px solid var(--border-color);
   margin-top: 1.25rem;
   flex-wrap: wrap;
 }

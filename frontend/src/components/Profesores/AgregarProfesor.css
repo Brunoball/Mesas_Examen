@@ -537,3 +537,36 @@
   opacity: .75;
   cursor: not-allowed;
 }
+/* Layout sin títulos intermedios: que no quede espacio muerto */
+.add-alumno-section {
+  height: auto;              /* antes 60vh */
+  padding: 1rem;
+}
+
+/* Asegurar chip visible para inputs date con "always-active" */
+.add-input-wrapper.always-active .add-label {
+  transform: translateY(-1.35rem) scale(.85);
+  background: linear-gradient(135deg, rgb(255 255 255 / .98) 0%, rgb(248 250 252 / .98) 100%);
+  color: var(--primary-color);
+  font-weight: 700;
+  padding: 0 .45rem;
+  left: .8rem;
+  z-index: 3;
+}
+
+/* Mejor interacción con el datepicker */
+.add-input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+/* Evitar que el label tape el click del date */
+.add-input-wrapper.always-active .add-label {
+  pointer-events: none;
+}
+
+/* En móvil mantener proporciones lindas */
+@media (max-width: 768px) {
+  .add-alumno-section { padding: .75rem .75rem 1rem; }
+  .add-input { padding: .75rem .9rem; }
+  .add-label { top: .7rem; left: .85rem; }
+}
