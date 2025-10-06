@@ -1,6 +1,7 @@
+// src/components/Catedras/modales/ModalAgregar.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSearch } from "@fortawesome/free-solid-svg-icons";
+import { faSearch, faChalkboardUser } from "@fortawesome/free-solid-svg-icons";
 import BASE_URL from "../../../config/config";
 import "./ModalAgregar.css";
 
@@ -58,7 +59,7 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
     setSeleccion(null);
     fetchDocentes();
 
-    // Bloquear scroll del body mientras el modal está abierto (opcional, cómodo)
+    // Bloquear scroll del body mientras el modal está abierto
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -113,16 +114,44 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
   return (
     <div className="ma-overlay" role="dialog" aria-modal="true" aria-label="Asignar docente">
       <div className="ma-card" onClick={(e) => e.stopPropagation()}>
-        <div className="ma-header">
-          <h2>Asignar / Cambiar docente</h2>
-          <button className="ma-close" onClick={onClose} aria-label="Cerrar">×</button>
+        {/* HEADER ROJO con ícono y badge */}
+        <div className="ma-header ma-header--brand">
+          <h2>
+            <FontAwesomeIcon icon={faChalkboardUser} className="ma-h2-icon" />
+            Asignar / Cambiar docente
+          </h2>
+
+          {/* Pill/badge opcional a la derecha */}
+          <span className="ma-badge">
+            <span className="dot" />
+            Lista de docentes
+          </span>
+
+          {/* X como SVG (igual a InfoPrevia) */}
+          <button className="ma-close" onClick={onClose} aria-label="Cerrar">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
 
+        {/* Subtítulo con datos de la cátedra */}
         <div className="ma-sub">
           <strong>Materia:</strong> {catedra?.materia ?? "-"} &nbsp;·&nbsp;
           <strong>Curso:</strong> {catedra?.nombre_curso ?? "-"} {catedra?.nombre_division ?? ""}
         </div>
 
+        {/* Buscador */}
         <div className="ma-search">
           <FontAwesomeIcon icon={faSearch} className="ma-search-icon" />
           <input
@@ -133,6 +162,7 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
           />
         </div>
 
+        {/* Lista / estados */}
         <div className="ma-body">
           {cargando ? (
             <div className="ma-status">Cargando docentes…</div>
@@ -156,6 +186,7 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
           )}
         </div>
 
+        {/* Acciones */}
         <div className="ma-actions">
           <button className="ma-btn secondary" onClick={onClose}>Cancelar</button>
           <button
@@ -167,7 +198,8 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
           </button>
         </div>
       </div>
-      {/* Cerrar clickeando fuera */}
+
+      {/* Backdrop: clic afuera cierra */}
       <div className="ma-backdrop" onClick={onClose} />
     </div>
   );

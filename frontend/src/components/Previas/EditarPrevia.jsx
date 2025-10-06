@@ -6,6 +6,11 @@ import Toast from '../Global/Toast';
 import '../Global/roots.css';
 import './AgregarPrevia.css';
 
+// Font Awesome (un solo color)
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPenToSquare, faArrowLeft, faSave } from '@fortawesome/free-solid-svg-icons';
+
+
 const hoyISO = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -318,7 +323,11 @@ const EditarPrevia = () => {
           {/* Header con gradiente + volver */}
           <div className="prev-add-header">
             <div className="prev-add-icon-title">
-              <span className="prev-add-icon">✏️</span>
+              <FontAwesomeIcon
+                icon={faPenToSquare}
+                className="prev-add-icon"
+                aria-hidden="true"
+              />
               <div>
                 <h1>Editar Previa</h1>
                 <p>Modificá los datos de la previa</p>
@@ -331,7 +340,8 @@ const EditarPrevia = () => {
               onClick={() => navigate(-1)}
               title="Volver"
             >
-              ↩ Volver
+              <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 8 }} />
+              Volver
             </button>
           </div>
 
@@ -392,7 +402,7 @@ const EditarPrevia = () => {
                 <div className="prev-section">
                   <h3 className="prev-section-title">Cursado</h3>
 
-                  {/* Curso + División en la MISMA FILA (igual a Agregar) */}
+                  {/* Curso + División */}
                   <div className="prev-row">
                     <div className="prev-col">
                       <div className="prev-input-wrapper always-active">
@@ -433,7 +443,7 @@ const EditarPrevia = () => {
                     </div>
                   </div>
 
-                  {/* Materia: curso + división en la MISMA FILA */}
+                  {/* Materia: curso + división */}
                   <div className="prev-row">
                     <div className="prev-col">
                       <div className="prev-input-wrapper always-active">
@@ -585,7 +595,8 @@ const EditarPrevia = () => {
                   onClick={() => navigate(-1)}
                   title="Volver"
                 >
-                  ↩ <span className="prev-add-button-text">Volver</span>
+                  <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 8 }} />
+                  <span className="prev-add-button-text">Volver</span>
                 </button>
 
                 <button
@@ -594,6 +605,7 @@ const EditarPrevia = () => {
                   disabled={loading || listasLoading || materiasLoading}
                   title="Guardar"
                 >
+                  <FontAwesomeIcon icon={faSave} style={{ marginRight: 8 }} />
                   <span className="prev-add-button-text">{loading ? 'Guardando...' : 'Guardar Cambios'}</span>
                 </button>
               </div>

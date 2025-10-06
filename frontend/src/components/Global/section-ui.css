@@ -161,6 +161,7 @@ input:-webkit-autofill { background-color: transparent !important; }
   justify-content: space-between;
 }
 .glob-profesor-title {
+  align-items: center;
   color: var(--text-on-primary);
   font-size: 1.6rem;
   margin: 0 0 0 1rem;
@@ -329,6 +330,7 @@ input:-webkit-autofill { background-color: transparent !important; }
 /* Grid de filtros */
 .glob-grid-filtros {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 .glob-chip-filtro {

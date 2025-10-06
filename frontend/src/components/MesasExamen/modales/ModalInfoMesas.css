@@ -173,7 +173,7 @@
 }
 
 .mi-card {
-  grid-column: span 12;
+  grid-column: span 6;
   background: #fff;
   border: 1px solid var(--mi-border);
   border-radius: var(--mi-radius-md);

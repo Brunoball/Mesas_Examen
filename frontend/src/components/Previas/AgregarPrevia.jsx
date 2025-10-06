@@ -6,6 +6,12 @@ import Toast from '../Global/Toast';
 import '../Global/roots.css';
 import './AgregarPrevia.css';
 
+// Font Awesome (un solo color)
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faBookOpen, faArrowLeft, faSave } from '@fortawesome/free-solid-svg-icons';
+
+
+
 const hoyISO = () => {
   const d = new Date();
   const y = d.getFullYear();
@@ -251,7 +257,11 @@ const AgregarPrevia = () => {
           {/* Header con gradiente + volver */}
           <div className="prev-add-header">
             <div className="prev-add-icon-title">
-              <span className="prev-add-icon">📚</span>
+              <FontAwesomeIcon
+                icon={faBookOpen}
+                className="prev-add-icon"
+                aria-hidden="true"
+              />
               <div>
                 <h1>Agregar Previa</h1>
                 <p>Cargá los datos de la previa del alumno</p>
@@ -264,7 +274,8 @@ const AgregarPrevia = () => {
               onClick={() => navigate(-1)}
               title="Volver"
             >
-              ↩ Volver
+              <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 8 }} />
+              Volver
             </button>
           </div>
 
@@ -321,7 +332,7 @@ const AgregarPrevia = () => {
                 <div className="prev-section">
                   <h3 className="prev-section-title">Cursado</h3>
 
-                  {/* ⬇️ NUEVO: Curso + División en la MISMA FILA */}
+                  {/* Curso + División en la misma fila */}
                   <div className="prev-row">
                     {/* Cursando: curso */}
                     <div className="prev-col">
@@ -363,7 +374,8 @@ const AgregarPrevia = () => {
                       </div>
                     </div>
                   </div>
-                  {/* ⬇️ NUEVO: Materia: curso + división en la MISMA FILA */}
+
+                  {/* Materia: curso + división */}
                   <div className="prev-row">
                     {/* Materia: curso */}
                     <div className="prev-col">
@@ -460,44 +472,7 @@ const AgregarPrevia = () => {
                     <span className="prev-input-highlight" />
                   </div>
 
-                  {/* (Opcional) Año + Fecha juntos: descomentar si lo querés en la misma fila */}
-                  {/* 
-                  <div className="prev-row">
-                    <div className="prev-col">
-                      <div className={`prev-input-wrapper ${hasVal(form.anio) ? 'has-value' : ''}`}>
-                        <label className="prev-label">Año (previa)</label>
-                        <input
-                          className="prev-input"
-                          type="number"
-                          name="anio"
-                          value={form.anio}
-                          onChange={onChange}
-                          min="2000"
-                          max="2100"
-                        />
-                        <span className="prev-input-highlight" />
-                      </div>
-                    </div>
-                    <div className="prev-col">
-                      <div className={`prev-input-wrapper ${hasVal(form.fecha_carga) ? 'has-value' : ''}`}>
-                        <label className="prev-label">Fecha carga</label>
-                        <input
-                          ref={fechaRef}
-                          className="prev-input"
-                          type="date"
-                          name="fecha_carga"
-                          value={form.fecha_carga}
-                          onChange={onChange}
-                          onMouseDown={openCalendar}
-                          onFocus={openCalendar}
-                        />
-                        <span className="prev-input-highlight" />
-                      </div>
-                    </div>
-                  </div>
-                  */}
-
-                  {/* Año (por separado, si no usás el bloque junto) */}
+                  {/* Año */}
                   <div className={`prev-input-wrapper ${hasVal(form.anio) ? 'has-value' : ''}`}>
                     <label className="prev-label">Año (previa)</label>
                     <input
@@ -554,7 +529,8 @@ const AgregarPrevia = () => {
                   onClick={() => navigate(-1)}
                   title="Volver"
                 >
-                  ↩ <span className="prev-add-button-text">Volver</span>
+                  <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 8 }} />
+                  <span className="prev-add-button-text">Volver</span>
                 </button>
 
                 <button
@@ -563,6 +539,7 @@ const AgregarPrevia = () => {
                   disabled={loading || listasLoading || materiasLoading}
                   title="Guardar"
                 >
+                  <FontAwesomeIcon icon={faSave} style={{ marginRight: 8 }} />
                   <span className="prev-add-button-text">{loading ? 'Guardando...' : 'Guardar Previa'}</span>
                 </button>
               </div>
