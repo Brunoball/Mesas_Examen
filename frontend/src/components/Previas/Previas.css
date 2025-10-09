@@ -300,12 +300,9 @@ input:-webkit-autofill { background-color: transparent !important; }
   padding: 0;
   position: relative;
   transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
-  border-bottom:1px solid var(--border-color);
-  cursor: pointer;
   backface-visibility: hidden; transform: translateZ(0); will-change: transform, opacity; contain: content;
 }
 
-.prev-row:hover { background: var(--secondary-100) !important; }
 .prev-row.prev-even-row { background-color: #fafafa; }
 .prev-row.prev-odd-row { background-color: var(--secondary-50); }
 
@@ -786,4 +783,79 @@ input:-webkit-autofill { background-color: transparent !important; }
 /* Por si no existe la variable */
 :root {
   --reg-success: #16A34A; /* verde 600 */
+}
+/* Contenedor izquierdo: contador + tabs */
+.glob-left-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;            /* espacio entre contador y tabs */
+  flex-wrap: wrap;      /* por si hay poco ancho */
+}
+
+/* Grupo de tabs junto al contador */
+.glob-tabs-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Botones de tab: reutiliza la estética de tus chips de filtro */
+.glob-chip-filtro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 12px;
+
+  border: 1px solid var(--reg-red-300);
+  background: #fff;
+  color: var(--reg-primary-dark);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease, border-color .12s ease;
+}
+
+.glob-chip-filtro:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--reg-shadow-sm);
+  background: linear-gradient(135deg, var(--reg-red-50) 0%, #fff 100%);
+  border-color: var(--reg-red-400);
+  color: #b91c1c;
+}
+
+.glob-chip-filtro.glob-active {
+  background: var(--reg-primary);
+  color: #fff;
+  border-color: var(--reg-primary);
+}
+
+@media (max-width: 768px) {
+  /* En móvil, que el contador y tabs queden en línea y bien respirados */
+  .glob-left-inline {
+    gap: 10px;
+  }
+  .glob-tabs-inline .glob-chip-filtro {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 0.95rem;
+  }
+}
+
+
+.sep-boton{display: flex; gap: 10px;}
+/* Botón "Mostrar Todos" en el header de filtros (Cátedras) */
+.glob-filtros-button.glob-show-all {
+  border: 1px solid var(--reg-primary);
+  background: #fff;
+  color: var(--reg-primary);
+  font-weight: 600;
+}
+@media (hover: hover) and (pointer: fine) {
+  .glob-filtros-button.glob-show-all:hover {
+    background: linear-gradient(135deg, var(--reg-red-50) 0%, #fff 100%);
+    transform: translateY(-2px);
+    box-shadow: var(--reg-shadow-md);
+    border-color: var(--reg-primary);
+  }
 }

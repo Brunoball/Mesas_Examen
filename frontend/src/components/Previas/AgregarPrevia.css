@@ -126,7 +126,7 @@
 /* ==============================
    Inputs + labels flotantes
 ============================== */
-.prev-input-wrapper { position: relative; width: 100%; }
+.prev-input-wrapper { position: relative; width: 100%;  margin: 5px 0 0;}
 
 .prev-label {
   position: absolute;
@@ -333,18 +333,17 @@
   .prev-section-title { font-size: .9rem; }
 }
 /* Fila de dos columnas y versión responsive */
-.prev-row {
+.prev-rowsdd {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px 16px;
-  margin-bottom: 6px;
 }
 .prev-col {
   min-width: 0; /* evita overflow con labels flotantes */
 }
 
 @media (max-width: 640px) {
-  .prev-row {
+  .prev-rowsdd {
     grid-template-columns: 1fr; /* en mobile, apila */
     gap: 10px;
   }

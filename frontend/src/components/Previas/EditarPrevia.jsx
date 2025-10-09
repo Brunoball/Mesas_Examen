@@ -403,7 +403,7 @@ const EditarPrevia = () => {
                   <h3 className="prev-section-title">Cursado</h3>
 
                   {/* Curso + División */}
-                  <div className="prev-row">
+                  <div className="prev-rowsdd">
                     <div className="prev-col">
                       <div className="prev-input-wrapper always-active">
                         <label className="prev-label">Curso</label>
@@ -444,7 +444,7 @@ const EditarPrevia = () => {
                   </div>
 
                   {/* Materia: curso + división */}
-                  <div className="prev-row">
+                  <div className="prev-rowsdd">
                     <div className="prev-col">
                       <div className="prev-input-wrapper always-active">
                         <label className="prev-label">Materia: curso</label>
@@ -589,15 +589,7 @@ const EditarPrevia = () => {
 
               {/* Botonera inferior */}
               <div className="prev-add-buttons">
-                <button
-                  type="button"
-                  className="prev-add-button prev-add-button--back"
-                  onClick={() => navigate(-1)}
-                  title="Volver"
-                >
-                  <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 8 }} />
-                  <span className="prev-add-button-text">Volver</span>
-                </button>
+
 
                 <button
                   type="submit"

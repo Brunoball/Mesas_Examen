@@ -1,5 +1,5 @@
 /* =========================================================
-   ModalInfoPrevia.css — Tema Rojo + Scroll interno (COMPACT)
+   ModalInfoPrevia.css — Tema Rojo + Tabs estilo ModalInfoMesas
    ========================================================= */
 
 /* ====== :root ROJO (sin degradados) ====== */
@@ -74,8 +74,8 @@
 
 /* ====== Contenedor ====== */
 .mi-modal__container{
-  width:min(880px,94vw);           /* ⬅️ un poco más angosto */
-  max-height:88vh;                 /* ⬅️ un poco más bajo */
+  width:min(880px,94vw);
+  max-height:88vh;
   background:var(--mi-bg);
   border-radius:var(--mi-radius-lg);
   box-shadow:var(--mi-shadow);
@@ -100,21 +100,21 @@
 }
 .mi-modal__close:hover{ background:rgba(255,255,255,.12); transform:rotate(90deg); }
 
-/* ====== Tabs (opcional) ====== */
-.mi-modal__tabs{
-  display:flex; gap:10px; padding:0 var(--mi-space-lg);
+/* ====== Tabs (idéntico a ModalInfoMesas) ====== */
+.mi-tabs{
+  display:flex; gap:12px; padding:0 18px;
   background:#fff; border-bottom:1px solid var(--mi-border);
 }
 .mi-tab{
   position:relative; appearance:none; border:0; background:transparent;
-  padding:12px 6px; font-size:var(--mi-fs-sm); font-weight:700; color:var(--mi-muted);
+  padding:14px 8px; font-size:.92rem; font-weight:600; color:var(--mi-muted);
   cursor:pointer; transition:var(--reg-transition);
 }
 .mi-tab:hover{ color:var(--mi-primary-600); }
 .mi-tab.is-active{ color:var(--mi-primary-700); }
 .mi-tab.is-active::after{
-  content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px;
-  background:var(--mi-primary-600); border-radius:2px 2px 0 0;
+  content:""; position:absolute; left:0; right:0; bottom:-1px; height:3px;
+  background:var(--mi-primary-600); border-radius:3px 3px 0 0;
 }
 
 /* ====== Contenido (scroll) ====== */
@@ -134,63 +134,49 @@
 /* ====== Grid / Cards ====== */
 .mi-grid{
   display:grid; grid-template-columns:repeat(12,1fr);
-  gap:12px;                         /* ⬅️ menos gap */
+  gap:12px;
 }
-
-/* Por defecto en desktop grande: 3 por fila (span 4) */
 .mi-card{
-  grid-column:span 4;               /* ⬅️ antes 6 */
+  grid-column:span 6; /* 2 columnas por fila en desktop mediano */
   background:#fff;
   border:1px solid var(--mi-border);
   border-radius:var(--mi-radius-md);
-  padding:12px;                     /* ⬅️ antes 16px */
+  padding:12px;
   box-shadow:0 2px 10px rgba(15,23,42,.03);
 }
 .mi-card--full{ grid-column:1 / -1; }
 
 .mi-card__title{
-  margin:0 0 8px;                   /* ⬅️ menos margen */
-  font-size:var(--mi-fs-md);
-  font-weight:800; color:var(--mi-text);
-  letter-spacing:-.01em;
-  padding-bottom:6px;               /* ⬅️ menos padding */
-  border-bottom:1px solid var(--mi-border);
+  margin:0 0 8px; font-size:var(--mi-fs-md);
+  font-weight:800; color:var(--mi-text); letter-spacing:-.01em;
+  padding-bottom:6px; border-bottom:1px solid var(--mi-border);
 }
 
 /* ====== Filas (label / value) ====== */
 .mi-row{
-  display:flex; align-items:center; justify-content:space-between;                   /* ⬅️ antes 8px */
-  border-bottom:1px dashed rgba(0,0,0,.06); gap:12px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px dashed rgba(0,0,0,.06); gap:12px; padding:8px 0;
 }
 .mi-row:last-child{ border-bottom:0; }
 
 .mi-label{ color:var(--mi-muted); font-weight:700; font-size:var(--mi-fs-sm); }
 .mi-value{ color:var(--mi-text); font-weight:600; text-align:right; max-width:60%; word-break:break-word; font-size:var(--mi-fs-md); }
 
-.mi-sep{ height:1px; background:var(--mi-border); margin:4px 0 2px; }
-
-/* Bloques multilínea */
-.mi-row--block{ grid-template-columns:150px 1fr; align-items:start; }
-.mi-value--multiline{ white-space:pre-wrap; }
-
-/* ====== Estados ====== */
+/* Estados */
 .mi-value.is-ok{ color:var(--reg-success); }
 .mi-value.is-pend{ color:var(--reg-warning); }
 
 /* ====== Responsivo ====== */
-/* Medianas: 2 por fila */
 @media (max-width: 1200px){
-  .mi-card{ grid-column:span 6; }
+  .mi-card{ grid-column:span 12; }
 }
-/* Chicas: 1 por fila y aún más compacto el header */
 @media (max-width: 640px){
   .mi-modal__container{ width:96vw; max-height:86vh; }
   .mi-modal__title{ font-size:1.05rem; }
   .mi-modal__subtitle{ font-size:.8rem; }
   .mi-tab{ white-space:nowrap; }
-  .mi-row{ grid-template-columns:1fr; }
+  .mi-row{ flex-direction:column; align-items:flex-start; }
   .mi-value{ text-align:left; max-width:100%; }
-  .mi-row--block{ grid-template-columns:1fr; }
 }
 
 /* ====== Animaciones ====== */

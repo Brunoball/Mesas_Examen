@@ -164,7 +164,6 @@ input:-webkit-autofill { background-color: transparent !important; }
   align-items: center;
   color: var(--text-on-primary);
   font-size: 1.6rem;
-  margin: 0 0 0 1rem;
   font-weight: 550;
   text-align: center;
   display: flex;
@@ -258,6 +257,7 @@ input:-webkit-autofill { background-color: transparent !important; }
   position: absolute;
   top: 100%;
   right: 0;
+  min-width: 280px;
   max-width: 280px;
   background: white;
   border: 1px solid var(--pro-red-200);
@@ -507,9 +507,9 @@ input:-webkit-autofill { background-color: transparent !important; }
   width: 27px;
   height: 27px;
   padding: 6px;
-  color: var(--chip-icon);
+  color: #C62828;
 }
-
+.is-affirm:hover{background-color:#C62828 ; color: white !important;}
 /* Variantes de color */
 .glob-iconchip.is-info  { --chip-bg:#feecf0; --chip-border:#f8cfd6; --chip-icon:#d32f2f; }
 .glob-iconchip.is-edit  { --chip-bg:#feecf0; --chip-border:#f8cfd6; --chip-icon:#d32f2f; }
@@ -780,3 +780,21 @@ input:-webkit-autofill { background-color: transparent !important; }
 
 /* evita FOUC: el "velo" inicial previo a la animación */
 .glob-pre { opacity: 0; transform: translateY(8px); }
+
+
+/* Icono grande para estado vacío */
+.glob-empty-icon {
+  display: block;
+  font-size: 2rem; /* responsivo */
+  color: var(--text-secondary);
+  margin: 0 auto;          /* centrado + separación */
+  opacity: 0.9;
+}
+
+/* (opcional) un poco más de aire al contenedor del mensaje */
+.glob-no-data-message .glob-message-content {
+  display: grid;
+  place-items: center;
+
+  padding: 10px 12px;
+}

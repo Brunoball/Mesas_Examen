@@ -41,7 +41,6 @@
    ========================= */
 .config-page-bg {
   min-height: 100vh;
-  padding: 32px;
   display: grid;
   place-items: center;
 }
@@ -315,6 +314,7 @@
 .chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;

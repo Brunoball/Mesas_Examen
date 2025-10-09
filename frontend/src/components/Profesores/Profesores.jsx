@@ -24,22 +24,21 @@ import {
   FaTimes,
   FaUsers,
   FaFilter,
-  FaChevronDown
+  FaChevronDown,
 } from 'react-icons/fa';
 
+// Estilos base de modales y globales
+import '../Global/modal-base.css';
+import '../Global/roots.css';
+
 // Modales
-// index.js o Profesores.jsx (arriba del todo de los imports de React)
-import '../Global/modal-base.css'; // ajustá la ruta según dónde lo guardaste
-
 import ModalEliminarProfesor from './modales/ModalEliminarProfesor';
-import ModalInfoProfesor     from './modales/ModalInfoProfesor';
-import ModalDarBajaProfesor  from './modales/ModalDarBajaProfesor';
-
+import ModalInfoProfesor from './modales/ModalInfoProfesor';
+import ModalDarBajaProfesor from './modales/ModalDarBajaProfesor';
 
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import Toast from '../Global/Toast';
-import '../Global/roots.css';
 
 /* ================================
    Utils
@@ -64,9 +63,9 @@ const formatearFechaISO = (v) => {
 // Hook simple para detectar mobile
 function useIsMobile(breakpoint = 768) {
   const getMatch = () =>
-    (typeof window !== 'undefined'
+    typeof window !== 'undefined'
       ? window.matchMedia(`(max-width: ${breakpoint}px)`).matches
-      : false);
+      : false;
   const [isMobile, setIsMobile] = useState(getMatch);
 
   useEffect(() => {
@@ -118,7 +117,7 @@ const Profesores = () => {
   const [toast, setToast] = useState({
     mostrar: false,
     tipo: '',
-    mensaje: ''
+    mensaje: '',
   });
 
   // Filtros (las listas se derivan del dataset)
@@ -177,9 +176,11 @@ const Profesores = () => {
   const materiasUnicas = useMemo(() => {
     const set = new Set(
       (profesoresDB || [])
-        .flatMap(p => Array.isArray(p?.materias) ? p.materias : (p?.materia_principal ? [p.materia_principal] : []))
+        .flatMap((p) =>
+          Array.isArray(p?.materias) ? p.materias : p?.materia_principal ? [p.materia_principal] : []
+        )
         .filter(Boolean)
-        .map(s => s.toString().trim())
+        .map((s) => s.toString().trim())
     );
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   }, [profesoresDB]);
@@ -187,9 +188,9 @@ const Profesores = () => {
   const departamentosUnicos = useMemo(() => {
     const set = new Set(
       (profesoresDB || [])
-        .map(p => p?.departamento || p?.area || '')
+        .map((p) => p?.departamento || p?.area || '')
         .filter(Boolean)
-        .map(s => s.toString().trim())
+        .map((s) => s.toString().trim())
     );
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   }, [profesoresDB]);
@@ -209,25 +210,21 @@ const Profesores = () => {
       const q = normalizar(busquedaDefer);
       resultados = resultados.filter(
         (p) =>
-          p._nyap.includes(q) ||
-          p._dni.includes(q) ||
-          p._id.includes(q)            // ✅ incluye búsqueda por ID (parcial o completa)
+          p._nyap.includes(q) || p._dni.includes(q) || p._id.includes(q) // ✅ ID parcial o completo
       );
     }
 
     if (materiaSeleccionada && materiaSeleccionada !== '') {
       const matNorm = normalizar(materiaSeleccionada);
       resultados = resultados.filter((p) => {
-        const lista = Array.isArray(p?.materias) ? p.materias : (p?.materia_principal ? [p.materia_principal] : []);
-        return lista.some(m => normalizar(m) === matNorm);
+        const lista = Array.isArray(p?.materias) ? p.materias : p?.materia_principal ? [p.materia_principal] : [];
+        return lista.some((m) => normalizar(m) === matNorm);
       });
     }
 
     if (departamentoSeleccionado && departamentoSeleccionado !== '') {
       const depNorm = normalizar(departamentoSeleccionado);
-      resultados = resultados.filter((p) =>
-        normalizar(p?.departamento ?? p?.area ?? '') === depNorm
-      );
+      resultados = resultados.filter((p) => normalizar(p?.departamento ?? p?.area ?? '') === depNorm);
     }
 
     if (filtroActivo === 'todos') {
@@ -249,13 +246,16 @@ const Profesores = () => {
   /* ================================
      Animación en cascada
   ================================= */
-  const dispararCascadaUnaVez = useCallback((duracionMs) => {
-    const safeMs = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
-    const total = typeof duracionMs === 'number' ? duracionMs : safeMs;
-    if (animacionActiva) return;
-    setAnimacionActiva(true);
-    window.setTimeout(() => setAnimacionActiva(false), total);
-  }, [animacionActiva]);
+  const dispararCascadaUnaVez = useCallback(
+    (duracionMs) => {
+      const safeMs = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
+      const total = typeof duracionMs === 'number' ? duracionMs : safeMs;
+      if (animacionActiva) return;
+      setAnimacionActiva(true);
+      window.setTimeout(() => setAnimacionActiva(false), total);
+    },
+    [animacionActiva]
+  );
 
   const triggerCascadaConPreMask = useCallback(() => {
     setPreCascada(true);
@@ -303,13 +303,11 @@ const Profesores = () => {
   }, []);
 
   // ======= Apertura/cierre de modales =======
-  // 👉 Abrimos primero con datos base y luego enriquecemos con fetch (evita que “no se vea nada”).
   const abrirModalInfo = useCallback((profesorBase) => {
     if (!profesorBase) return;
     setProfesorInfo(profesorBase);
     setMostrarModalInfo(true);
 
-    // fetch en segundo plano para traer campos extendidos
     (async () => {
       try {
         const res = await fetch(
@@ -321,7 +319,7 @@ const Profesores = () => {
           setProfesorInfo((prev) => ({ ...(prev || profesorBase), ...extendido }));
         }
       } catch {
-        // silencioso: ya se muestra lo base
+        // silencioso
       }
     })();
   }, []);
@@ -367,7 +365,7 @@ const Profesores = () => {
               ...p,
               _nyap: normalizar(nyap),
               _dni: String(p?.dni ?? p?.num_documento ?? '').toLowerCase(),
-              _id: String(p?.id_profesor ?? '').trim().toLowerCase(), // ✅ index por ID para búsqueda
+              _id: String(p?.id_profesor ?? '').trim().toLowerCase(), // ✅ index por ID
             };
           });
 
@@ -420,7 +418,9 @@ const Profesores = () => {
   const manejarSeleccion = useCallback(
     (profesor) => {
       if (bloquearInteraccion || animacionActiva) return;
-      setProfesorSeleccionado((prev) => (prev?.id_profesor !== profesor.id_profesor ? profesor : null));
+      setProfesorSeleccionado((prev) =>
+        prev?.id_profesor !== profesor.id_profesor ? profesor : null
+      );
     },
     [bloquearInteraccion, animacionActiva]
   );
@@ -464,7 +464,9 @@ const Profesores = () => {
         if (data.exito) {
           setProfesores((prev) => prev.filter((p) => p.id_profesor !== id));
           setProfesoresDB((prev) =>
-            prev.map((p) => (p.id_profesor === id ? { ...p, activo: 0, motivo, ingreso: data.fecha || p.ingreso } : p))
+            prev.map((p) =>
+              p.id_profesor === id ? { ...p, activo: 0, motivo, ingreso: data.fecha || p.ingreso } : p
+            )
           );
           mostrarToast('Profesor dado de baja correctamente');
         } else {
@@ -506,17 +508,39 @@ const Profesores = () => {
     }));
 
     const headers = [
-      'ID Profesor','Apellido y Nombre (DB)','Cargo','Materia principal','Total materias',
-      'Tipo de documento','Sigla','Nº Documento','Sexo','Teléfono','Fecha de ingreso',
-      'Domicilio','Localidad','Departamento',
+      'ID Profesor',
+      'Apellido y Nombre (DB)',
+      'Cargo',
+      'Materia principal',
+      'Total materias',
+      'Tipo de documento',
+      'Sigla',
+      'Nº Documento',
+      'Sexo',
+      'Teléfono',
+      'Fecha de ingreso',
+      'Domicilio',
+      'Localidad',
+      'Departamento',
     ];
 
     const ws = XLSX.utils.json_to_sheet(filas, { header: headers });
 
     ws['!cols'] = [
-      { wch: 12 },{ wch: 28 },{ wch: 20 },{ wch: 26 },{ wch: 14 },
-      { wch: 22 },{ wch: 8  },{ wch: 16 },{ wch: 10 },{ wch: 14 },
-      { wch: 14 },{ wch: 28 },{ wch: 20 },{ wch: 22 },
+      { wch: 12 },
+      { wch: 28 },
+      { wch: 20 },
+      { wch: 26 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 8 },
+      { wch: 16 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 28 },
+      { wch: 20 },
+      { wch: 22 },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -551,47 +575,44 @@ const Profesores = () => {
     setFiltros((prev) => {
       const next = { ...prev, busqueda: valor };
       next.filtroActivo =
-        (valor?.trim() || prev.materiaSeleccionada || prev.departamentoSeleccionado)
-          ? 'filtros'
-          : null;
+        (valor?.trim() || prev.materiaSeleccionada || prev.departamentoSeleccionado) ? 'filtros' : null;
       return next;
     });
   }, []);
 
-  const handleFiltrarPorMateria = useCallback((materia) => {
-    setFiltros((prev) => {
-      const next = { ...prev, materiaSeleccionada: materia };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || materia || prev.departamentoSeleccionado)
-          ? 'filtros'
-          : null;
-      return next;
-    });
-    setMostrarFiltros(false);
-    triggerCascadaConPreMask();
-  }, [triggerCascadaConPreMask]);
+  const handleFiltrarPorMateria = useCallback(
+    (materia) => {
+      setFiltros((prev) => {
+        const next = { ...prev, materiaSeleccionada: materia };
+        next.filtroActivo =
+          (prev.busqueda?.trim() || materia || prev.departamentoSeleccionado) ? 'filtros' : null;
+        return next;
+      });
+      setMostrarFiltros(false);
+      triggerCascadaConPreMask();
+    },
+    [triggerCascadaConPreMask]
+  );
 
-  const handleFiltrarPorDepartamento = useCallback((departamento) => {
-    setFiltros((prev) => {
-      const next = { ...prev, departamentoSeleccionado: departamento };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || prev.materiaSeleccionada || departamento)
-          ? 'filtros'
-          : null;
-      return next;
-    });
-    setMostrarFiltros(false);
-    triggerCascadaConPreMask();
-  }, [triggerCascadaConPreMask]);
+  const handleFiltrarPorDepartamento = useCallback(
+    (departamento) => {
+      setFiltros((prev) => {
+        const next = { ...prev, departamentoSeleccionado: departamento };
+        next.filtroActivo =
+          (prev.busqueda?.trim() || prev.materiaSeleccionada || departamento) ? 'filtros' : null;
+        return next;
+      });
+      setMostrarFiltros(false);
+      triggerCascadaConPreMask();
+    },
+    [triggerCascadaConPreMask]
+  );
 
   // Quitar chips individuales
   const quitarBusqueda = useCallback(() => {
     setFiltros((prev) => {
       const next = { ...prev, busqueda: '' };
-      next.filtroActivo =
-        (prev.materiaSeleccionada || prev.departamentoSeleccionado)
-          ? 'filtros'
-          : null;
+      next.filtroActivo = prev.materiaSeleccionada || prev.departamentoSeleccionado ? 'filtros' : null;
       return next;
     });
   }, []);
@@ -599,10 +620,7 @@ const Profesores = () => {
   const quitarMateria = useCallback(() => {
     setFiltros((prev) => {
       const next = { ...prev, materiaSeleccionada: '' };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || prev.departamentoSeleccionado)
-          ? 'filtros'
-          : null;
+      next.filtroActivo = prev.busqueda?.trim() || prev.departamentoSeleccionado ? 'filtros' : null;
       return next;
     });
   }, []);
@@ -610,10 +628,7 @@ const Profesores = () => {
   const quitarDepartamento = useCallback(() => {
     setFiltros((prev) => {
       const next = { ...prev, departamentoSeleccionado: '' };
-      next.filtroActivo =
-        (prev.busqueda?.trim() || prev.materiaSeleccionada)
-          ? 'filtros'
-          : null;
+      next.filtroActivo = prev.busqueda?.trim() || prev.materiaSeleccionada ? 'filtros' : null;
       return next;
     });
   }, []);
@@ -655,7 +670,7 @@ const Profesores = () => {
     } = data;
 
     const profesor = rows[index];
-    const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
+       const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
 
     const materiaPrincipal = profesor.materia_principal ?? '';
@@ -669,7 +684,7 @@ const Profesores = () => {
         onClick={() => manejarSeleccion(profesor)}
         style={{
           ...style,
-          gridTemplateColumns: "0.5fr 1.6fr 0.8fr 0.8fr",
+          gridTemplateColumns: '0.5fr 1.6fr 1.4fr 0.5fr',
           animationDelay: willAnimate ? `${index * 0.03}s` : '0s',
           opacity: preMask ? 0 : undefined,
           transform: preMask ? 'translateY(8px)' : undefined,
@@ -776,15 +791,13 @@ const Profesores = () => {
           <div className="glob-search-input-container">
             <input
               type="text"
-              placeholder="Buscar por ID, nombre DB o DNI"  // ✅ actualizado
+              placeholder="Buscar por ID, nombre DB o DNI"
               className="glob-search-input"
               value={busqueda}
               onChange={(e) => handleBuscarChange(e.target.value)}
               disabled={cargando}
             />
-            {busqueda ? (
-              <FaTimes className="glob-clear-search-icon" onClick={quitarBusqueda} />
-            ) : null}
+            {busqueda ? <FaTimes className="glob-clear-search-icon" onClick={quitarBusqueda} /> : null}
             <button className="glob-search-button" title="Buscar">
               <FaSearch className="glob-search-icon" />
             </button>
@@ -855,7 +868,9 @@ const Profesores = () => {
                       {(departamentosDisponibles.length ? departamentosDisponibles : departamentosUnicos).map((dep) => (
                         <button
                           key={`dep-${dep}`}
-                          className={`glob-chip-filtro ${filtros.departamentoSeleccionado === dep ? 'glob-active' : ''}`}
+                          className={`glob-chip-filtro ${
+                            filtros.departamentoSeleccionado === dep ? 'glob-active' : ''
+                          }`}
                           onClick={() => handleFiltrarPorDepartamento(dep)}
                           title={`Filtrar por departamento ${dep}`}
                         >
@@ -889,10 +904,10 @@ const Profesores = () => {
             <div className="glob-left-inline">
               <div className="glob-contador-container">
                 <span className="glob-profesores-desktop">
-                  Cant profesores: {(hayFiltros || filtroActivo === 'todos') ? profesoresFiltrados.length : 0}
+                  Cant profesores: {hayFiltros || filtroActivo === 'todos' ? profesoresFiltrados.length : 0}
                 </span>
                 <span className="glob-profesores-mobile">
-                  {(hayFiltros || filtroActivo === 'todos') ? profesoresFiltrados.length : 0}
+                  {hayFiltros || filtroActivo === 'todos' ? profesoresFiltrados.length : 0}
                 </span>
                 <FaUsers className="glob-icono-profesor" />
               </div>
@@ -919,7 +934,9 @@ const Profesores = () => {
 
                   {materiaSeleccionada && (
                     <div className="glob-chip-mini" title="Filtro activo">
-                      <span className="glob-chip-mini-text glob-profesores-desktop">Materia: {materiaSeleccionada}</span>
+                      <span className="glob-chip-mini-text glob-profesores-desktop">
+                        Materia: {materiaSeleccionada}
+                      </span>
                       <span className="glob-chip-mini-text glob-profesores-mobile">{materiaSeleccionada}</span>
                       <button
                         className="glob-chip-mini-close"
@@ -934,7 +951,9 @@ const Profesores = () => {
 
                   {departamentoSeleccionado && (
                     <div className="glob-chip-mini" title="Filtro activo">
-                      <span className="glob-chip-mini-text glob-profesores-desktop">Departamento: {departamentoSeleccionado}</span>
+                      <span className="glob-chip-mini-text glob-profesores-desktop">
+                        Departamento: {departamentoSeleccionado}
+                      </span>
                       <span className="glob-chip-mini-text glob-profesores-mobile">{departamentoSeleccionado}</span>
                       <button
                         className="glob-chip-mini-close"
@@ -962,8 +981,7 @@ const Profesores = () => {
           {/* TABLA (solo desktop) */}
           {!isMobile && (
             <div className="glob-box-table">
-              <div className="glob-header"
-              style={{ gridTemplateColumns: "0.5fr 1.6fr 0.8fr 0.8fr" }} >
+              <div className="glob-header" style={{ gridTemplateColumns: '0.5fr 1.6fr 1.4fr 0.5fr' }}>
                 <div className="glob-column-header">ID Docente</div>
                 <div className="glob-column-header">Apellido y Nombre</div>
                 <div className="glob-column-header">Materia</div>
@@ -972,11 +990,13 @@ const Profesores = () => {
 
               <div className="glob-body">
                 {!hayFiltros && filtroActivo !== 'todos' ? (
+                  // 👉 Estado vacío con icono grande centrado + botón "Mostrar todos"
                   <div className="glob-no-data-message">
                     <div className="glob-message-content">
-                      <p>Por favor aplicá búsqueda o filtros para ver los profesores</p>
+                      <FaFilter className="glob-empty-icon" aria-hidden="true" />
+                      <p>Aplicá búsqueda o filtros para ver los profesores</p>
                       <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
-                        Mostrar todos los profesores
+                        Mostrar todos
                       </button>
                     </div>
                   </div>
@@ -1038,8 +1058,10 @@ const Profesores = () => {
               }`}
             >
               {!hayFiltros && filtroActivo !== 'todos' ? (
+                // 👉 Estado vacío mobile con icono grande centrado + botón "Mostrar todos"
                 <div className="glob-no-data-message glob-no-data-mobile">
                   <div className="glob-message-content">
+                    <FaFilter className="glob-empty-icon" aria-hidden="true" />
                     <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
                     <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
                       Mostrar todos
@@ -1226,11 +1248,7 @@ const Profesores = () => {
         onEliminar={eliminarProfesor}
       />
 
-      <ModalInfoProfesor
-        mostrar={mostrarModalInfo}
-        profesor={profesorInfo}
-        onClose={cerrarModalInfo}
-      />
+      <ModalInfoProfesor mostrar={mostrarModalInfo} profesor={profesorInfo} onClose={cerrarModalInfo} />
 
       <ModalDarBajaProfesor
         mostrar={mostrarModalDarBaja}
