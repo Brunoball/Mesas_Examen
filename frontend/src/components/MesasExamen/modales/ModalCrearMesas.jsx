@@ -8,6 +8,7 @@ import "./ModalCrearMesas.css";
  * Modal para crear mesas por RANGO DE FECHAS.
  * 1) mesas_crear  { fecha_inicio, fecha_fin }
  * 2) mesas_armar_grupos { agendar_no_fechadas:1, fecha_inicio, fecha_fin, priorizar_por:"materia" }
+ * 3) mesas_reoptimizar { max_iter, fecha_inicio, fecha_fin }
  *
  * Expone:
  * - onLoadingChange(v:boolean) -> para FullScreenLoader del padre
@@ -53,7 +54,7 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
       setEnviando(true);
       onLoadingChange?.(true);
 
-      // 1) Crear mesas
+      // 1) Crear mesas (armar_mesas.php)
       const { resp: respCrear, json: jsonCrear } = await postJson("mesas_crear", {
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
@@ -66,7 +67,7 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
         return;
       }
 
-      // 2) Armar grupos + AGENDAR no-fechadas (prio 0)
+      // 2) Armar grupos + AGENDAR no-fechadas (prio 0) (armar_mesa_grupo.php)
       const { resp: respGrupos, json: jsonGrupos } = await postJson("mesas_armar_grupos", {
         agendar_no_fechadas: 1,
         priorizar_por: "materia",
@@ -78,16 +79,30 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
         const msg =
           jsonGrupos?.mensaje ||
           `Se crearon las mesas, pero falló el armado de grupos [HTTP ${respGrupos.status}]`;
+        // avisamos error pero seguimos intentando reoptimizar por si algo se puede mejorar
         onError?.(msg);
-        onSuccess?.(); // refrescar igual por si se creó algo
-        onClose?.();
-        return;
+      }
+
+      // 3) Reoptimizar (reoptimizar_mesas.php)
+      const { resp: respReopt, json: jsonReopt } = await postJson("mesas_reoptimizar", {
+        max_iter: 7,             // podés ajustar
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin,
+        dry_run: 0,
+      });
+
+      if (!respReopt.ok || !jsonReopt?.exito) {
+        const msg =
+          jsonReopt?.mensaje ||
+          `Se crearon y agruparon las mesas, pero falló la reoptimización [HTTP ${respReopt.status}]`;
+        // informamos, pero igual refrescamos
+        onError?.(msg);
       }
 
       onSuccess?.();
       onClose?.();
     } catch (err) {
-      onError?.("Error de red al crear/armar las mesas.");
+      onError?.("Error de red al crear/armar/reoptimizar las mesas.");
     } finally {
       setEnviando(false);
       onLoadingChange?.(false);
@@ -172,7 +187,7 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
             </button>
             <button type="submit" className="mi-btn mi-btn--primary" disabled={enviando}>
               <FaCheck style={{ marginRight: 6 }} />
-              {enviando ? "Creando mesas…" : "Crear mesas"}
+              {enviando ? "Creando y optimizando…" : "Crear mesas"}
             </button>
           </div>
         </form>

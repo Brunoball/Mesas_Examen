@@ -158,6 +158,9 @@ try {
         case 'mesas_detalle_pdf':
             include_module($MODULES_DIR . '/mesas/obtener_mesas_pdf.php'); break;
 
+        case 'mesas_reoptimizar':
+            include_module($MODULES_DIR . '/mesas/reoptimizar_mesas.php'); break;
+
         // ✅ Alias retrocompatible: obtener_info_mesa -> mesas_detalle
         case 'obtener_info_mesa':
             // Adaptador: soporta GET ?id_mesa=1 o ?numero_mesa=1
