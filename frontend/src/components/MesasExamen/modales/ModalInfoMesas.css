@@ -1,184 +1,184 @@
-/* ====== :root ROJO (sin degradados) — variables con prefijo reg- ====== */
+/* =========================================================
+   ModalInfoMesas.css — versión mejorada (full organized)
+   - Diseño por cajas, limpios y legibles
+   - Tipografía consistente y buen espaciado
+   - Tablas responsivas con encabezado fijo
+   - Grid claro para tarjetas y secciones
+   ========================================================= */
+
+/* =============== PALETA / THEME ================= */
 :root {
-  /* 🎨 PALETA ROJA */
-  --reg-primary: #B71C1C;
-  --reg-primary-light: #E53935;
-  --reg-primary-dark: #7F0000;
-
-  --reg-secondary: #1D428A;
-  --reg-accent: #C62828;
-
-  --reg-success: #10B981;
-  --reg-warning: #F59E0B;
-  --reg-danger: #D32F2F;
-
-  --reg-light: #F8FAFC;
-  --reg-dark: #0F172A;
-
-  --reg-gray-100: #F1F5F9;
-  --reg-gray-200: #E2E8F0;
-  --reg-gray-300: #CBD5E1;
-  --reg-gray-400: #94A3B8;
-  --reg-gray-500: #64748B;
-  --reg-gray-600: #475569;
-  --reg-gray-700: #334155;
-  --reg-gray-800: #1E293B;
-  --reg-gray-900: #0F172A;
-
-  --reg-border-radius: 12px;
-  --reg-border-radius-lg: 16px;
-  --reg-border-radius-xl: 20px;
-
-  --reg-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  --reg-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --reg-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --reg-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --reg-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-
-  /* ====== ALIAS para el modal (mi-*) ====== */
-  --mi-primary: var(--reg-primary);
-  --mi-primary-600: var(--reg-primary-light);
-  --mi-primary-700: var(--reg-primary-dark);
+  --mi-primary: #b71c1c;
+  --mi-primary-600: #d32f2f;
+  --mi-primary-700: #7f0000;
 
   --mi-bg: #ffffff;
-  --mi-bg-soft: #fbfcff;
-  --mi-border: var(--reg-gray-200);
-  --mi-text: var(--reg-dark);
-  --mi-muted: var(--reg-gray-600);
-  --mi-shadow: var(--reg-shadow-lg);
-  --mi-radius-lg: var(--reg-border-radius-lg);
-  --mi-radius-md: var(--reg-border-radius);
+  --mi-bg-soft: #f8fafc;
+  --mi-panel: #ffffff;
+
+  --mi-text: #0f172a;
+  --mi-muted: #475569;
+
+  --mi-border: #e2e8f0;
+  --mi-border-strong: #cbd5e1;
+
+  --mi-shadow-sm: 0 1px 2px rgba(2, 6, 23, 0.06);
+  --mi-shadow-md: 0 6px 14px rgba(2, 6, 23, 0.08);
+  --mi-shadow-lg: 0 14px 28px rgba(2, 6, 23, 0.12);
+
+  --mi-radius: 12px;
+  --mi-radius-lg: 16px;
+
+  --mi-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans",
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
-/* ====== Overlay ====== */
+/* =============== OVERLAY Y CONTENEDOR ============ */
 .mi-modal__overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(2, 6, 23, 0.55);
   backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   z-index: 1000;
-  animation: mi-fade 0.15s ease-out;
+  animation: mi-fade 160ms ease-out;
+  font-family: var(--mi-font);
 }
 
-/* ====== Contenedor ====== */
 .mi-modal__container {
-  width: min(960px, 92vw);
-  max-height: 90vh;
+  width: min(1040px, 92vw);
+  max-height: 92vh;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
   background: var(--mi-bg);
   border-radius: var(--mi-radius-lg);
-  box-shadow: var(--mi-shadow);
-  display: flex;
-  flex-direction: column;
+  box-shadow: var(--mi-shadow-lg);
   overflow: hidden;
-  animation: mi-slide 0.22s ease-out;
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  animation: mi-slide 220ms ease-out;
+  border: 1px solid rgba(2, 6, 23, 0.06);
 }
 
-/* ====== Header (ROJO) ====== */
+/* =============== HEADER ========================== */
 .mi-modal__header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
   align-items: center;
-  justify-content: space-between;
   padding: 18px 22px;
-  background: var(--mi-primary);
+  background: linear-gradient(180deg, var(--mi-primary) 0%, var(--mi-primary-700) 100%);
   color: #fff;
+}
+
+.mi-modal__head-left {
+  min-width: 0;
 }
 
 .mi-modal__title {
   margin: 0;
   font-size: 1.35rem;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
 }
 
 .mi-modal__subtitle {
-  margin: 4px 0 0;
-  font-size: .9rem;
-  opacity: .95;
+  margin: 6px 0 0;
+  font-size: 0.92rem;
+  opacity: 0.95;
   font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mi-modal__close {
   appearance: none;
   border: 0;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: transform .15s ease, background .15s ease;
+  transition: transform .15s ease, background .15s ease, opacity .15s ease;
 }
-.mi-modal__close:hover { background: rgba(255,255,255,.12); transform: rotate(90deg); }
-.mi-modal__head-left { flex: 1; }
+.mi-modal__close:hover { background: rgba(255,255,255,.22); transform: rotate(90deg); }
 
-/* ====== Tabs ====== */
+/* =============== TABS ============================ */
 .mi-tabs {
   display: flex;
-  gap: 12px;
-  padding: 0 18px;
-  background: #fff;
+  gap: 8px;
+  padding: 0 14px;
+  background: var(--mi-bg);
   border-bottom: 1px solid var(--mi-border);
 }
+
 .mi-tab {
   position: relative;
   appearance: none;
   border: 0;
   background: transparent;
-  padding: 14px 8px;
-  font-size: .92rem;
-  font-weight: 600;
+  padding: 14px 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--mi-muted);
   cursor: pointer;
-  transition: var(--reg-transition);
+  border-radius: 10px 10px 0 0;
+  transition: color .15s ease, background .15s ease;
 }
-.mi-tab:hover { color: var(--mi-primary-600); }
-.mi-tab.is-active { color: var(--mi-primary-700); }
+.mi-tab:hover { color: var(--mi-primary-600); background: rgba(239, 68, 68, 0.06); }
+.mi-tab.is-active {
+  color: var(--mi-primary-700);
+  background: #fff;
+}
 .mi-tab.is-active::after {
   content: "";
   position: absolute;
-  left: 0; right: 0; bottom: -1px;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
   height: 3px;
   background: var(--mi-primary-600);
   border-radius: 3px 3px 0 0;
 }
 
-/* ====== Contenido ====== */
+/* =============== CONTENIDO ======================= */
 .mi-modal__content {
-  flex: 1;
-  overflow: hidden;
   background: var(--mi-bg-soft);
+  overflow: hidden; /* el scroll va dentro de los paneles */
 }
 
+/* Panel con scroll y padding consistente */
 .mi-tabpanel {
   display: none;
   height: 100%;
   overflow: auto;
-  padding: 22px;
-  background: linear-gradient(180deg, #fff 0%, #fbfcff 100%);
+  padding: 20px;
 }
 .mi-tabpanel.is-active { display: block; }
 
-/* ====== Grid base ====== */
-.mi-grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 18px;
+/* =============== CAJAS / TARJETAS =============== */
+.mi-section {
+  margin-bottom: 18px;
 }
 
+.mi-grid {
+  display: grid;
+  gap: 16px;
+}
+
+/* Por defecto 1 columna, en desktop 2 */
 .mi-card {
-  grid-column: span 6;
-  background: #fff;
+  background: var(--mi-panel);
   border: 1px solid var(--mi-border);
-  border-radius: var(--mi-radius-md);
+  border-radius: var(--mi-radius);
+  box-shadow: var(--mi-shadow-sm);
   padding: 16px;
-  box-shadow: 0 2px 10px rgba(15,23,42,.03);
 }
 
 .mi-card__title {
@@ -191,62 +191,175 @@
   border-bottom: 1px solid var(--mi-border);
 }
 
-/* ====== Variantes de grid ====== */
-/* Mesa: 2 columnas (7/5) en desktop */
-@media (min-width: 720px) {
+/* Variantes de grid */
+@media (min-width: 900px) {
+  .mi-grid { grid-template-columns: repeat(12, 1fr); }
   .mi-grid-mesa .mi-card:first-child { grid-column: span 7; }
   .mi-grid-mesa .mi-card:last-child  { grid-column: span 5; }
-}
-
-/* Docentes: 3 columnas iguales en desktop */
-@media (min-width: 720px) {
   .mi-grid-docentes .mi-card { grid-column: span 4; }
 }
 
-/* ====== Filas (label / value) ====== */
+/* =============== FILAS LABEL / VALOR ============= */
+.mi-rows {
+  display: grid;
+  gap: 10px;
+}
+
 .mi-row {
   display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 10px;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
   align-items: start;
   padding: 8px 0;
-  border-top: 1px dashed rgba(0,0,0,0.06);
+  border-top: 1px dashed rgba(15, 23, 42, 0.08);
 }
-.mi-row:first-of-type { border-top: 0; }
+.mi-row:first-child { border-top: 0; }
 
 .mi-label {
   color: var(--mi-muted);
   font-weight: 700;
-  font-size: .9rem;
+  font-size: 0.92rem;
+  line-height: 1.35;
 }
 
 .mi-value {
   color: var(--mi-text);
   font-weight: 600;
-  text-align: left;
-  /* Evitar que los nombres se rompan letra por letra */
-  white-space: normal;
-  word-break: normal;
+  line-height: 1.5;
+  font-size: 0.96rem;
+  word-break: break-word;
   overflow-wrap: anywhere;
-  font-size: .95rem;
 }
 
-/* Valor específico para el listado de tribunal */
+/* Valor largo (ej. tribunal) */
 .mi-value.is-tribunal {
-  white-space: normal;
-  word-break: normal;
-  overflow-wrap: break-word;
+  background: #fafafa;
+  border: 1px dashed var(--mi-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.5;
 }
 
-/* ====== Responsivo ====== */
-@media (max-width: 640px) {
-  .mi-modal__container { width: 96vw; max-height: 88vh; }
-  .mi-modal__title { font-size: 1.15rem; }
-  .mi-modal__subtitle { font-size: .82rem; }
-  .mi-row { grid-template-columns: 1fr; }
+/* =============== TABLAS ========================== */
+.mi-table {
+  background: var(--mi-panel);
+  border: 1px solid var(--mi-border);
+  border-radius: var(--mi-radius);
+  box-shadow: var(--mi-shadow-sm);
+  overflow: hidden;
 }
 
-/* ====== Animaciones ====== */
+/* contenedor con scroll propio y sticky header */
+.mi-tbody {
+  max-height: 48vh;           /* altura máxima en panel */
+  overflow: auto;
+}
+
+.mi-thead, .mi-tr {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr 1fr 0.7fr; /* Alumno / DNI / Curso/Div / Mesa */
+  gap: 12px;
+  align-items: center;
+}
+
+.mi-thead {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  border-bottom: 1px solid var(--mi-border-strong);
+  z-index: 1;
+}
+
+.mi-th {
+  padding: 12px 14px;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--mi-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.mi-tr {
+  border-bottom: 1px solid var(--mi-border);
+}
+.mi-tr:last-child { border-bottom: 0; }
+
+.mi-td {
+  padding: 12px 14px;
+  font-size: 0.96rem;
+  color: var(--mi-text);
+  line-height: 1.45;
+  min-width: 0; /* truncamiento correcto */
+}
+
+/* Zebra */
+.mi-tbody .mi-tr:nth-child(odd) .mi-td {
+  background: #fcfdff;
+}
+
+/* Estados de tabla */
+.mi-row-empty {
+  padding: 18px 16px;
+  color: var(--mi-muted);
+  text-align: center;
+}
+
+/* =============== ESTADOS / FEEDBACK ============= */
+.mi-loader,
+.mi-error {
+  background: var(--mi-panel);
+  border: 1px solid var(--mi-border);
+  border-radius: var(--mi-radius);
+  padding: 16px;
+  margin: 10px 0;
+  box-shadow: var(--mi-shadow-sm);
+}
+
+.mi-loader {
+  color: var(--mi-muted);
+  font-weight: 600;
+}
+
+.mi-error {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+/* =============== RESPONSIVE ===================== */
+@media (max-width: 900px) {
+  .mi-modal__container { width: 96vw; max-height: 90vh; }
+
+  /* tarjetas a 1 columna */
+  .mi-grid,
+  .mi-grid-mesa,
+  .mi-grid-docentes { grid-template-columns: 1fr; }
+
+  /* filas label/valor en columna */
+  .mi-row { grid-template-columns: 1fr; gap: 6px; }
+
+  /* tabla: pasa a columnas más cómodas */
+  .mi-thead, .mi-tr {
+    grid-template-columns: 1.5fr 1fr 1.2fr 0.7fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .mi-thead, .mi-tr {
+    grid-template-columns: 1.6fr 1fr; /* 2 columnas */
+  }
+  /* mostrar curso/div y mesa en líneas secundarias usando block */
+  .mi-td:nth-child(3), /* Curso/Div */
+  .mi-td:nth-child(4)  /* Mesa */ {
+    grid-column: 1 / -1;
+    padding-top: 4px;
+    color: var(--mi-muted);
+    font-size: 0.9rem;
+  }
+  .mi-modal__subtitle { white-space: normal; }
+}
+
+/* =============== ANIMACIONES ==================== */
 @keyframes mi-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mi-slide {
   from { opacity: 0; transform: translateY(18px); }

@@ -2,13 +2,14 @@
 // backend/config/db.php
 // Configuración de la base de datos
 //brunoball516
+//
 //Gastex2233
 //php -S localhost:3001 -c "C:\PHP\php1\php.ini"
 
 $host = 'localhost';
 $dbname = 'mesas_examen';
 $user = 'root'; // Cambialo si usás otro usuario
-$pass = 'Gastex2233'; // Cambialo si tenés contraseña
+$pass = 'brunoball516'; // Cambialo si tenés contraseña
 
 
 try {

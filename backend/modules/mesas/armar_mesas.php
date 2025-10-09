@@ -1,348 +1,337 @@
 <?php
 // backend/modules/mesas/armar_mesas.php
-header('Content-Type: application/json; charset=utf-8');
+// -----------------------------------------------------------------------------
+// Inserta MESAS desde PREVIAS (inscripcion=1, id_condicion=3).
+// - Calcula prioridad=1 por correlatividad (regla pedida).
+// - Inserta TODO sin fecha/turno (incluyendo prioridad=1).
+// - Luego AGENDA SOLO los numero_mesa con prioridad=1 buscando desde el
+//   primer día/turno y RESPETANDO disponibilidad de docentes:
+//     * Si fecha_no == fecha_slot  -> bloquea TODO el día (ambos turnos) SOLO ese día.
+//     * Si id_turno_no está definido -> bloquea ese turno en TODAS las fechas.
+//       (Si están ambos, se aplican ambas restricciones a la vez.)
+// - Minimiza choques de DNIs al elegir slots.
+// -----------------------------------------------------------------------------
+//
+// Entrada (POST JSON):
+//   { "fecha_inicio":"YYYY-MM-DD", "fecha_fin":"YYYY-MM-DD", "dry_run":0|1 }
+//
+// Salida:
+//   { exito:true, data:{resumen, slots, nota} }
+//
+// -----------------------------------------------------------------------------
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-  http_response_code(204);
-  exit;
-}
+declare(strict_types=1);
+
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
 require_once __DIR__ . '/../../config/db.php';
 
-function bad_request($msg) {
-  http_response_code(400);
-  echo json_encode(['exito' => false, 'mensaje' => $msg]);
-  exit;
+// ---------- Utilidades ----------
+function respond(bool $ok, $payload = null, int $status = 200): void {
+  if (ob_get_length()) { @ob_clean(); }
+  http_response_code($status);
+  echo json_encode(
+    $ok ? ['exito'=>true, 'data'=>$payload]
+       : ['exito'=>false, 'mensaje'=>(is_string($payload)?$payload:'Error desconocido')],
+    JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES
+  ); exit;
+}
+function bad_request(string $m): void { respond(false, $m, 400); }
+function validarFecha(?string $s): bool {
+  if (!$s) return false;
+  $d = DateTime::createFromFormat('Y-m-d', $s);
+  return $d && $d->format('Y-m-d') === $s;
+}
+function rangoFechas(string $inicio, string $fin): array {
+  $di = new DateTime($inicio); $df = new DateTime($fin);
+  if ($df < $di) return [];
+  $out=[]; while ($di <= $df) { $out[] = $di->format('Y-m-d'); $di->modify('+1 day'); }
+  return $out;
+}
+function estadoColumnaTurno(PDO $pdo): array {
+  $sql="SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='mesas' AND COLUMN_NAME='id_turno' LIMIT 1";
+  $st = $pdo->query($sql); $row = $st ? $st->fetch(PDO::FETCH_ASSOC) : null;
+  if (!$row) return ['existe'=>false, 'not_null'=>false];
+  return ['existe'=>true, 'not_null'=>(strtoupper($row['IS_NULLABLE']??'YES')==='NO')];
+}
+
+if (!isset($pdo) || !$pdo instanceof PDO) {
+  bad_request("Error: no se encontró la conexión PDO (backend/config/db.php).");
 }
 
 try {
-  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['exito' => false, 'mensaje' => 'Método no permitido.']);
-    exit;
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') respond(false,'Método no permitido',405);
+
+  $input = json_decode(file_get_contents('php://input') ?: '{}', true);
+  if (!is_array($input)) $input = [];
+
+  $fecha_inicio = $input['fecha_inicio'] ?? null;
+  $fecha_fin    = $input['fecha_fin'] ?? null;
+  $dry_run      = !empty($input['dry_run']);
+
+  if (!validarFecha($fecha_inicio) || !validarFecha($fecha_fin)) {
+    bad_request("Debés enviar 'fecha_inicio' y 'fecha_fin' con formato YYYY-MM-DD.");
   }
+  $fechas = rangoFechas($fecha_inicio, $fecha_fin);
+  if (!$fechas) bad_request("El rango de fechas es inválido.");
 
-  // Entrada
-  $input = [];
-  $ct = $_SERVER['CONTENT_TYPE'] ?? '';
-  if (stripos($ct, 'application/json') !== false) {
-    $raw = file_get_contents('php://input');
-    $input = json_decode($raw, true) ?: [];
-  } else {
-    $input = $_POST;
-  }
-
-  $id_materia_in  = isset($input['id_materia'])  ? (int)$input['id_materia']  : 0;
-  $id_curso_in    = isset($input['id_curso'])    ? (int)$input['id_curso']    : 0;
-  $id_division_in = isset($input['id_division']) ? (int)$input['id_division'] : 0;
-
-  $fecha_mesa_in  = trim($input['fecha_mesa'] ?? '');
-  $id_turno_in    = isset($input['id_turno']) ? (int)$input['id_turno'] : 0;
-  $anio_in        = isset($input['anio'])     ? (int)$input['anio']     : 0;
-  $auto           = isset($input['auto']) ? (int)$input['auto'] : 0;
-
-  // Rango opcional para modo auto
-  $fecha_inicio = trim($input['fecha_inicio'] ?? '');
-  $fecha_fin    = trim($input['fecha_fin'] ?? '');
-  $usarRango    = ($fecha_inicio !== '' && $fecha_fin !== '');
-
-  if ($usarRango) {
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_inicio) ||
-        !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_fin)) {
-      bad_request('Formato de fecha_inicio/fecha_fin inválido. Use YYYY-MM-DD.');
-    }
-    if ($fecha_inicio > $fecha_fin) {
-      bad_request('fecha_inicio no puede ser mayor que fecha_fin.');
-    }
-    // Construir días del rango
-    $days = [];
-    $di = new DateTime($fecha_inicio);
-    $df = new DateTime($fecha_fin);
-    while ($di <= $df) {
-      $days[] = $di->format('Y-m-d');
-      $di->modify('+1 day');
-    }
-  }
-
-  // ---------- Elegir previa disponible ----------
-  $params = [];
-  $where  = ["p.inscripcion = 1"];
-  if ($anio_in > 0)         { $where[] = "p.anio = :anio";                    $params[':anio'] = $anio_in; }
-  if ($id_curso_in > 0)     { $where[] = "p.materia_id_curso = :curso_in";    $params[':curso_in'] = $id_curso_in; }
-  if ($id_division_in > 0)  { $where[] = "p.materia_id_division = :div_in";   $params[':div_in'] = $id_division_in; }
-  if ($id_materia_in > 0)   { $where[] = "p.id_materia = :materia_in";        $params[':materia_in'] = $id_materia_in; }
-
+  // ---------- PREVIAS + correlativa ----------
   $sqlPrev = "
-    SELECT p.*
-    FROM previas p
-    LEFT JOIN mesas m ON m.id_previa = p.id_previa
-    WHERE " . implode(' AND ', $where) . "
-      AND m.id_mesa IS NULL
-    ORDER BY p.fecha_carga ASC, p.id_previa ASC
-    LIMIT 1
+    SELECT
+      pr.id_previa, pr.dni, pr.alumno,
+      pr.id_materia, pr.materia_id_curso, pr.materia_id_division,
+      m.correlativa AS correlatividad
+    FROM mesas_examen.previas pr
+    INNER JOIN mesas_examen.materias m ON m.id_materia = pr.id_materia
+    WHERE pr.inscripcion = 1 AND pr.id_condicion = 3
   ";
-  $stPrev = $pdo->prepare($sqlPrev);
-  $stPrev->execute($params);
-  $previa = $stPrev->fetch(PDO::FETCH_ASSOC);
+  $previas = $pdo->query($sqlPrev)->fetchAll(PDO::FETCH_ASSOC);
 
-  if (!$previa) {
-    echo json_encode(['exito'=>false,'mensaje'=>'No hay previas inscriptas disponibles.','creadas'=>0]);
-    exit;
+  if (!$previas) {
+    respond(true, [
+      'resumen' => [
+        'dias'=>count($fechas),
+        'total_previas'=>0,
+        'insertados'=>0,
+        'omitidos_existentes'=>0,
+        'omitidos_sin_catedra'=>0,
+        'agendados_prio'=>0
+      ],
+      'slots'=>[],
+      'nota'=>'No hay previas inscriptas.'
+    ]);
   }
 
-  // Bloqueo por id_previa global
-  $stPreviaUsada = $pdo->prepare("SELECT 1 FROM mesas WHERE id_previa = :id_previa LIMIT 1");
-  $stPreviaUsada->execute([':id_previa' => (int)$previa['id_previa']]);
-  if ($stPreviaUsada->fetch()) {
-    echo json_encode(['exito'=>false,'mensaje'=>'La PREVIA ya tiene mesa.','creadas'=>0]);
-    exit;
+  // Agrupar por DNI para calcular prioridad por correlativa (al menos 2 con misma correlativa)
+  $porDni = [];
+  foreach ($previas as $p) { $porDni[$p['dni']][] = $p; }
+
+  $turnoInfo = estadoColumnaTurno($pdo);
+  $colTurnoExiste  = $turnoInfo['existe'];
+  $colTurnoNotNull = $turnoInfo['not_null'];
+
+  // Disponibilidad docentes
+  $docNo = []; // id_docente => ['fecha_no'=>?string,'turno_no'=>?int]
+  $rsDoc = $pdo->query("SELECT id_docente, id_turno_no, fecha_no FROM mesas_examen.docentes WHERE activo=1");
+  if ($rsDoc) {
+    foreach ($rsDoc->fetchAll(PDO::FETCH_ASSOC) as $d) {
+      $docNo[(int)$d['id_docente']] = [
+        'fecha_no' => $d['fecha_no'] ?? null,
+        'turno_no' => isset($d['id_turno_no']) ? (int)$d['id_turno_no'] : null
+      ];
+    }
   }
+  $slotProhibido = function(int $id_docente, string $fecha, int $turno) use ($docNo): bool {
+    if (!isset($docNo[$id_docente])) return false;
+    $fno = $docNo[$id_docente]['fecha_no'] ?? null;
+    $tno = $docNo[$id_docente]['turno_no'] ?? null;
+    if ($fno && $fno === $fecha) return true;     // bloquea todo el día
+    if ($tno !== null && $tno === $turno) return true; // bloquea turno cada día
+    return false;
+  };
 
-  // IDs para cátedra
-  $id_materia  = (int)$previa['id_materia'];
-  $id_curso    = (int)$previa['materia_id_curso'];
-  $id_division = (int)$previa['materia_id_division'];
-
-  if ($id_curso_in > 0)    { $id_curso    = $id_curso_in; }
-  if ($id_division_in > 0) { $id_division = $id_division_in; }
-  if ($id_materia_in > 0)  { $id_materia  = $id_materia_in; }
-
-  if ($id_curso <= 0 || $id_division <= 0 || $id_materia <= 0) {
-    echo json_encode(['exito'=>false,'mensaje'=>'La previa no posee materia_id_curso/division válidos.','creadas'=>0]);
-    exit;
-  }
-
-  // Área
-  $stArea = $pdo->prepare("SELECT id_area FROM materias WHERE id_materia = :m LIMIT 1");
-  $stArea->execute([':m'=>$id_materia]);
-  $rowA = $stArea->fetch(PDO::FETCH_ASSOC);
-  $id_area = $rowA ? (int)$rowA['id_area'] : 0;
-  if ($id_area <= 0) {
-    echo json_encode(['exito'=>false,'mensaje'=>'La materia no tiene área asignada.','creadas'=>0]);
-    exit;
-  }
-
-  // Cátedra
-  $stCat = $pdo->prepare("
-    SELECT c.id_catedra, c.id_docente
-    FROM catedras c
-    WHERE c.id_curso = :curso AND c.id_division = :division AND c.id_materia = :materia
+  // Sentencias
+  $stExisteMesa = $pdo->prepare("SELECT 1 FROM mesas_examen.mesas WHERE id_previa=:idp LIMIT 1");
+  $stBuscaCatedra = $pdo->prepare("
+    SELECT id_catedra, id_docente
+    FROM mesas_examen.catedras
+    WHERE id_materia=:idm AND id_curso=:ic AND id_division=:idv
     LIMIT 1
   ");
-  $stCat->execute([':curso'=>$id_curso, ':division'=>$id_division, ':materia'=>$id_materia]);
-  $cat = $stCat->fetch(PDO::FETCH_ASSOC);
-  if (!$cat) {
-    echo json_encode(['exito'=>false,'mensaje'=>'No se encontró cátedra (curso/división/materia).','creadas'=>0]);
-    exit;
-  }
-  $id_catedra = (int)$cat['id_catedra'];
-  $titular_id = (int)$cat['id_docente'];
+  $stNumeroExistente = $pdo->prepare("
+    SELECT m.numero_mesa
+    FROM mesas_examen.mesas m
+    INNER JOIN mesas_examen.catedras c ON c.id_catedra = m.id_catedra
+    WHERE c.id_materia=:idm AND m.id_docente=:idd
+    ORDER BY m.numero_mesa ASC
+    LIMIT 1
+  ");
+  $rowMax = $pdo->query("SELECT COALESCE(MAX(numero_mesa),0) AS maxnum FROM mesas_examen.mesas")
+                ->fetch(PDO::FETCH_ASSOC);
+  $siguienteNumero = (int)($rowMax['maxnum'] ?? 0);
 
-  // ---------- Fechas y turnos ----------
-  $dni = trim($previa['dni'] ?? '');
-  if ($dni === '') $dni = '__SIN_DNI__' . $previa['id_previa'];
-
-  $usarAuto = $auto === 1 || $fecha_mesa_in === '' || $id_turno_in <= 0;
-
-  if ($usarAuto) {
-    // Si hay rango, intentamos primer slot libre DENTRO del rango
-    if ($usarRango) {
-      // Para evitar chocar mismo dni en mismo día/turno
-      $stChoque = $pdo->prepare("
-        SELECT 1
-        FROM mesas ms
-        JOIN previas pv ON pv.id_previa = ms.id_previa
-        WHERE pv.dni = :dni AND ms.fecha_mesa = :f AND ms.id_turno = :t
-        LIMIT 1
-      ");
-
-      $found = false;
-      foreach ($days as $d) {
-        // Intentar turno 1 y luego 2
-        for ($turno_calc = 1; $turno_calc <= 2; $turno_calc++) {
-          // ¿ya existe mesa para esta previa en ese día/turno? (extra)
-          $stChk = $pdo->prepare("
-            SELECT 1 FROM mesas
-            WHERE id_previa = :p AND fecha_mesa = :f AND id_turno = :t
-            LIMIT 1
-          ");
-          $stChk->execute([':p'=>(int)$previa['id_previa'], ':f'=>$d, ':t'=>$turno_calc]);
-          if ($stChk->fetch()) continue;
-
-          // ¿choca mismo DNI mismo día/turno?
-          $stChoque->execute([':dni'=>$dni, ':f'=>$d, ':t'=>$turno_calc]);
-          if ($stChoque->fetch()) continue;
-
-          $fecha_mesa = $d;
-          $id_turno   = $turno_calc;
-          $found = true;
-          break 2;
-        }
-      }
-
-      if (!$found) {
-        echo json_encode(['exito'=>false,'mensaje'=>'Sin lugar dentro del rango indicado.','creadas'=>0]);
-        exit;
-      }
-    } else {
-      // Auto sin rango: comportamiento anterior (hoy + alternar)
-      $fecha_base = date('Y-m-d');
-      $stCountGlobal = $pdo->query("SELECT COUNT(*) AS c FROM mesas");
-      $cGlobal = (int)($stCountGlobal->fetch(PDO::FETCH_ASSOC)['c'] ?? 0);
-
-      $stCountDni = $pdo->prepare("
-        SELECT COUNT(*) AS c
-        FROM mesas ms
-        JOIN previas pv ON pv.id_previa = ms.id_previa
-        WHERE pv.dni = :dni
-      ");
-      $stCountDni->execute([':dni'=>$dni]);
-      $cDni = (int)($stCountDni->fetch(PDO::FETCH_ASSOC)['c'] ?? 0);
-
-      $slot = max(0, $cGlobal + $cDni);
-      $day_offset = intdiv($slot, 2);
-      $turno_calc = ($slot % 2 === 0) ? 1 : 2;
-      $fecha_calc = date('Y-m-d', strtotime($fecha_base . " +{$day_offset} days"));
-
-      $stChoque = $pdo->prepare("
-        SELECT 1
-        FROM mesas ms
-        JOIN previas pv ON pv.id_previa = ms.id_previa
-        WHERE pv.dni = :dni AND ms.fecha_mesa = :f AND ms.id_turno = :t
-        LIMIT 1
-      ");
-      $intentos = 0;
-      while (true) {
-        $stChoque->execute([':dni'=>$dni, ':f'=>$fecha_calc, ':t'=>$turno_calc]);
-        if (!$stChoque->fetch()) break;
-        $slot++;
-        $day_offset = intdiv($slot, 2);
-        $turno_calc = ($slot % 2 === 0) ? 1 : 2;
-        $fecha_calc = date('Y-m-d', strtotime($fecha_base . " +{$day_offset} days"));
-        if (++$intentos > 10000) break;
-      }
-
-      $fecha_mesa = $fecha_calc;
-      $id_turno   = $turno_calc;
-    }
+  // Insert SIEMPRE sin fecha/turno (también prio=1)
+  if ($colTurnoExiste && $colTurnoNotNull) {
+    $stInsertSinFecha = $pdo->prepare("
+      INSERT INTO mesas_examen.mesas
+        (numero_mesa, prioridad, id_catedra, id_previa, id_docente, fecha_mesa, id_turno)
+      VALUES
+        (:nm,:prio,:cat,:idp,:idd,NULL,NULL)
+    ");
   } else {
-    // Usar lo que vino
-    $fecha_mesa = $fecha_mesa_in !== '' ? $fecha_mesa_in : date('Y-m-d');
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_mesa)) {
-      bad_request('Formato de fecha_mesa inválido. Use YYYY-MM-DD.');
+    $stInsertSinFecha = $pdo->prepare("
+      INSERT INTO mesas_examen.mesas
+        (numero_mesa, prioridad, id_catedra, id_previa, id_docente, fecha_mesa)
+      VALUES
+        (:nm,:prio,:cat,:idp,:idd,NULL)
+    ");
+  }
+
+  $cacheNumeroPorMD = []; // "materia#docente" => numero_mesa
+  $docentePorNumero = [];
+  $dnisPorNumero = [];      // para choques
+  $idsPrio1PorNumero  = []; // ids recientes a agendar
+  $prio1CountPorNumero= [];
+  $insertados = $omitidosExistentes = $omitidosSinCatedra = 0;
+
+  if (!$dry_run) $pdo->beginTransaction();
+
+  foreach ($porDni as $dni => $lista) {
+    // Detectar candidatos prioridad=1 por correlatividad
+    $grupos = [];
+    foreach ($lista as $p) {
+      $c = $p['correlatividad'];
+      if ($c===null || $c==='') continue;
+      $grupos[(string)$c][] = $p;
     }
-    $id_turno = $id_turno_in > 0 ? $id_turno_in : 1;
+    $cands = [];
+    foreach ($grupos as $corr => $arr) {
+      if (count($arr) >= 2) {
+        usort($arr, fn($a,$b) => (int)$a['materia_id_curso'] <=> (int)$b['materia_id_curso']);
+        $cands[] = ['id_previa'=>(int)$arr[0]['id_previa'], 'curso'=>(int)$arr[0]['materia_id_curso']];
+      }
+    }
+    $idPreviaPrio1 = null;
+    if ($cands) {
+      usort($cands, fn($a,$b) => $a['curso'] <=> $b['curso']);
+      $idPreviaPrio1 = $cands[0]['id_previa'];
+    }
+
+    // Orden estable por curso
+    usort($lista, fn($a,$b) => (int)$a['materia_id_curso'] <=> (int)$b['materia_id_curso']);
+
+    foreach ($lista as $p) {
+      $id_previa  = (int)$p['id_previa'];
+      $prioridad  = ($idPreviaPrio1 !== null && $id_previa === $idPreviaPrio1) ? 1 : 0;
+
+      // ya existe?
+      $stExisteMesa->execute([':idp'=>$id_previa]);
+      if ($stExisteMesa->fetch()) { $omitidosExistentes++; continue; }
+
+      // cátedra/docente
+      $stBuscaCatedra->execute([
+        ':idm'=>$p['id_materia'], ':ic'=>$p['materia_id_curso'], ':idv'=>$p['materia_id_division']
+      ]);
+      $cat = $stBuscaCatedra->fetch(PDO::FETCH_ASSOC);
+      if (!$cat) { $omitidosSinCatedra++; continue; }
+
+      $id_catedra = (int)$cat['id_catedra'];
+      $id_docente = (int)$cat['id_docente'];
+      $id_materia = (int)$p['id_materia'];
+
+      // numero_mesa por (materia,docente)
+      $clave = $id_materia.'#'.$id_docente;
+      if (!isset($cacheNumeroPorMD[$clave])) {
+        $stNumeroExistente->execute([':idm'=>$id_materia, ':idd'=>$id_docente]);
+        $row = $stNumeroExistente->fetch(PDO::FETCH_ASSOC);
+        $cacheNumeroPorMD[$clave] = $row && isset($row['numero_mesa'])
+          ? (int)$row['numero_mesa']
+          : ++$siguienteNumero;
+      }
+      $nm = $cacheNumeroPorMD[$clave];
+      $docentePorNumero[$nm] = $id_docente;
+
+      // Insert SIN fecha/turno
+      if (!$dry_run) {
+        $stInsertSinFecha->execute([':nm'=>$nm, ':prio'=>$prioridad, ':cat'=>$id_catedra, ':idp'=>$id_previa, ':idd'=>$id_docente]);
+        $newId = (int)$pdo->lastInsertId();
+      } else {
+        $newId = 0; // preview
+      }
+
+      // Recolectar ids de prio1 para agendar luego
+      if ($prioridad === 1) {
+        $idsPrio1PorNumero[$nm][] = $newId;
+        $prio1CountPorNumero[$nm] = ($prio1CountPorNumero[$nm] ?? 0) + 1;
+      }
+
+      // choques de DNIs (para prio1)
+      $dnisPorNumero[$nm][$p['dni']] = true;
+
+      $insertados++;
+    }
   }
 
-  // Tribunal acorde al turno elegido (igual que antes)
-  $otros = [];
-  $stA = $pdo->prepare("
-    SELECT DISTINCT d.id_docente
-    FROM docentes d
-    JOIN catedras c2 ON c2.id_docente = d.id_docente
-    JOIN materias mt ON mt.id_materia = c2.id_materia
-    WHERE d.activo = 1
-      AND d.id_docente <> :titular
-      AND mt.id_area = :area
-      AND (d.id_turno_no IS NULL OR d.id_turno_no <> :turno)
-      AND (d.id_turno_si IS NULL OR d.id_turno_si = :turno)
-    ORDER BY RAND()
-    LIMIT 2
-  ");
-  $stA->execute([':titular'=>$titular_id, ':area'=>$id_area, ':turno'=>$id_turno]);
-  $otros = $stA->fetchAll(PDO::FETCH_COLUMN);
+  // ---------- Slots y asignación SOLO prio1 ----------
+  $slots=[]; foreach($fechas as $f){ $slots[]=['fecha'=>$f,'turno'=>1]; $slots[]=['fecha'=>$f,'turno'=>2]; }
+  $S = count($slots);
 
-  if (count($otros) < 2) {
-    $faltan = 2 - count($otros);
-    $place  = count($otros) ? implode(',', array_map('intval',$otros)) : '0';
-    $stB = $pdo->prepare("
-      SELECT DISTINCT d.id_docente
-      FROM docentes d
-      JOIN catedras c2 ON c2.id_docente = d.id_docente
-      JOIN materias mt ON mt.id_materia = c2.id_materia
-      WHERE d.activo = 1
-        AND d.id_docente <> :titular
-        AND mt.id_area = :area
-        AND d.id_docente NOT IN ($place)
-      ORDER BY RAND()
-      LIMIT {$faltan}
-    ");
-    $stB->execute([':titular'=>$titular_id, ':area'=>$id_area]);
-    $otros = array_merge($otros, $stB->fetchAll(PDO::FETCH_COLUMN));
+  $nms = array_keys($idsPrio1PorNumero);
+  // ordenar por cantidad de prio1 desc, luego numero_mesa asc
+  usort($nms, function($a,$b) use ($prio1CountPorNumero){
+    $pa=$prio1CountPorNumero[$a]??0; $pb=$prio1CountPorNumero[$b]??0;
+    if ($pa!==$pb) return ($pa>$pb)?-1:1;
+    return $a<=>$b;
+  });
+
+  $dnisEnSlot = array_fill(0,$S,[]);
+  $updates = []; // numero_mesa => slot index
+
+  foreach ($nms as $nm) {
+    $dnisNM = array_keys($dnisPorNumero[$nm] ?? []);
+    $idDoc  = (int)($docentePorNumero[$nm] ?? 0);
+
+    $mejor = -1; $bestInter = PHP_INT_MAX;
+    for ($s=0; $s<$S; $s++) {
+      $fechaS=$slots[$s]['fecha']; $turnoS=$slots[$s]['turno'];
+
+      if ($idDoc>0 && $slotProhibido($idDoc, $fechaS, $turnoS)) {
+        continue;
+      }
+
+      $inter=0; foreach($dnisNM as $d){ if(isset($dnisEnSlot[$s][$d])) $inter++; }
+
+      if ($inter===0) { $mejor=$s; $bestInter=0; break; }
+
+      if ($inter < $bestInter) { $mejor=$s; $bestInter=$inter; }
+    }
+
+    if ($mejor<0) $mejor = $S-1;
+
+    $updates[$nm]=$mejor;
+    foreach($dnisNM as $d){ $dnisEnSlot[$mejor][$d]=true; }
   }
 
-  if (count($otros) < 2) {
-    $faltan = 2 - count($otros);
-    $place  = count($otros) ? implode(',', array_map('intval',$otros)) : '0';
-    $stC = $pdo->prepare("
-      SELECT d.id_docente
-      FROM docentes d
-      WHERE d.activo = 1
-        AND d.id_docente <> :titular
-        AND d.id_docente NOT IN ($place)
-        AND (d.id_turno_no IS NULL OR d.id_turno_no <> :turno)
-        AND (d.id_turno_si IS NULL OR d.id_turno_si = :turno)
-      ORDER BY RAND()
-      LIMIT {$faltan}
-    ");
-    $stC->execute([':titular'=>$titular_id, ':turno'=>$id_turno]);
-    $otros = array_merge($otros, $stC->fetchAll(PDO::FETCH_COLUMN));
+  // UPDATE masivo de filas recién insertadas con prio1
+  if (!$dry_run) {
+    foreach ($updates as $nm=>$s) {
+      $ids = array_filter($idsPrio1PorNumero[$nm] ?? []);
+      if (!$ids) continue;
+      $ph = implode(',', array_fill(0,count($ids),'?'));
+      $params = [$slots[$s]['fecha']];
+      if ($colTurnoExiste) $params[] = $slots[$s]['turno'];
+      $params = array_merge($params, $ids);
+
+      if ($colTurnoExiste) {
+        $pdo->prepare("UPDATE mesas_examen.mesas SET fecha_mesa=?, id_turno=? WHERE id_mesa IN ($ph)")->execute($params);
+      } else {
+        $pdo->prepare("UPDATE mesas_examen.mesas SET fecha_mesa=? WHERE id_mesa IN ($ph)")->execute($params);
+      }
+    }
   }
 
-  if (count($otros) < 2) {
-    echo json_encode(['exito'=>false,'mensaje'=>'No hay suficientes docentes para el tribunal.','creadas'=>0]);
-    exit;
-  }
+  if (!$dry_run) $pdo->commit();
 
-  $doc2 = (int)$otros[0];
-  $doc3 = (int)$otros[1];
-
-  // Doble seguridad (misma previa/fecha/turno)
-  $stExiste = $pdo->prepare("
-    SELECT 1 FROM mesas
-    WHERE id_previa = :id_previa AND fecha_mesa = :fecha AND id_turno = :turno
-    LIMIT 1
-  ");
-  $stExiste->execute([
-    ':id_previa'=>(int)$previa['id_previa'],
-    ':fecha'=>$fecha_mesa, ':turno'=>$id_turno
-  ]);
-  if ($stExiste->fetch()) {
-    echo json_encode(['exito'=>false,'mensaje'=>'Ya existe una mesa para esa PREVIA con la misma fecha y turno.','creadas'=>0]);
-    exit;
-  }
-
-  // INSERT
-  $pdo->beginTransaction();
-  $stIns = $pdo->prepare("
-    INSERT INTO mesas
-      (id_catedra, id_previa, id_docente_1, id_docente_2, id_docente_3, fecha_mesa, id_turno)
-    VALUES
-      (:id_catedra, :id_previa, :d1, :d2, :d3, :fecha, :turno)
-  ");
-  $stIns->execute([
-    ':id_catedra'=>$id_catedra,
-    ':id_previa' =>(int)$previa['id_previa'],
-    ':d1'        =>$titular_id,
-    ':d2'        =>$doc2,
-    ':d3'        =>$doc3,
-    ':fecha'     =>$fecha_mesa,
-    ':turno'     =>$id_turno
-  ]);
-  $id_mesa = (int)$pdo->lastInsertId();
-  $pdo->commit();
-
-  echo json_encode([
-    'exito'=>true,
-    'mensaje'=> $usarAuto
-      ? ($usarRango ? 'Mesa generada (auto dentro de rango).' : 'Mesa generada (auto fecha/turno).')
-      : 'Mesa generada.',
-    'creadas'=>1,
-    'detalles'=>[['id_mesa'=>$id_mesa,'fecha_mesa'=>$fecha_mesa,'id_turno'=>$id_turno]]
+  respond(true, [
+    'resumen'=>[
+      'dias'=>count($fechas),
+      'total_previas'=>count($previas),
+      'insertados'=>$insertados,
+      'omitidos_existentes'=>$omitidosExistentes,
+      'omitidos_sin_catedra'=>$omitidosSinCatedra,
+      'agendados_prio'=>array_sum(array_map('count',$idsPrio1PorNumero))
+    ],
+    'slots'=>$slots,
+    'nota'=>'Se agendaron SOLO prioridad=1. El resto queda libre para que armar_mesa_grupo.php los acomode/juegue con fechas y turnos.'
   ]);
 
 } catch (Throwable $e) {
-  if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) { $pdo->rollBack(); }
-  http_response_code(500);
-  echo json_encode(['exito'=>false,'mensaje'=>'Error al generar la mesa.','detalle'=>$e->getMessage()]);
+  if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+  respond(false, 'Error en el servidor: '.$e->getMessage(), 500);
 }

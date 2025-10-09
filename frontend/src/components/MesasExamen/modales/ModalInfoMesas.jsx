@@ -3,20 +3,33 @@ import "./ModalInfoMesas.css";
 import BASE_URL from "../../../config/config";
 
 /**
- * Modal de información de una MESA DE EXAMEN con pestañas
+ * Modal de Información de MESAS (una mesa o un grupo de mesas)
+ * - Trae todos los alumnos de las mesas (con curso/división)
+ * - Trae los 3 profesores (tribunal unificado)
+ * - Para cada profesor, lista qué alumnos le corresponden (los de las mesas donde figura)
+ *
+ * Fuente de datos: POST  action=mesas_detalle
+ *   - { id_grupo }  -> resuelve numero_mesa_1..3 y devuelve detalle por mesa
+ *   - { numeros_mesa: [ ... ] }
  */
 const ModalInfoMesas = ({ open, mesa, onClose }) => {
   const TABS = [
-    { id: "mesa", label: "Mesa" },
-    { id: "alumno", label: "Alumno" },
+    { id: "resumen", label: "Resumen" },
+    { id: "alumnos", label: "Alumnos" },
     { id: "docentes", label: "Docentes" },
+    { id: "por_docente", label: "Por docente" },
   ];
-  const [active, setActive] = useState(TABS[0].id);
 
+  const [active, setActive] = useState(TABS[0].id);
   const [loading, setLoading] = useState(false);
-  const [detalle, setDetalle] = useState(null);
   const [error, setError] = useState("");
 
+  // Detalle crudo desde el backend: arreglo de mesas [{numero_mesa, materia, fecha, turno, docentes[], alumnos[]}, ...]
+  const [mesasDetalle, setMesasDetalle] = useState([]);
+
+  /* ==========================
+     Utils
+  ========================== */
   const texto = useCallback((v) => {
     const s = v === null || v === undefined ? "" : String(v).trim();
     return s === "" ? "-" : s;
@@ -29,32 +42,85 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     return `${m[3]}/${m[2]}/${m[1]}`;
   }, []);
 
-  // Cargar detalle (vía router con CORS correcto)
+  const uniqPreserve = (arr) => {
+    const seen = new Set();
+    const out = [];
+    for (const x of arr) {
+      const k = String(x ?? "").trim().toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(x);
+    }
+    return out;
+  };
+
+  /* ==========================
+     Carga de detalle
+  ========================== */
   useEffect(() => {
     setActive(TABS[0].id);
-    setDetalle(null);
+    setMesasDetalle([]);
     setError("");
+
     if (!open) return;
 
-    const idMesa = mesa?.id_mesa ?? mesa?.id;
-    if (!idMesa) return;
+    // Puede venir:
+    // - mesa.id_grupo (grupo)
+    // - mesa.numero_mesa: número único o array de números
+    // - mesa.id_mesa / mesa.id (para compatibilidad antigua) => no alcanza para este modal; preferimos numeros o id_grupo
+    const idGrupo = mesa?.id_grupo;
+    const numeros =
+      Array.isArray(mesa?.numero_mesa)
+        ? mesa.numero_mesa
+        : mesa?.numero_mesa
+        ? [mesa.numero_mesa]
+        : [];
+
+    if (!idGrupo && (!numeros || numeros.length === 0)) {
+      // No hay contexto suficiente
+      return;
+    }
 
     const fetchDetalle = async () => {
       setLoading(true);
       try {
-        const resp = await fetch(
-          `${BASE_URL}/api.php?action=obtener_info_mesa&id_mesa=${encodeURIComponent(
-            idMesa
-          )}`,
-          { cache: "no-store" }
-        );
+        const body = idGrupo
+          ? { id_grupo: idGrupo }
+          : { numeros_mesa: numeros.map((n) => parseInt(n, 10)).filter(Boolean) };
+
+        const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
         const json = await resp.json().catch(() => ({}));
         if (!resp.ok || !json?.exito) {
           throw new Error(json?.mensaje || `HTTP ${resp.status}`);
         }
-        setDetalle(json.data);
+
+        const data = Array.isArray(json.data) ? json.data : [];
+        // normalizar campos esperados
+        const norm = data.map((m) => ({
+          numero_mesa: m.numero_mesa ?? null,
+          materia: m.materia ?? mesa?.materia ?? "",
+          fecha: m.fecha ?? mesa?.fecha ?? "",
+          id_turno: m.id_turno ?? null,
+          turno: m.turno ?? mesa?.turno ?? "",
+          docentes: Array.isArray(m.docentes) ? m.docentes.filter(Boolean) : [],
+          alumnos: Array.isArray(m.alumnos)
+            ? m.alumnos.map((a) => ({
+                alumno: a.alumno ?? "",
+                dni: a.dni ?? "",
+                // backend devuelve "curso" ya combinado tipo "3° A".
+                curso_div: a.curso ?? "",
+              }))
+            : [],
+        }));
+
+        setMesasDetalle(norm);
       } catch (e) {
-        setError(e?.message || "No se pudo obtener información de la mesa.");
+        setError(e?.message || "No se pudo obtener información de las mesas.");
       } finally {
         setLoading(false);
       }
@@ -63,47 +129,96 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     fetchDetalle();
   }, [open, mesa]);
 
-  // Mezcla: usa "detalle" si existe; caso contrario, usa los campos que vinieron en "mesa"
-  const M = useMemo(() => {
-    const base = detalle || {};
-    const src = { ...(mesa || {}), ...base };
-    const tribunalArr = Array.isArray(src.tribunal)
-      ? src.tribunal.filter(Boolean)
-      : [src.docente_1, src.docente_2, src.docente_3].filter(Boolean);
+  /* ==========================
+     Derivados para la UI
+  ========================== */
+
+  // Materia/fecha/turno "representativos"
+  const resumenCab = useMemo(() => {
+    if (!mesasDetalle?.length) {
+      return {
+        materia: mesa?.materia ?? "-",
+        fecha: mesa?.fecha ?? "-",
+        turno: mesa?.turno ?? "-",
+        mesas: [],
+      };
+    }
+    const materia =
+      mesasDetalle.find((x) => x.materia)?.materia ??
+      mesa?.materia ??
+      "-";
+    const fecha =
+      mesasDetalle.find((x) => x.fecha)?.fecha ??
+      mesa?.fecha ??
+      "-";
+    const turno =
+      mesasDetalle.find((x) => x.turno)?.turno ??
+      mesa?.turno ??
+      "-";
+
+    const mesasNums = mesasDetalle
+      .map((x) => x.numero_mesa)
+      .filter(Boolean);
 
     return {
-      // IDs y relaciones
-      id_mesa: src.id_mesa ?? src.id ?? "-",
-      id_catedra: src.id_catedra ?? "-",
-      id_previa: src.id_previa ?? "-",
-      id_materia: src.id_materia ?? src.materia_id ?? "-",
-      id_turno: src.id_turno ?? "-",
-
-      // Mesa base (nombres legibles cuando existan)
-      materia: src.materia ?? src.nombre_materia ?? "-",
-      curso: src.curso_nombre ?? src.curso ?? "-",
-      division: src.division_nombre ?? src.division ?? "-",
-      fecha_mesa: src.fecha_mesa ?? src.fecha ?? "-",
-      turno: src.turno ?? src.turno_nombre ?? "-",
-
-      // Alumno (previas)
-      dni: src.dni ?? "-",
-      alumno: src.alumno ?? "-",
-      id_condicion: src.id_condicion ?? "-",
-      inscripcion: src.inscripcion ?? "-",
-      anio: src.anio ?? "-",
-
-      // Docentes (IDs + nombres)
-      id_docente_1: src.id_docente_1 ?? "-",
-      id_docente_2: src.id_docente_2 ?? "-",
-      id_docente_3: src.id_docente_3 ?? "-",
-      docente_1: src.docente_1 ?? "-",
-      docente_2: src.docente_2 ?? "-",
-      docente_3: src.docente_3 ?? "-",
-
-      tribunal: tribunalArr,
+      materia,
+      fecha,
+      turno,
+      mesas: uniqPreserve(mesasNums),
     };
-  }, [detalle, mesa]);
+  }, [mesasDetalle, mesa]);
+
+  // Alumnos unificados de todas las mesas
+  const alumnosTodos = useMemo(() => {
+    const out = [];
+    for (const m of mesasDetalle) {
+      for (const a of m.alumnos) {
+        out.push({
+          alumno: a.alumno,
+          dni: a.dni,
+          curso_div: a.curso_div,
+          numero_mesa: m.numero_mesa,
+        });
+      }
+    }
+    // Orden: por alumno
+    out.sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
+    return out;
+  }, [mesasDetalle]);
+
+  // Tribunal unificado (3 docentes únicos de todas las mesas)
+  const docentesUnicos = useMemo(() => {
+    const all = mesasDetalle.flatMap((m) => m.docentes || []);
+    return uniqPreserve(all);
+  }, [mesasDetalle]);
+
+  // Alumnos por docente: todos los alumnos de las mesas en las que figure el docente
+  const alumnosPorDocente = useMemo(() => {
+    const map = new Map(); // nombreDocente -> alumnos[]
+    for (const d of docentesUnicos) {
+      map.set(d, []);
+    }
+    for (const m of mesasDetalle) {
+      if (!Array.isArray(m.docentes) || !m.docentes.length) continue;
+      for (const d of m.docentes) {
+        if (!map.has(d)) map.set(d, []);
+        for (const a of m.alumnos) {
+          map.get(d).push({
+            alumno: a.alumno,
+            dni: a.dni,
+            curso_div: a.curso_div,
+            numero_mesa: m.numero_mesa,
+          });
+        }
+      }
+    }
+    // ordenar alumnos dentro de cada docente
+    for (const [d, arr] of map.entries()) {
+      arr.sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
+      map.set(d, arr);
+    }
+    return map;
+  }, [docentesUnicos, mesasDetalle]);
 
   if (!open) return null;
 
@@ -125,10 +240,10 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 id="mi-modal-title" className="mi-modal__title">
-              Información de la Mesa
+              Información de Mesas
             </h2>
             <p className="mi-modal__subtitle">
-              ID: {texto(M.id_mesa)} &nbsp;|&nbsp; {texto(M.materia)}
+              {texto(resumenCab.materia)} &nbsp;|&nbsp; {fmtFechaISO(resumenCab.fecha)} &nbsp;|&nbsp; {texto(resumenCab.turno)}
             </p>
           </div>
           <button className="mi-modal__close" onClick={onClose} aria-label="Cerrar">
@@ -152,22 +267,21 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
           ))}
         </div>
 
-        {/* Contenido */}
+        {/* Body */}
         <div className="mi-modal__content">
           {loading && <div className="mi-loader">Cargando información…</div>}
           {error && !loading && <div className="mi-error">⚠️ {error}</div>}
 
-          {/* TAB: Mesa */}
-          {active === "mesa" && (
+          {/* ====== TAB: Resumen ====== */}
+          {active === "resumen" && !loading && !error && (
             <section className="mi-tabpanel is-active">
               <div className="mi-grid mi-grid-mesa">
                 <article className="mi-card">
-                  <h3 className="mi-card__title">Mesa</h3>
-                  <div className="mi-row"><span className="mi-label">ID Mesa</span><span className="mi-value">{texto(M.id_mesa)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Materia</span><span className="mi-value">{texto(M.materia)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Curso / División</span><span className="mi-value">{texto(M.curso)} {texto(M.division)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Fecha</span><span className="mi-value">{fmtFechaISO(M.fecha_mesa)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Turno</span><span className="mi-value">{texto(M.turno)}</span></div>
+                  <h3 className="mi-card__title">Datos generales</h3>
+                  <div className="mi-row"><span className="mi-label">Materia</span><span className="mi-value">{texto(resumenCab.materia)}</span></div>
+                  <div className="mi-row"><span className="mi-label">Fecha</span><span className="mi-value">{fmtFechaISO(resumenCab.fecha)}</span></div>
+                  <div className="mi-row"><span className="mi-label">Turno</span><span className="mi-value">{texto(resumenCab.turno)}</span></div>
+                  <div className="mi-row"><span className="mi-label">Mesas</span><span className="mi-value">{resumenCab.mesas.length ? resumenCab.mesas.join(" • ") : "-"}</span></div>
                 </article>
 
                 <article className="mi-card">
@@ -175,11 +289,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
                   <div className="mi-row">
                     <span className="mi-label">Docentes</span>
                     <span className="mi-value is-tribunal">
-                      {M.tribunal?.length
-                        ? M.tribunal.join(" | ")
-                        : [M.docente_1, M.docente_2, M.docente_3]
-                            .filter((x) => x && x !== "-")
-                            .join(" | ") || "-"}
+                      {docentesUnicos.length ? docentesUnicos.join(" | ") : "-"}
                     </span>
                   </div>
                 </article>
@@ -187,34 +297,105 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
             </section>
           )}
 
-          {/* TAB: Alumno */}
-          {active === "alumno" && (
+          {/* ====== TAB: Alumnos ====== */}
+          {active === "alumnos" && !loading && !error && (
             <section className="mi-tabpanel is-active">
-              <div className="mi-grid">
-                <article className="mi-card">
-                  <h3 className="mi-card__title">Alumno</h3>
-                  <div className="mi-row"><span className="mi-label">DNI</span><span className="mi-value">{texto(M.dni)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Nombre y Apellido</span><span className="mi-value">{texto(M.alumno)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Condición</span><span className="mi-value">{texto(M.id_condicion)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Inscripción</span><span className="mi-value">{texto(M.inscripcion)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Año</span><span className="mi-value">{texto(M.anio)}</span></div>
-                </article>
+              <div className="mi-table">
+                <div className="mi-thead">
+                  <div className="mi-th">Alumno</div>
+                  <div className="mi-th">DNI</div>
+                  <div className="mi-th">Curso / División</div>
+                  <div className="mi-th">N° Mesa</div>
+                </div>
+                <div className="mi-tbody">
+                  {alumnosTodos.length === 0 ? (
+                    <div className="mi-row-empty">Sin alumnos.</div>
+                  ) : (
+                    alumnosTodos.map((a, i) => (
+                      <div className="mi-tr" key={`${a.dni}-${i}`}>
+                        <div className="mi-td">{texto(a.alumno)}</div>
+                        <div className="mi-td">{texto(a.dni)}</div>
+                        <div className="mi-td">{texto(a.curso_div)}</div>
+                        <div className="mi-td">{texto(a.numero_mesa)}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </section>
           )}
 
-          {/* TAB: Docentes (3 tarjetas en fila en desktop) */}
-          {active === "docentes" && (
+          {/* ====== TAB: Docentes ====== */}
+          {active === "docentes" && !loading && !error && (
             <section className="mi-tabpanel is-active">
               <div className="mi-grid mi-grid-docentes">
-                {[1, 2, 3].map((n) => (
-                  <article key={n} className="mi-card">
-                    <h3 className="mi-card__title">Docente {n}</h3>
-                    <div className="mi-row"><span className="mi-label">ID</span><span className="mi-value">{texto(M[`id_docente_${n}`])}</span></div>
-                    <div className="mi-row"><span className="mi-label">Nombre</span><span className="mi-value">{texto(M[`docente_${n}`])}</span></div>
-                  </article>
-                ))}
+                {docentesUnicos.length === 0 ? (
+                  <div className="mi-row-empty">Sin docentes asignados.</div>
+                ) : (
+                  docentesUnicos.slice(0, 3).map((doc, idx) => (
+                    <article key={`${doc}-${idx}`} className="mi-card">
+                      <h3 className="mi-card__title">Docente {idx + 1}</h3>
+                      <div className="mi-row">
+                        <span className="mi-label">Nombre</span>
+                        <span className="mi-value">{texto(doc)}</span>
+                      </div>
+                      <div className="mi-row">
+                        <span className="mi-label">Mesas</span>
+                        <span className="mi-value">
+                          {
+                            uniqPreserve(
+                              mesasDetalle
+                                .filter((m) => (m.docentes || []).includes(doc))
+                                .map((m) => m.numero_mesa)
+                                .filter(Boolean)
+                            ).join(" • ") || "-"
+                          }
+                        </span>
+                      </div>
+                    </article>
+                  ))
+                )}
               </div>
+            </section>
+          )}
+
+          {/* ====== TAB: Por docente (alumnos de cada profesor) ====== */}
+          {active === "por_docente" && !loading && !error && (
+            <section className="mi-tabpanel is-active">
+              {docentesUnicos.length === 0 ? (
+                <div className="mi-row-empty">Sin docentes asignados.</div>
+              ) : (
+                docentesUnicos.map((doc) => {
+                  const lista = alumnosPorDocente.get(doc) || [];
+                  return (
+                    <article key={doc} className="mi-card mi-card--stretch">
+                      <h3 className="mi-card__title">Alumnos de {doc}</h3>
+                      <div className="mi-table">
+                        <div className="mi-thead">
+                          <div className="mi-th">Alumno</div>
+                          <div className="mi-th">DNI</div>
+                          <div className="mi-th">Curso / División</div>
+                          <div className="mi-th">N° Mesa</div>
+                        </div>
+                        <div className="mi-tbody">
+                          {lista.length === 0 ? (
+                            <div className="mi-row-empty">Sin alumnos asignados.</div>
+                          ) : (
+                            lista.map((a, i) => (
+                              <div className="mi-tr" key={`${doc}-${a.dni}-${i}`}>
+                                <div className="mi-td">{texto(a.alumno)}</div>
+                                <div className="mi-td">{texto(a.dni)}</div>
+                                <div className="mi-td">{texto(a.curso_div)}</div>
+                                <div className="mi-td">{texto(a.numero_mesa)}</div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
             </section>
           )}
         </div>

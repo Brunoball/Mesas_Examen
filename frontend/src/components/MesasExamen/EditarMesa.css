@@ -1,0 +1,149 @@
+/* ================================
+   EditarMesa – estilos locales
+   ================================ */
+
+/* Títulos/secciones */
+.glob-profesor-box h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1f2937; /* gris oscuro */
+  margin: 12px 0 10px 0;
+}
+
+/* Grilla base usada en el componente */
+.glob-grid-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* en desktop */
+  gap: 16px;
+}
+
+/* Campos: label + input/select */
+.glob-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.glob-form-label {
+  font-size: 0.88rem;
+  color: #374151;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Inputs/Selects – heredan el estilo global pero aseguramos contraste */
+.glob-search-input,
+.glob-form-field input,
+.glob-form-field select,
+.glob-form-field textarea {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  box-sizing: border-box;
+}
+
+.glob-search-input:focus,
+.glob-form-field input:focus,
+.glob-form-field select:focus,
+.glob-form-field textarea:focus {
+  border-color: #2563eb;              /* azul */
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
+}
+
+/* Asegurar legibilidad en disabled / readOnly (por defecto algunos navegadores bajan demasiado el contraste) */
+.glob-search-input[disabled],
+.glob-form-field input[disabled],
+.glob-form-field select[disabled],
+.glob-form-field textarea[disabled],
+.glob-form-field input[readonly],
+.glob-form-field textarea[readonly] {
+  background: #f3f4f6;                /* gris claro */
+  color: #111827 !important;          /* texto visible */
+  -webkit-text-fill-color: #111827;   /* Safari/Chromium */
+  opacity: 1;                         /* NO bajar opacidad */
+  cursor: default;
+  border-color: #d1d5db;
+}
+
+/* Placeholders y valores en inputs */
+.glob-search-input::placeholder,
+.glob-form-field input::placeholder,
+.glob-form-field textarea::placeholder {
+  color: #9ca3af;
+}
+
+/* Select – quitar estilos nativos feos en algunos browsers */
+.glob-form-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #6b7280 50%),
+    linear-gradient(135deg, #6b7280 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px),
+    100% 0;
+  background-size: 6px 6px, 6px 6px, 2.2em 100%;
+  background-repeat: no-repeat;
+  padding-right: 2.4em;
+}
+
+/* Fila de botones inferior – ajustar separación */
+.glob-botones-container .glob-profesor-button {
+  min-height: 40px;
+}
+
+/* Responsive: en pantallas chicas, la grilla pasa a 1 columna */
+@media (max-width: 880px) {
+  .glob-grid-form {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* Pequeños refinamientos visuales */
+.glob-box-table {
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.glob-profesor-title {
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.mi-muted {
+  color: #6b7280;
+  font-size: .9rem;
+}
+
+/* Enlaces/botones primarios dentro de esta página */
+.glob-profesor-button {
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+/* Compatibilidad con inputs de fecha (en algunos temas quedaban transparentes) */
+input[type="date"].glob-search-input {
+  background-color: #ffffff;
+}
+input[type="date"].glob-search-input[disabled] {
+  background-color: #f3f4f6;
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827;
+}

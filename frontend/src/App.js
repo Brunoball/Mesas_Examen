@@ -26,6 +26,8 @@ import ConfigForm from "./components/ConfigFormulario/ConfigForm";
 
 /* ✅ Mesas de Examen */
 import MesasExamen from "./components/MesasExamen/MesasExamen";
+/* 🆕 Editor de Mesa */
+import EditarMesa from "./components/MesasExamen/EditarMesa";
 
 /* 🆕 Playground del Loader (pestaña aparte para tunear el loader) */
 import LoaderPlayground from "./components/Global/LoaderPlayground";
@@ -42,7 +44,14 @@ function App() {
         <Route path="/panel" element={<RutaProtegida componente={<Principal />} />} />
 
         {/* Mesas de Examen (protegido) */}
+        {/* Ruta “oficial” */}
         <Route path="/mesas-examen" element={<RutaProtegida componente={<MesasExamen />} />} />
+        {/* Alias para compatibilidad con los navigate("/mesas") */}
+        <Route path="/mesas" element={<RutaProtegida componente={<MesasExamen />} />} />
+        {/* Edición de mesa */}
+        <Route path="/mesas-examen/editar/:id" element={<RutaProtegida componente={<EditarMesa />} />} />
+        {/* Alias de edición */}
+        <Route path="/mesas/editar/:id" element={<RutaProtegida componente={<EditarMesa />} />} />
 
         {/* Profesores (solo ADMIN) */}
         <Route path="/profesores" element={<RutaAdmin componente={<Profesores />} />} />
