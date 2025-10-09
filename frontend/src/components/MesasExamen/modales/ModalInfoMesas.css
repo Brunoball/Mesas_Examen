@@ -48,15 +48,8 @@
 }
 
 .mi-modal__container {
-<<<<<<< HEAD
-  width: min(1040px, 92vw);
-  max-height: 92vh;
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-=======
   width: min(960px, 92vw);
   max-height: 94vh;
->>>>>>> c0543f46d8e827521e500c697942f82cb095235c
   background: var(--mi-bg);
   border-radius: var(--mi-radius-lg);
   box-shadow: var(--mi-shadow-lg);

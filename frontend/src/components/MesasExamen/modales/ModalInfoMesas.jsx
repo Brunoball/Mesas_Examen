@@ -1,9 +1,9 @@
+// src/components/MesasExamen/modales/ModalInfoMesas.jsx
 import React, { useEffect, useCallback, useMemo, useState } from "react";
 import "./ModalInfoMesas.css";
 import BASE_URL from "../../../config/config";
 
 /**
-<<<<<<< HEAD
  * Modal de Información de MESAS (una mesa o un grupo de mesas)
  * - Trae todos los alumnos de las mesas (con curso/división)
  * - Trae los 3 profesores (tribunal unificado)
@@ -12,10 +12,6 @@ import BASE_URL from "../../../config/config";
  * Fuente de datos: POST  action=mesas_detalle
  *   - { id_grupo }  -> resuelve numero_mesa_1..3 y devuelve detalle por mesa
  *   - { numeros_mesa: [ ... ] }
-=======
- * Modal de información de una MESA DE EXAMEN con pestañas
- * Distribución de TARJETAS en 2 columnas (sin tocar el interior de cada tarjeta)
->>>>>>> c0543f46d8e827521e500c697942f82cb095235c
  */
 const ModalInfoMesas = ({ open, mesa, onClose }) => {
   const TABS = [
@@ -47,7 +43,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     return `${m[3]}/${m[2]}/${m[1]}`;
   }, []);
 
-<<<<<<< HEAD
   const uniqPreserve = (arr) => {
     const seen = new Set();
     const out = [];
@@ -63,9 +58,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
   /* ==========================
      Carga de detalle
   ========================== */
-=======
-  // Cargar detalle
->>>>>>> c0543f46d8e827521e500c697942f82cb095235c
   useEffect(() => {
     setActive(TABS[0].id);
     setMesasDetalle([]);
@@ -76,14 +68,13 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     // Puede venir:
     // - mesa.id_grupo (grupo)
     // - mesa.numero_mesa: número único o array de números
-    // - mesa.id_mesa / mesa.id (para compatibilidad antigua) => no alcanza para este modal; preferimos numeros o id_grupo
+    // - mesa.id_mesa / mesa.id (no alcanza para este modal)
     const idGrupo = mesa?.id_grupo;
-    const numeros =
-      Array.isArray(mesa?.numero_mesa)
-        ? mesa.numero_mesa
-        : mesa?.numero_mesa
-        ? [mesa.numero_mesa]
-        : [];
+    const numeros = Array.isArray(mesa?.numero_mesa)
+      ? mesa.numero_mesa
+      : mesa?.numero_mesa
+      ? [mesa.numero_mesa]
+      : [];
 
     if (!idGrupo && (!numeros || numeros.length === 0)) {
       // No hay contexto suficiente
@@ -138,7 +129,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     fetchDetalle();
   }, [open, mesa]);
 
-<<<<<<< HEAD
   /* ==========================
      Derivados para la UI
   ========================== */
@@ -153,69 +143,17 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
         mesas: [],
       };
     }
-    const materia =
-      mesasDetalle.find((x) => x.materia)?.materia ??
-      mesa?.materia ??
-      "-";
-    const fecha =
-      mesasDetalle.find((x) => x.fecha)?.fecha ??
-      mesa?.fecha ??
-      "-";
-    const turno =
-      mesasDetalle.find((x) => x.turno)?.turno ??
-      mesa?.turno ??
-      "-";
+    const materia = mesasDetalle.find((x) => x.materia)?.materia ?? mesa?.materia ?? "-";
+    const fecha = mesasDetalle.find((x) => x.fecha)?.fecha ?? mesa?.fecha ?? "-";
+    const turno = mesasDetalle.find((x) => x.turno)?.turno ?? mesa?.turno ?? "-";
 
-    const mesasNums = mesasDetalle
-      .map((x) => x.numero_mesa)
-      .filter(Boolean);
+    const mesasNums = mesasDetalle.map((x) => x.numero_mesa).filter(Boolean);
 
     return {
       materia,
       fecha,
       turno,
       mesas: uniqPreserve(mesasNums),
-=======
-  // Merge: detalle > mesa
-  const M = useMemo(() => {
-    const base = detalle || {};
-    const src = { ...(mesa || {}), ...base };
-    const tribunalArr = Array.isArray(src.tribunal)
-      ? src.tribunal.filter(Boolean)
-      : [src.docente_1, src.docente_2, src.docente_3].filter(Boolean);
-
-    return {
-      // IDs y relaciones
-      id_mesa: src.id_mesa ?? src.id ?? "-",
-      id_catedra: src.id_catedra ?? "-",
-      id_previa: src.id_previa ?? "-",
-      id_materia: src.id_materia ?? src.materia_id ?? "-",
-      id_turno: src.id_turno ?? "-",
-
-      // Mesa base (nombres legibles)
-      materia: src.materia ?? src.nombre_materia ?? "-",
-      curso: src.curso_nombre ?? src.curso ?? "-",
-      division: src.division_nombre ?? src.division ?? "-",
-      fecha_mesa: src.fecha_mesa ?? src.fecha ?? "-",
-      turno: src.turno ?? src.turno_nombre ?? "-",
-
-      // Alumno
-      dni: src.dni ?? "-",
-      alumno: src.alumno ?? "-",
-      id_condicion: src.id_condicion ?? "-",
-      inscripcion: src.inscripcion ?? "-",
-      anio: src.anio ?? "-",
-
-      // Docentes (IDs + nombres)
-      id_docente_1: src.id_docente_1 ?? "-",
-      id_docente_2: src.id_docente_2 ?? "-",
-      id_docente_3: src.id_docente_3 ?? "-",
-      docente_1: src.docente_1 ?? "-",
-      docente_2: src.docente_2 ?? "-",
-      docente_3: src.docente_3 ?? "-",
-
-      tribunal: tribunalArr,
->>>>>>> c0543f46d8e827521e500c697942f82cb095235c
     };
   }, [mesasDetalle, mesa]);
 
@@ -276,9 +214,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
   return (
     <div
       className="mi-modal__overlay"
-      onClick={(e) =>
-        e.target.classList.contains("mi-modal__overlay") && onClose?.()
-      }
+      onClick={(e) => e.target.classList.contains("mi-modal__overlay") && onClose?.()}
     >
       <div
         className="mi-modal__container"
@@ -294,11 +230,20 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
               Información de Mesas
             </h2>
             <p className="mi-modal__subtitle">
-              {texto(resumenCab.materia)} &nbsp;|&nbsp; {fmtFechaISO(resumenCab.fecha)} &nbsp;|&nbsp; {texto(resumenCab.turno)}
+              {texto(resumenCab.materia)} &nbsp;|&nbsp; {fmtFechaISO(resumenCab.fecha)} &nbsp;|&nbsp;{" "}
+              {texto(resumenCab.turno)}
             </p>
           </div>
           <button className="mi-modal__close" onClick={onClose} aria-label="Cerrar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -323,21 +268,30 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
           {loading && <div className="mi-loader">Cargando información…</div>}
           {error && !loading && <div className="mi-error">⚠️ {error}</div>}
 
-<<<<<<< HEAD
           {/* ====== TAB: Resumen ====== */}
           {active === "resumen" && !loading && !error && (
-=======
-          {/* TAB: Mesa — TARJETAS EN 2 COLUMNAS */}
-          {active === "mesa" && (
->>>>>>> c0543f46d8e827521e500c697942f82cb095235c
             <section className="mi-tabpanel is-active">
               <div className="mi-grid mi-grid--2cols">
                 <article className="mi-card">
                   <h3 className="mi-card__title">Datos generales</h3>
-                  <div className="mi-row"><span className="mi-label">Materia</span><span className="mi-value">{texto(resumenCab.materia)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Fecha</span><span className="mi-value">{fmtFechaISO(resumenCab.fecha)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Turno</span><span className="mi-value">{texto(resumenCab.turno)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Mesas</span><span className="mi-value">{resumenCab.mesas.length ? resumenCab.mesas.join(" • ") : "-"}</span></div>
+                  <div className="mi-row">
+                    <span className="mi-label">Materia</span>
+                    <span className="mi-value">{texto(resumenCab.materia)}</span>
+                  </div>
+                  <div className="mi-row">
+                    <span className="mi-label">Fecha</span>
+                    <span className="mi-value">{fmtFechaISO(resumenCab.fecha)}</span>
+                  </div>
+                  <div className="mi-row">
+                    <span className="mi-label">Turno</span>
+                    <span className="mi-value">{texto(resumenCab.turno)}</span>
+                  </div>
+                  <div className="mi-row">
+                    <span className="mi-label">Mesas</span>
+                    <span className="mi-value">
+                      {resumenCab.mesas.length ? resumenCab.mesas.join(" • ") : "-"}
+                    </span>
+                  </div>
                 </article>
 
                 <article className="mi-card">
@@ -353,7 +307,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
             </section>
           )}
 
-<<<<<<< HEAD
           {/* ====== TAB: Alumnos ====== */}
           {active === "alumnos" && !loading && !error && (
             <section className="mi-tabpanel is-active">
@@ -378,25 +331,10 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
                     ))
                   )}
                 </div>
-=======
-          {/* TAB: Alumno — (1 tarjeta ahora, pero el contenedor ya está listo para 2 col si sumás otra) */}
-          {active === "alumno" && (
-            <section className="mi-tabpanel is-active">
-              <div className="mi-grid mi-grid--2cols">
-                <article className="mi-card">
-                  <h3 className="mi-card__title">Alumno</h3>
-                  <div className="mi-row"><span className="mi-label">DNI</span><span className="mi-value">{texto(M.dni)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Nombre y Apellido</span><span className="mi-value">{texto(M.alumno)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Condición</span><span className="mi-value">{texto(M.id_condicion)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Inscripción</span><span className="mi-value">{texto(M.inscripcion)}</span></div>
-                  <div className="mi-row"><span className="mi-label">Año</span><span className="mi-value">{texto(M.anio)}</span></div>
-                </article>
->>>>>>> c0543f46d8e827521e500c697942f82cb095235c
               </div>
             </section>
           )}
 
-<<<<<<< HEAD
           {/* ====== TAB: Docentes ====== */}
           {active === "docentes" && !loading && !error && (
             <section className="mi-tabpanel is-active">
@@ -414,32 +352,17 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
                       <div className="mi-row">
                         <span className="mi-label">Mesas</span>
                         <span className="mi-value">
-                          {
-                            uniqPreserve(
-                              mesasDetalle
-                                .filter((m) => (m.docentes || []).includes(doc))
-                                .map((m) => m.numero_mesa)
-                                .filter(Boolean)
-                            ).join(" • ") || "-"
-                          }
+                          {uniqPreserve(
+                            mesasDetalle
+                              .filter((m) => (m.docentes || []).includes(doc))
+                              .map((m) => m.numero_mesa)
+                              .filter(Boolean)
+                          ).join(" • ") || "-"}
                         </span>
                       </div>
                     </article>
                   ))
                 )}
-=======
-          {/* TAB: Docentes — también en 2 columnas para la distribución de TARJETAS */}
-          {active === "docentes" && (
-            <section className="mi-tabpanel is-active">
-              <div className="mi-grid mi-grid--2cols">
-                {[1, 2, 3].map((n) => (
-                  <article key={n} className="mi-card">
-                    <h3 className="mi-card__title">Docente {n}</h3>
-                    <div className="mi-row"><span className="mi-label">ID</span><span className="mi-value">{texto(M[`id_docente_${n}`])}</span></div>
-                    <div className="mi-row"><span className="mi-label">Nombre</span><span className="mi-value">{texto(M[`docente_${n}`])}</span></div>
-                  </article>
-                ))}
->>>>>>> c0543f46d8e827521e500c697942f82cb095235c
               </div>
             </section>
           )}
