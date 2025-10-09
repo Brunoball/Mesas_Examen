@@ -32,6 +32,7 @@ import Toast from '../Global/Toast';
 import InscribirModal from './modales/InscribirModal'; // <— variante success (verde)
 import ModalInfoPrevia from './modales/ModalInfoPrevia';
 import '../Global/roots.css';
+import './Previas.css';
 
 /* ================================
    Utils
@@ -75,8 +76,7 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-/* ========= Modal de confirmación (Eliminar / Desinscribir) 
-           — Misma estética que “Cerrar sesión” ========= */
+/* ========= Modal de confirmación (Eliminar / Desinscribir) ========= */
 const ConfirmActionModal = ({
   open,
   mode,         // 'eliminar' | 'desinscribir'
@@ -670,6 +670,12 @@ const Previas = () => {
     saveAs(blob, `Previas_${sufijo}_${fechaStr}(${filas.length}).xlsx`);
   }, [hayFiltros, filtroActivo, previasFiltradas, cargando, tab]);
 
+  // ⬇️ Nuevo: tab change con cascada
+  const handleTabChange = useCallback((nuevoTab) => {
+    setTab(nuevoTab);
+    triggerCascadaConPreMask(); // dispara la animación al cambiar entre "Todos" e "Inscriptos"
+  }, [triggerCascadaConPreMask]);
+
   /* ================================
      Fila virtualizada (desktop)
   ================================= */
@@ -798,24 +804,6 @@ const Previas = () => {
         <div className="glob-front-row-pro">
           <span className="glob-profesor-title">Gestión de Previas</span>
 
-          {/* Tabs */}
-          <div className="glob-grid-filtros" style={{ gap: 8, alignItems: 'center' }}>
-            <button
-              className={`glob-chip-filtro ${tab === 'todos' ? 'glob-active' : ''}`}
-              onClick={() => setTab('todos')}
-              title="Ver todas las previas"
-            >
-              Todos
-            </button>
-            <button
-              className={`glob-chip-filtro ${tab === 'inscriptos' ? 'glob-active' : ''}`}
-              onClick={() => setTab('inscriptos')}
-              title="Ver solo inscriptos"
-            >
-              Inscriptos
-            </button>
-          </div>
-
           {/* Búsqueda */}
           <div className="glob-search-input-container">
             <input
@@ -934,20 +922,43 @@ const Previas = () => {
           </div>
         </div>
 
-        {/* CONTADOR + CHIPS + LISTADO */}
+        {/* CONTADOR + TABS + CHIPS + LISTADO */}
         <div className="glob-profesores-list">
           <div className="glob-contenedor-list-items">
-            {/* Contador */}
+            {/* Contador + Tabs inline */}
             <div className="glob-left-inline">
-              <div className="glob-contador-container">
-                <span className="glob-profesores-desktop">
-                  {tab === 'inscriptos' ? 'Inscriptos: ' : 'Cant previas: '}
-                  {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
-                </span>
-                <span className="glob-profesores-mobile">
-                  {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
-                </span>
-                <FaUsers className="glob-icono-profesor" />
+              <div className='sep-boton'>
+                <div className="glob-contador-container">
+                  <span className="glob-profesores-desktop">
+                    {tab === 'inscriptos' ? 'Inscriptos: ' : 'Cant previas: '}
+                    {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
+                  </span>
+                  <span className="glob-profesores-mobile">
+                    {(hayFiltros || filtroActivo === 'todos') ? previasFiltradas.length : 0}
+                  </span>
+                  <FaUsers className="glob-icono-profesor" />
+                </div>
+                {/* Tabs inline al lado del contador */}
+                <div className="glob-tabs-inline" role="tablist" aria-label="Filtro por estado de inscripción">
+                  <button
+                    role="tab"
+                    aria-selected={tab === 'todos'}
+                    className={`glob-chip-filtro ${tab === 'todos' ? 'glob-active' : ''}`}
+                    onClick={() => handleTabChange('todos')}
+                    title="Ver todas las previas"
+                  >
+                    Todos
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={tab === 'inscriptos'}
+                    className={`glob-chip-filtro ${tab === 'inscriptos' ? 'glob-active' : ''}`}
+                    onClick={() => handleTabChange('inscriptos')}
+                    title="Ver solo inscriptos"
+                  >
+                    Inscriptos
+                  </button>
+                </div>
               </div>
 
               {/* Chips */}
@@ -1029,6 +1040,7 @@ const Previas = () => {
                 {!hayFiltros && filtroActivo !== 'todos' ? (
                   <div className="glob-no-data-message">
                     <div className="glob-message-content">
+                      <FaFilter className="glob-empty-icon" aria-hidden="true" />
                       <p>Aplicá búsqueda o filtros para ver las previas</p>
                       <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
                         Mostrar todas
@@ -1082,6 +1094,7 @@ const Previas = () => {
               {!hayFiltros && filtroActivo !== 'todos' ? (
                 <div className="glob-no-data-message glob-no-data-mobile">
                   <div className="glob-message-content">
+                    <FaFilter className="glob-empty-icon" aria-hidden="true" />
                     <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
                     <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
                       Mostrar todas

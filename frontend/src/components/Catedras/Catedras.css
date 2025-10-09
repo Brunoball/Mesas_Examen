@@ -162,3 +162,88 @@
 
 /* Si querés usar el modo "mobile cards", agregá data-label desde el JSX.
    Por ahora igual se ve bien como lista apilada. */
+/* Cierra por defecto */
+.glob-filtros-group-body { display: none; }
+
+/* Abierto */
+.glob-filtros-group-body.is-open { display: block; }
+
+/* Rotación del caret si no la tenías ya */
+.glob-accordion-caret { transition: transform .2s ease; }
+.glob-filtros-group-header.is-open .glob-accordion-caret,
+.glob-accordion-caret.glob-rotate { transform: rotate(180deg); }
+/* ======= Performance & Fluidez ======= */
+
+/* Usa una sola definición de columnas por CSS var */
+.has-cols {
+  display: grid;
+  grid-template-columns: var(--cols);
+}
+
+/* Evitar costosos recalculos de layout dentro del área scrolleable */
+.glob-box-table .glob-body {
+  contain: content;              /* aísla layout/paint */
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Filas: animación con var --delay (seteada inline sólo cuando se usa) */
+.glob-row {
+  transition: transform .25s ease, opacity .25s ease, background .15s ease;
+  will-change: transform, opacity;
+  transform: translateZ(0);      /* empuja a la GPU */
+}
+
+/* Item alternado sigue igual; sólo suavizamos sombra si existe */
+.glob-box-table {
+  box-shadow: 0 6px 18px rgba(0,0,0,.28);
+}
+
+/* Header y filas comparten columnas por var; sacamos inline del JSX */
+.glob-header {
+  grid-template-columns: var(--cols);
+}
+
+/* Clamp rápido para la primera columna estrecha */
+.clamp-80 { width: 100%; max-width: 80px; }
+
+/* Cascada: usar var(--delay) para no recalcular clases */
+.glob-cascade {
+  animation: glob-fade-in-up .36s var(--delay, 0s) both;
+}
+
+@keyframes glob-fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Menos trabajo en cada frame al hacer hover */
+.glob-row:hover { background: rgba(79,140,255,.06); }
+
+/* Cards mobile: igual idea */
+.glob-card {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  animation: glob-fade-in-up .36s var(--delay, 0s) both;
+}
+
+/* AutoSizer + List contenedor: evita fugas de repaints */
+.glob-body > div {
+  contain: strict;
+}
+
+/* Respeta accesibilidad de usuarios con reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .glob-row,
+  .glob-card {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Acordeón: ya venía, dejamos explícito para evitar cálculos extra */
+.glob-filtros-group-body { display: none; }
+.glob-filtros-group-body.is-open { display: block; }
+.glob-accordion-caret { transition: transform .2s ease; }
+.glob-filtros-group-header.is-open .glob-accordion-caret,
+.glob-accordion-caret.glob-rotate { transform: rotate(180deg); }

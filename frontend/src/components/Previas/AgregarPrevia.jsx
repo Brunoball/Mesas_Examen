@@ -333,7 +333,7 @@ const AgregarPrevia = () => {
                   <h3 className="prev-section-title">Cursado</h3>
 
                   {/* Curso + División en la misma fila */}
-                  <div className="prev-row">
+                  <div className="prev-rowsdd">
                     {/* Cursando: curso */}
                     <div className="prev-col">
                       <div className="prev-input-wrapper always-active">
@@ -376,7 +376,7 @@ const AgregarPrevia = () => {
                   </div>
 
                   {/* Materia: curso + división */}
-                  <div className="prev-row">
+                  <div className="prev-rowsdd">
                     {/* Materia: curso */}
                     <div className="prev-col">
                       <div className="prev-input-wrapper always-active">
@@ -523,15 +523,7 @@ const AgregarPrevia = () => {
 
               {/* Botonera inferior */}
               <div className="prev-add-buttons">
-                <button
-                  type="button"
-                  className="prev-add-button prev-add-button--back"
-                  onClick={() => navigate(-1)}
-                  title="Volver"
-                >
-                  <FontAwesomeIcon icon={faArrowLeft} style={{ marginRight: 8 }} />
-                  <span className="prev-add-button-text">Volver</span>
-                </button>
+
 
                 <button
                   type="submit"

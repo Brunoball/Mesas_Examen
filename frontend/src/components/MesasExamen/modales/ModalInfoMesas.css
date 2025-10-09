@@ -67,7 +67,7 @@
 /* ====== Contenedor ====== */
 .mi-modal__container {
   width: min(960px, 92vw);
-  max-height: 90vh;
+  max-height: 94vh;
   background: var(--mi-bg);
   border-radius: var(--mi-radius-lg);
   box-shadow: var(--mi-shadow);
@@ -251,4 +251,22 @@
 @keyframes mi-slide {
   from { opacity: 0; transform: translateY(18px); }
   to { opacity: 1; transform: translateY(0); }
+}
+/* === Forzar 2 columnas de tarjetas === */
+.mi-grid--2cols {
+  display: grid;
+  grid-template-columns: 1fr;       /* 1 col en mobile */
+  gap: 18px;
+}
+
+/* ≥ 720px: 2 columnas iguales */
+@media (min-width: 720px) {
+  .mi-grid--2cols {
+    grid-template-columns: 1fr 1fr; /* 2 cols en desktop */
+  }
+}
+
+/* Evitar que las reglas previas de "span" afecten a este layout */
+.mi-grid--2cols .mi-card {
+  grid-column: auto !important;
 }

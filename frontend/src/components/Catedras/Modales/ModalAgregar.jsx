@@ -23,6 +23,9 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
   const [seleccion, setSeleccion] = useState(null);
   const [asignando, setAsignando] = useState(false);
 
+  // Para disparar la animación en cascada
+  const [appear, setAppear] = useState(false);
+
   const fetchDocentes = useCallback(async () => {
     try {
       setCargando(true);
@@ -75,6 +78,16 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Disparar la animación en cascada al abrir/cambiar filtro/cargar
+  useEffect(() => {
+    if (!open) return;
+    // Reseteo inmediato para poder re-disparar
+    setAppear(false);
+    // Próximo frame activa la clase que empieza las animaciones
+    const id = requestAnimationFrame(() => setAppear(true));
+    return () => cancelAnimationFrame(id);
+  }, [open, q, cargando]);
+
   const filtrados = useMemo(() => {
     if (!q) return docentes;
     const nq = normalizar(q);
@@ -121,11 +134,7 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
             Asignar / Cambiar docente
           </h2>
 
-          {/* Pill/badge opcional a la derecha */}
-          <span className="ma-badge">
-            <span className="dot" />
-            Lista de docentes
-          </span>
+
 
           {/* X como SVG (igual a InfoPrevia) */}
           <button className="ma-close" onClick={onClose} aria-label="Cerrar">
@@ -171,7 +180,7 @@ const ModalAgregar = ({ open, catedra, onClose, onAsignado }) => {
           ) : filtrados.length === 0 ? (
             <div className="ma-status">Sin resultados</div>
           ) : (
-            <ul className="ma-list">
+            <ul className={`ma-list ${appear ? "is-appear" : ""}`}>
               {filtrados.map((d) => (
                 <li
                   key={d.id_docente}

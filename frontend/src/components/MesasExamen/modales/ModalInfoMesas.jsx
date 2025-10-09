@@ -4,6 +4,7 @@ import BASE_URL from "../../../config/config";
 
 /**
  * Modal de información de una MESA DE EXAMEN con pestañas
+ * Distribución de TARJETAS en 2 columnas (sin tocar el interior de cada tarjeta)
  */
 const ModalInfoMesas = ({ open, mesa, onClose }) => {
   const TABS = [
@@ -29,7 +30,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     return `${m[3]}/${m[2]}/${m[1]}`;
   }, []);
 
-  // Cargar detalle (vía router con CORS correcto)
+  // Cargar detalle
   useEffect(() => {
     setActive(TABS[0].id);
     setDetalle(null);
@@ -63,7 +64,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     fetchDetalle();
   }, [open, mesa]);
 
-  // Mezcla: usa "detalle" si existe; caso contrario, usa los campos que vinieron en "mesa"
+  // Merge: detalle > mesa
   const M = useMemo(() => {
     const base = detalle || {};
     const src = { ...(mesa || {}), ...base };
@@ -79,14 +80,14 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
       id_materia: src.id_materia ?? src.materia_id ?? "-",
       id_turno: src.id_turno ?? "-",
 
-      // Mesa base (nombres legibles cuando existan)
+      // Mesa base (nombres legibles)
       materia: src.materia ?? src.nombre_materia ?? "-",
       curso: src.curso_nombre ?? src.curso ?? "-",
       division: src.division_nombre ?? src.division ?? "-",
       fecha_mesa: src.fecha_mesa ?? src.fecha ?? "-",
       turno: src.turno ?? src.turno_nombre ?? "-",
 
-      // Alumno (previas)
+      // Alumno
       dni: src.dni ?? "-",
       alumno: src.alumno ?? "-",
       id_condicion: src.id_condicion ?? "-",
@@ -157,10 +158,10 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
           {loading && <div className="mi-loader">Cargando información…</div>}
           {error && !loading && <div className="mi-error">⚠️ {error}</div>}
 
-          {/* TAB: Mesa */}
+          {/* TAB: Mesa — TARJETAS EN 2 COLUMNAS */}
           {active === "mesa" && (
             <section className="mi-tabpanel is-active">
-              <div className="mi-grid mi-grid-mesa">
+              <div className="mi-grid mi-grid--2cols">
                 <article className="mi-card">
                   <h3 className="mi-card__title">Mesa</h3>
                   <div className="mi-row"><span className="mi-label">ID Mesa</span><span className="mi-value">{texto(M.id_mesa)}</span></div>
@@ -187,10 +188,10 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
             </section>
           )}
 
-          {/* TAB: Alumno */}
+          {/* TAB: Alumno — (1 tarjeta ahora, pero el contenedor ya está listo para 2 col si sumás otra) */}
           {active === "alumno" && (
             <section className="mi-tabpanel is-active">
-              <div className="mi-grid">
+              <div className="mi-grid mi-grid--2cols">
                 <article className="mi-card">
                   <h3 className="mi-card__title">Alumno</h3>
                   <div className="mi-row"><span className="mi-label">DNI</span><span className="mi-value">{texto(M.dni)}</span></div>
@@ -203,10 +204,10 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
             </section>
           )}
 
-          {/* TAB: Docentes (3 tarjetas en fila en desktop) */}
+          {/* TAB: Docentes — también en 2 columnas para la distribución de TARJETAS */}
           {active === "docentes" && (
             <section className="mi-tabpanel is-active">
-              <div className="mi-grid mi-grid-docentes">
+              <div className="mi-grid mi-grid--2cols">
                 {[1, 2, 3].map((n) => (
                   <article key={n} className="mi-card">
                     <h3 className="mi-card__title">Docente {n}</h3>
