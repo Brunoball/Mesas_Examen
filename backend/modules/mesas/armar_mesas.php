@@ -1,23 +1,14 @@
 <?php
 // backend/modules/mesas/armar_mesas.php
 // -----------------------------------------------------------------------------
-// Inserta MESAS desde PREVIAS (inscripcion=1, id_condicion=3).
-// - Calcula prioridad=1 por correlatividad (regla pedida).
-// - Inserta TODO sin fecha/turno (incluyendo prioridad=1).
-// - Luego AGENDA SOLO los numero_mesa con prioridad=1 buscando desde el
-//   primer día/turno y RESPETANDO disponibilidad de docentes:
-//     * Si fecha_no == fecha_slot  -> bloquea TODO el día (ambos turnos) SOLO ese día.
-//     * Si id_turno_no está definido -> bloquea ese turno en TODAS las fechas.
-//       (Si están ambos, se aplican ambas restricciones a la vez.)
-// - Minimiza choques de DNIs al elegir slots.
-// -----------------------------------------------------------------------------
-//
-// Entrada (POST JSON):
-//   { "fecha_inicio":"YYYY-MM-DD", "fecha_fin":"YYYY-MM-DD", "dry_run":0|1 }
-//
-// Salida:
-//   { exito:true, data:{resumen, slots, nota} }
-//
+// Inserta MESAS desde PREVIAS (inscripcion=1, id_condicion=3) con mejoras:
+// - Evita que un mismo DNI quede dos veces en la MISMA numero_mesa (cuando
+//   el alumno tiene la misma materia y el mismo docente en distintos cursos):
+//   si el DNI ya está presente en el numero_mesa base (materia+docente),
+//   se crea un numero_mesa alternativo exclusivo para ese DNI.
+// - Mantiene prioridad=1 por correlatividad y agenda SOLO esas filas en los
+//   primeros slots posibles respetando disponibilidad del docente y minimizando
+//   choques de DNIs.
 // -----------------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -173,10 +164,11 @@ try {
     ");
   }
 
-  $cacheNumeroPorMD = []; // "materia#docente" => numero_mesa
+  $cacheNumeroPorMD = [];             // "materia#docente" => numero_mesa (base)
+  $cacheNumeroPorMDAlumno = [];       // "materia#docente#dni" => numero_mesa (alterno si hace falta)
   $docentePorNumero = [];
-  $dnisPorNumero = [];      // para choques
-  $idsPrio1PorNumero  = []; // ids recientes a agendar
+  $dnisPorNumero = [];                // numero_mesa => set dni (para evitar duplicar en mismo número)
+  $idsPrio1PorNumero  = [];           // numero_mesa => [id_mesa insertadas con prio1]
   $prio1CountPorNumero= [];
   $insertados = $omitidosExistentes = $omitidosSinCatedra = 0;
 
@@ -225,16 +217,32 @@ try {
       $id_docente = (int)$cat['id_docente'];
       $id_materia = (int)$p['id_materia'];
 
-      // numero_mesa por (materia,docente)
-      $clave = $id_materia.'#'.$id_docente;
-      if (!isset($cacheNumeroPorMD[$clave])) {
+      // ------- numero_mesa por (materia,docente) con salvaguarda por DNI -------
+      $claveBase = $id_materia.'#'.$id_docente;
+      $claveAlumno = $claveBase.'#'.$dni;
+
+      // obtener (o calcular) numero base
+      if (!isset($cacheNumeroPorMD[$claveBase])) {
         $stNumeroExistente->execute([':idm'=>$id_materia, ':idd'=>$id_docente]);
         $row = $stNumeroExistente->fetch(PDO::FETCH_ASSOC);
-        $cacheNumeroPorMD[$clave] = $row && isset($row['numero_mesa'])
+        $cacheNumeroPorMD[$claveBase] = $row && isset($row['numero_mesa'])
           ? (int)$row['numero_mesa']
           : ++$siguienteNumero;
       }
-      $nm = $cacheNumeroPorMD[$clave];
+      $nmCandidato = $cacheNumeroPorMD[$claveBase];
+
+      // si ese numero_mesa ya tiene al mismo DNI, asignar/crear alterno exclusivo para este DNI
+      $dniYaEnBase = isset($dnisPorNumero[$nmCandidato][$dni]);
+      if ($dniYaEnBase) {
+        if (!isset($cacheNumeroPorMDAlumno[$claveAlumno])) {
+          // crear nuevo numero_mesa alterno
+          $cacheNumeroPorMDAlumno[$claveAlumno] = ++$siguienteNumero;
+        }
+        $nm = $cacheNumeroPorMDAlumno[$claveAlumno];
+      } else {
+        $nm = $nmCandidato;
+      }
+
       $docentePorNumero[$nm] = $id_docente;
 
       // Insert SIN fecha/turno
@@ -251,7 +259,7 @@ try {
         $prio1CountPorNumero[$nm] = ($prio1CountPorNumero[$nm] ?? 0) + 1;
       }
 
-      // choques de DNIs (para prio1)
+      // registrar DNI en el numero elegido
       $dnisPorNumero[$nm][$p['dni']] = true;
 
       $insertados++;
@@ -328,7 +336,7 @@ try {
       'agendados_prio'=>array_sum(array_map('count',$idsPrio1PorNumero))
     ],
     'slots'=>$slots,
-    'nota'=>'Se agendaron SOLO prioridad=1. El resto queda libre para que armar_mesa_grupo.php los acomode/juegue con fechas y turnos.'
+    'nota'=>'Se agendaron SOLO prioridad=1. Además, se evitó duplicar al mismo alumno dentro de un mismo numero_mesa cuando tiene la misma materia con el mismo docente en cursos distintos.'
   ]);
 
 } catch (Throwable $e) {
