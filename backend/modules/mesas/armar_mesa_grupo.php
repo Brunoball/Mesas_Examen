@@ -1,12 +1,16 @@
 <?php
 // backend/modules/mesas/armar_mesa_grupo.php
 // -----------------------------------------------------------------------------
-// Versión: "correlatividad estricta por DNI+área" + (agrupa-hasta-4 / singles)
-// - Si una mesa de curso MAYOR quedaba antes que otra de curso MENOR del mismo
-//   alumno y misma área, se DIFERIRÁ la mayor (se quita del slot fijo y pasa a
-//   libres) para reubicarla luego en un slot posterior compatible con docente.
-// - Mantiene: no duplicar DNIs en el mismo slot, prioriza prioridad=1,
-//   respeta indisponibilidades de docentes y agrupación 2/3/4.
+// Versión: "correlatividad estricta por DNI+área" + split selectivo por DNI
+// - Si una mesa de curso MAYOR queda antes que otra de curso MENOR del mismo
+//   alumno (mismo DNI) y misma área, primero INTENTA separar sólo a ese alumno
+//   del numero_mesa problemático SI ese numero_mesa tiene “muchos alumnos”
+//   (umbral configurable: 3 o más). Se le asigna un numero_mesa nuevo con el
+//   mismo docente, se limpian fecha/turno y se deja re-agendar/agrupado luego.
+// - Si no aplica split (o falla), se usa el diferimiento que ya existía: quitar
+//   fecha/turno del numero_mesa mayor (o del grupo) para reubicar después.
+// - Mantiene: no duplicar DNIs en el mismo slot, prioridad=1 se agenda temprano,
+//   indisponibilidades de docentes y agrupación 2/3/4 por área.
 // -----------------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -19,6 +23,9 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
 require_once __DIR__ . '/../../config/db.php';
+
+// ---------------- Config ----------------
+const UMBRAL_SPLIT_MUCHOS_ALUMNOS = 3; // si el numero_mesa tiene ≥3 DNIs, se habilita split selectivo
 
 // ---------------- Utils ----------------
 function respond(bool $ok, $payload = null, int $status = 200): void {
@@ -51,7 +58,7 @@ function pad4(array $g): array {
 }
 
 // ---------------- DNI helpers ----------------
-/** [numero_mesa => array<int dni>] (set único por mesa) */
+/** [numero_mesa => array<string dni>] */
 function mapDNIsPorNumero(PDO $pdo): array {
   $sql = "
     SELECT m.numero_mesa, p.dni
@@ -151,6 +158,51 @@ function expandirATresMasUnoSinSlot(array $grupo3, array &$rest, array $dnisMap)
     }
   }
   return $grupo3;
+}
+
+// ---------------- Split selectivo por DNI (NUEVO) ----------------
+/**
+ * Separa las filas del alumno ($dni) que están dentro del numero_mesa $nmOrigen
+ * y les asigna un numero_mesa NUEVO (MAX+1), preservando id_docente por fila,
+ * y limpiando fecha_mesa/id_turno para re-agendar.
+ * Devuelve el numero_mesa nuevo si hubo split, o null si no hizo nada.
+ */
+function splitAlumnoEnNumeroMesa(PDO $pdo, int $nmOrigen, string $dni): ?int {
+  // ¿Cuántos DNIs únicos tiene el numero_mesa origen?
+  $stCount = $pdo->prepare("
+    SELECT COUNT(DISTINCT p.dni) AS cnt
+    FROM mesas_examen.mesas m
+    INNER JOIN mesas_examen.previas p ON p.id_previa = m.id_previa
+    WHERE m.numero_mesa = :nm
+  ");
+  $stCount->execute([':nm'=>$nmOrigen]);
+  $cnt = (int)($stCount->fetchColumn() ?: 0);
+  if ($cnt < UMBRAL_SPLIT_MUCHOS_ALUMNOS) return null; // no aplica split
+
+  // nuevo numero_mesa
+  $rowMax = $pdo->query("SELECT COALESCE(MAX(numero_mesa),0) FROM mesas_examen.mesas")->fetch(PDO::FETCH_NUM);
+  $nmNuevo = (int)($rowMax[0] ?? 0) + 1;
+
+  // Mover filas del alumno: mantener id_docente / id_catedra / prioridad; limpiar fecha/turno
+  // Usamos UPDATE con JOIN a previas por DNI
+  $stUpd = $pdo->prepare("
+    UPDATE mesas_examen.mesas m
+    INNER JOIN mesas_examen.previas p ON p.id_previa = m.id_previa
+    SET m.numero_mesa = :nmNuevo,
+        m.fecha_mesa  = NULL,
+        m.id_turno    = NULL
+    WHERE m.numero_mesa = :nmOrigen
+      AND p.dni = :dni
+  ");
+  $stUpd->execute([':nmNuevo'=>$nmNuevo, ':nmOrigen'=>$nmOrigen, ':dni'=>$dni]);
+
+  // Validar que realmente se movió algo
+  $moved = $stUpd->rowCount();
+  if ($moved <= 0) return null;
+
+  // limpiar cualquier rastro en "no_agrupadas" del origen en el slot actual (si hubiera)
+  // (no es estrictamente necesario, luego purgamos por consistencia)
+  return $nmNuevo;
 }
 
 if (!isset($pdo) || !$pdo instanceof PDO) {
@@ -290,11 +342,7 @@ try {
     }
   }
 
-  // === PRECEDENCIA ESTRICTA (DETECCIÓN + DIFERIMIENTO) ======================
-  // Si detectamos (curso mayor) en slot < (curso menor), diferimos la mesa mayor:
-  //  - Si estaba en un grupo del mismo slot: eliminamos el grupo y pasamos
-  //    todos sus números a "libres".
-  //  - Quitamos fecha/turno a esa mesa (y a su grupo si correspondía).
+  // === PRECEDENCIA ESTRICTA (DETECCIÓN + SPLIT SELECTIVO + DIFERIMIENTO) ===
   $stFindGrupo = $pdo->prepare("
     SELECT id_mesa_grupos, numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4
     FROM mesas_examen.mesas_grupos
@@ -309,67 +357,115 @@ try {
      WHERE numero_mesa=:n AND fecha_mesa=:f AND id_turno=:t
   ");
 
-  $deferidos = []; // numeros diferidos => true
+  $deferidos = [];        // numeros diferidos => true
+  $splitHechos = [];      // [['dni'=>, 'nm_origen'=>, 'nm_nuevo'=>], ...]
+  $huboCambiosEstructura = false;
+
   if (!$dryRun && !empty($agendaDniArea)) {
     // Recorremos por DNI+área
     foreach ($agendaDniArea as $dni => $areas) {
       foreach ($areas as $area => $regs) {
         usort($regs, fn($a,$b)=>$a['slot']<=>$b['slot']); // por orden actual
-        // Buscamos violaciones: mayor antes que menor
-        $minCursoHastaAhora = PHP_INT_MAX;
-        foreach ($regs as $info) { $minCursoHastaAhora = min($minCursoHastaAhora, $info['curso']); }
-        // dos pasadas: 1) localizar el menor; 2) diferir a los mayores previos
-        $cursoMin = $minCursoHastaAhora;
-        foreach ($regs as $info) {
-          if ($info['curso'] > $cursoMin) {
-            // si existe algún registro con curso == $cursoMin en slot MAYOR al slot de este,
-            // no es violación; la violación es cuando ESTE (mayor) está ANTES que algún menor.
-            $hayMenorDespues = false;
-            foreach ($regs as $cmp) {
-              if ($cmp['curso'] < $info['curso'] && $cmp['slot'] > $info['slot']) { $hayMenorDespues = true; break; }
+        // Detectar violaciones: mayor antes que menor en el tiempo
+        // Recorremos y si encontramos (curso mayor) en slot < slot de (menor), actuamos
+        $minCursoGlobal = PHP_INT_MAX;
+        foreach ($regs as $info) { $minCursoGlobal = min($minCursoGlobal, $info['curso']); }
+
+        foreach ($regs as $infoMayor) {
+          // ¿existe un MENOR con slot posterior?
+          $hayMenorDespues = false;
+          foreach ($regs as $infoMenor) {
+            if ($infoMenor['curso'] < $infoMayor['curso'] && $infoMenor['slot'] > $infoMayor['slot']) {
+              $hayMenorDespues = true;
+              break;
             }
-            if ($hayMenorDespues) {
-              // Diferir nm (mayor)
-              $nmMayor = (int)$info['nm'];
-              // hallar fecha/turno actuales
-              $slotInv = array_search($info['slot'], $slotIdxMap, true);
-              // $slotInv no es clave inversa; recuperamos por búsqueda:
-              $fecha=null; $turno=null;
-              foreach ($slotsOrden as $k=>$s) {
-                if (($slotIdxMap[$s['fecha'].'|'.$s['turno']]??-1) === $info['slot']) { $fecha=$s['fecha']; $turno=$s['turno']; break; }
-              }
-              if ($fecha!==null) {
-                // ¿pertenece a un grupo? si sí, eliminarlo y diferir a TODOS los de ese grupo
-                $stFindGrupo->execute([':f'=>$fecha,':t'=>$turno,':n'=>$nmMayor]);
-                if ($g=$stFindGrupo->fetch(PDO::FETCH_ASSOC)) {
-                  $numsG = array_values(array_filter([
-                    (int)$g['numero_mesa_1'], (int)$g['numero_mesa_2'], (int)$g['numero_mesa_3'], (int)$g['numero_mesa_4']
-                  ]));
-                  $stDelGrupo->execute([':id'=>(int)$g['id_mesa_grupos']]);
-                  // desagendar todos los números de ese grupo en ese slot
-                  foreach ($numsG as $nx) {
-                    $stUnsetFecha->execute([':n'=>$nx,':f'=>$fecha,':t'=>$turno]);
-                    $deferidos[$nx]=true;
-                  }
-                } else {
-                  // single o no agrupada -> sólo esa mesa
-                  $stUnsetFecha->execute([':n'=>$nmMayor,':f'=>$fecha,':t'=>$turno]);
-                  $deferidos[$nmMayor]=true;
+          }
+          if (!$hayMenorDespues) continue; // no hay violación con este candidato
+
+          // Tenemos violación: primero intentar SPLIT SELECTIVO si el numero_mesa del mayor es "grande"
+          $nmMayor = (int)$infoMayor['nm'];
+
+          // ¿cuántos DNIs tiene ese numero_mesa?
+          $dnIsDelNM = $dnisPorNumero[$nmMayor] ?? [];
+          $cantDnisNM = count($dnIsDelNM);
+
+          $seHizoSplit = false;
+          if ($cantDnisNM >= UMBRAL_SPLIT_MUCHOS_ALUMNOS) {
+            // Split: mover sólo las filas de ESTE DNI desde nmMayor a un numero_mesa nuevo
+            $nmNuevo = splitAlumnoEnNumeroMesa($pdo, $nmMayor, (string)$dni);
+            if ($nmNuevo !== null) {
+              $splitHechos[] = ['dni'=>$dni, 'nm_origen'=>$nmMayor, 'nm_nuevo'=>$nmNuevo];
+              $huboCambiosEstructura = true;
+              $seHizoSplit = true;
+            }
+          }
+
+          if (!$seHizoSplit) {
+            // Si no se puede splittear (o no corresponde), diferir como antes
+            // hallar fecha/turno actuales del nmMayor
+            $fecha=null; $turno=null;
+            foreach ($rowsFechadas as $rF) {
+              if ((int)$rF['numero_mesa']===$nmMayor) { $fecha=$rF['fecha_mesa']; $turno=(int)$rF['id_turno']; break; }
+            }
+            if ($fecha!==null && $turno!==null) {
+              // ¿pertenece a un grupo? si sí, eliminarlo y diferir a TODOS los de ese grupo
+              $stFindGrupo->execute([':f'=>$fecha,':t'=>$turno,':n'=>$nmMayor]);
+              if ($g=$stFindGrupo->fetch(PDO::FETCH_ASSOC)) {
+                $numsG = array_values(array_filter([
+                  (int)$g['numero_mesa_1'], (int)$g['numero_mesa_2'], (int)$g['numero_mesa_3'], (int)$g['numero_mesa_4']
+                ]));
+                $stDelGrupo->execute([':id'=>(int)$g['id_mesa_grupos']]);
+                foreach ($numsG as $nx) {
+                  $stUnsetFecha->execute([':n'=>$nx,':f'=>$fecha,':t'=>$turno]);
+                  $deferidos[$nx]=true;
                 }
+              } else {
+                // single o no agrupada -> sólo esa mesa
+                $stUnsetFecha->execute([':n'=>$nmMayor,':f'=>$fecha,':t'=>$turno]);
+                $deferidos[$nmMayor]=true;
               }
+              $huboCambiosEstructura = true;
             }
           }
         }
       }
     }
-    if (!empty($deferidos)) {
-      // Refrescar estructuras base luego de diferir
-      $rowsFechadas = $pdo->query($sqlFechadas)->fetchAll(PDO::FETCH_ASSOC);
-      $dnisEnSlot=[]; $agendaDniArea=[];
+
+    if ($huboCambiosEstructura) {
+      // Refrescar estructuras base luego de splits/diferimientos
+      $dnisPorNumero = mapDNIsPorNumero($pdo);
+      $cursoPorNumeroPorDni = [];
+      $areaPorNumero = [];
+      $docPorNM = [];
+
+      $resCur = $pdo->query("
+        SELECT m.numero_mesa, p.dni, p.materia_id_curso AS curso, mat.id_area, MIN(m.id_docente) AS id_docente
+        FROM mesas_examen.mesas m
+        INNER JOIN mesas_examen.previas p  ON p.id_previa = m.id_previa
+        INNER JOIN mesas_examen.catedras c ON c.id_catedra = m.id_catedra
+        INNER JOIN mesas_examen.materias mat ON mat.id_materia = c.id_materia
+        GROUP BY m.numero_mesa, p.dni, p.materia_id_curso, mat.id_area
+      ")->fetchAll(PDO::FETCH_ASSOC);
+      foreach ($resCur as $r) {
+        $nm=(int)$r['numero_mesa']; $dni=(string)$r['dni']; $curso=(int)$r['curso']; $area=(int)$r['id_area'];
+        if (!isset($cursoPorNumeroPorDni[$nm])) $cursoPorNumeroPorDni[$nm]=[];
+        if (!isset($cursoPorNumeroPorDni[$nm][$dni]) || $curso < $cursoPorNumeroPorDni[$nm][$dni]) {
+          $cursoPorNumeroPorDni[$nm][$dni]=$curso;
+        }
+        $areaPorNumero[$nm] = $area;
+        $docPorNM[$nm] = (int)$r['id_docente'];
+      }
+
+      // Recalcular rowsFechadas, dnisEnSlot y agendaDniArea
+      $stF = $pdo->prepare($sqlFechadas); $stF->execute($paramsF);
+      $rowsFechadas = $stF->fetchAll(PDO::FETCH_ASSOC);
+
+      $dnisEnSlot=[];
       foreach ($rowsFechadas as $r){
         $key=$r['fecha_mesa'].'|'.$r['id_turno'];
         foreach(($dnisPorNumero[(int)$r['numero_mesa']]??[]) as $dni){ $dnisEnSlot[$key][$dni]=true; }
       }
+      $agendaDniArea=[];
       foreach ($rowsFechadas as $r) {
         $nm=(int)$r['numero_mesa']; $area=(int)$r['id_area'];
         $key=$r['fecha_mesa'].'|'.$r['id_turno'];
@@ -384,7 +480,7 @@ try {
     }
   }
 
-  // ---------------- Libres (tras diferimientos también) ----------------
+  // ---------------- Libres (tras split/diferimientos) ----------------
   $rowsLibres = $pdo->query("
     SELECT m.numero_mesa,
            MIN(m.id_docente) AS id_docente,
@@ -455,12 +551,11 @@ try {
   $singlesNoAgrupadas=[];
 
   // =============================== FASE A ===============================
-  // Completar slots fijos (después de posibles diferimientos); expandir 3->4.
+  // Completar slots fijos (después de posibles splits/diferimientos); expandir 3->4.
   $buckets=[];
   foreach($rowsFechadas as $r){
     $f=$r['fecha_mesa']; $t=(int)$r['id_turno']; $a=(int)$r['id_area']; $nm=(int)$r['numero_mesa'];
-    // si fue diferido arriba, saltearlo (ya no debe estar en fechadas, pero por las dudas)
-    if (!empty($deferidos[$nm])) continue;
+    if (!empty($deferidos[$nm])) continue; // ya diferido
     $key="$f|$t|$a";
     if(!isset($buckets[$key])) $buckets[$key]=['f'=>$f,'t'=>$t,'a'=>$a,'nums'=>[]];
     $buckets[$key]['nums'][]=$nm;
@@ -483,7 +578,6 @@ try {
         $cursoActual = $cursoPorNumeroPorDni[$nm][$dni] ?? null;
         if ($cursoActual===null) continue;
         foreach (($agendaDniArea[$dni][$a]??[]) as $reg) {
-          // NO permitir mayor antes que menor
           if ($cursoActual > $reg['curso'] && $slotIdxMap[$slotKey] < $reg['slot']) { $okPrec=false; break; }
         }
         if (!$okPrec) break;
@@ -556,7 +650,7 @@ try {
       }
     }
 
-    // fijos que sigan sueltos -> no_agrupadas (ya cubierto arriba si tam=1)
+    // fijos que sigan sueltos -> no_agrupadas
     foreach($numsFijos as $nm){
       if($estaAgrupada($nm,$f,$t)) continue;
       $yaSingle = array_filter($singlesNoAgrupadas, fn($x)=>$x['numero_mesa']===$nm && $x['fecha']===$f && $x['turno']===$t);
@@ -577,7 +671,7 @@ try {
 
   if ($agendar) {
     $slots=[]; foreach($fechasRango as $f){ $slots[]=['fecha'=>$f,'turno'=>1]; $slots[]=['fecha'=>$f,'turno'=>2]; }
-    // asegurar orden y map índice para estos slots también
+    // asegurar orden y map índice
     foreach ($slots as $s) {
       $k=$s['fecha'].'|'.$s['turno'];
       if (!isset($slotIdxMap[$k])) {
@@ -592,7 +686,6 @@ try {
     $S=count($slots);
     $slotCarga=array_fill(0,$S,0);
 
-    // elege slot con cheques: disponibilidad, choques DNI, precedencia y prioridad
     $eligeSlot = function(array $grupo) use (&$slots,&$slotCarga,&$docPorNM,&$slotProhibido,&$dnisEnSlot,&$dnisPorNumero,&$agendaDniArea,&$areaPorNumero,&$slotIdxMap,&$prioPorNumero){
       $dnisG = unionDNIs($dnisPorNumero,$grupo);
       $tienePrio = false;
@@ -616,8 +709,7 @@ try {
           foreach($dnisG as $dni){ if(isset($h[$dni])) { $ok=false; break; } }
         }
         if(!$ok) continue;
-        // **Precedencia estricta**: ningún nm del grupo puede quedar antes que
-        //  otro nm (de mismo DNI y área) de curso menor ya agendado.
+        // **Precedencia estricta**
         foreach ($grupo as $nm) {
           foreach (($dnisPorNumero[$nm]??[]) as $dni) {
             $cursoActual = $cursoPorNumeroPorDni[$nm][$dni] ?? null;
@@ -656,7 +748,7 @@ try {
       $rest = array_values(array_filter($nums, fn($x)=>!isset($usados[$x])));
 
       foreach ($gruposBase as $g) {
-        // si es single, no grupo -> no_agrupadas (igualmente respeta precedencia en el slot que elija)
+        // single -> no_agrupadas
         if (count($g)===1) {
           $s = $eligeSlot($g);
           $nm = $g[0];
@@ -681,13 +773,11 @@ try {
           }
 
           foreach(unionDNIs($dnisPorNumero,[$nm]) as $dni){ $dnisEnSlot["$f|$t"][$dni]=true; }
-          $agendaDniArea = (function($agendaDniArea,$nm,$area,$slotIdxMap,$f,$t,$dnisPorNumero,$cursoPorNumeroPorDni){
-            foreach(($dnisPorNumero[$nm]??[]) as $dni){
-              $curso = $cursoPorNumeroPorDni[$nm][$dni] ?? null;
-              if ($curso!==null) $agendaDniArea[$dni][$area][]=['slot'=>$slotIdxMap["$f|$t"] ?? 0,'curso'=>$curso,'nm'=>$nm];
-            }
-            return $agendaDniArea;
-          })($agendaDniArea,$nm,$area,$slotIdxMap,$f,$t,$dnisPorNumero,$cursoPorNumeroPorDni);
+          // actualizar agendaDniArea
+          foreach(($dnisPorNumero[$nm]??[]) as $dni){
+            $curso = $cursoPorNumeroPorDni[$nm][$dni] ?? null;
+            if ($curso!==null) $agendaDniArea[$dni][$area][]=['slot'=>$slotIdxMap["$f|$t"] ?? 0,'curso'=>$curso,'nm'=>$nm];
+          }
 
           $agendadas += 1;
           $slotsAsignados[]=['nums'=>[$nm],'fecha'=>$f,'turno'=>$t,'area'=>$area,'tipo'=>'single_no_agrupada'];
@@ -700,11 +790,7 @@ try {
           $g4 = expandirATresMasUnoSinSlot($g, $rest, $dnisPorNumero);
           if (count($g4)===4) {
             $s = $eligeSlot($g4);
-            if ($s>=0) {
-              $g = $g4; // quedó cuaterna
-            } else {
-              $rest[] = $g4[3];
-            }
+            if ($s>=0) { $g = $g4; } else { $rest[] = $g4[3]; }
           }
         }
 
@@ -746,7 +832,6 @@ try {
         }
 
         foreach(unionDNIs($dnisPorNumero,$g) as $dni){ $dnisEnSlot["$f|$t"][$dni]=true; }
-        // actualizar agendaDniArea para futuras decisiones
         foreach($g as $nmG){
           foreach(($dnisPorNumero[$nmG]??[]) as $dni){
             $curso = $cursoPorNumeroPorDni[$nmG][$dni] ?? null;
@@ -775,7 +860,8 @@ try {
       'agendar_no_fechadas' => $agendar?1:0,
       'agendadas'           => $agendar?$agendadas:0,
       'singles_no_agrupadas'=> count($singlesNoAgrupadas),
-      'diferidas_por_precedencia'=> count($deferidos)
+      'diferidas_por_precedencia'=> count($deferidos),
+      'splits_realizados'   => count($splitHechos)
     ],
     'detalle'=>[
       'creados'               => $creados,
@@ -783,12 +869,10 @@ try {
       'omitidos_dup'          => $omitidosDup,
       'slots_asignados'       => $slotsAsignados,
       'singles_no_agrupadas'  => $singlesNoAgrupadas,
-      'deferidos'             => array_keys($deferidos)
+      'deferidos'             => array_keys($deferidos),
+      'splits'                => $splitHechos
     ],
-    'nota'=>'Se aplicó correlatividad estricta por alumno dentro del área: si una mesa
-             de curso mayor quedaba antes que otra de curso menor, la mayor se diferió
-             y se reubicó después, respetando disponibilidad del docente y evitando
-             choques de DNIs. Se priorizan números con prioridad=1 en slots tempranos.'
+    'nota'=>'Se aplicó un split selectivo por DNI cuando el numero_mesa mayor tenía muchos alumnos (≥ '.UMBRAL_SPLIT_MUCHOS_ALUMNOS.'). Solo se movieron las filas de ese DNI a un numero_mesa nuevo, limpiando fecha/turno para reubicar sin romper el resto. Si no aplicaba split, se difería como antes.'
   ]);
 
 } catch (Throwable $e) {

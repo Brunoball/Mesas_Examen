@@ -9,6 +9,9 @@
 // - Mantiene prioridad=1 por correlatividad y agenda SOLO esas filas en los
 //   primeros slots posibles respetando disponibilidad del docente y minimizando
 //   choques de DNIs.
+// - NUEVO: respeta un máximo de 3 TURNOS DISTINTOS por docente (fecha+turno).
+//   Si el slot ya lo usa el docente, no cuenta como “vez” nueva; si sería un
+//   4º turno distinto, se evita asignarlo a ese slot.
 // -----------------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -99,7 +102,7 @@ try {
     ]);
   }
 
-  // Agrupar por DNI para calcular prioridad por correlativa (al menos 2 con misma correlativa)
+  // Agrupar por DNI para calcular prioridad por correlativa
   $porDni = [];
   foreach ($previas as $p) { $porDni[$p['dni']][] = $p; }
 
@@ -125,6 +128,34 @@ try {
     if ($fno && $fno === $fecha) return true;     // bloquea todo el día
     if ($tno !== null && $tno === $turno) return true; // bloquea turno cada día
     return false;
+  };
+
+  // ========= NUEVO: mapa de (docente -> set de slots distintos ya usados) =========
+  $docenteSlots = []; // [id_docente] => ['YYYY-MM-DD|turno' => true, ...]
+  $rsUsed = $pdo->query("
+    SELECT DISTINCT m.id_docente, m.fecha_mesa, m.id_turno
+    FROM mesas_examen.mesas m
+    WHERE m.fecha_mesa IS NOT NULL AND m.id_turno IS NOT NULL
+  ");
+  if ($rsUsed) {
+    foreach ($rsUsed->fetchAll(PDO::FETCH_ASSOC) as $r) {
+      $idd = (int)$r['id_docente']; if ($idd<=0) continue;
+      $key = $r['fecha_mesa'].'|'.(int)$r['id_turno'];
+      $docenteSlots[$idd][$key] = true;
+    }
+  }
+  $docenteSuperaMax = function(int $id_docente, string $fecha, int $turno) use (&$docenteSlots): bool {
+    if ($id_docente<=0) return false;
+    $key = $fecha.'|'.$turno;
+    $ya = $docenteSlots[$id_docente] ?? [];
+    // si ya usa ESTE MISMO slot, permitir (no suma “vez”)
+    if (isset($ya[$key])) return false;
+    // si ya tiene 3 slots distintos, NO permitir un 4º
+    return (count($ya) >= 3);
+  };
+  $registrarDocenteEnSlot = function(int $id_docente, string $fecha, int $turno) use (&$docenteSlots): void {
+    if ($id_docente<=0) return;
+    $docenteSlots[$id_docente][$fecha.'|'.$turno] = true;
   };
 
   // Sentencias
@@ -164,11 +195,11 @@ try {
     ");
   }
 
-  $cacheNumeroPorMD = [];             // "materia#docente" => numero_mesa (base)
-  $cacheNumeroPorMDAlumno = [];       // "materia#docente#dni" => numero_mesa (alterno si hace falta)
+  $cacheNumeroPorMD = [];             // "materia#docente" => numero_mesa base
+  $cacheNumeroPorMDAlumno = [];       // "materia#docente#dni" => numero_mesa alterno
   $docentePorNumero = [];
-  $dnisPorNumero = [];                // numero_mesa => set dni (para evitar duplicar en mismo número)
-  $idsPrio1PorNumero  = [];           // numero_mesa => [id_mesa insertadas con prio1]
+  $dnisPorNumero = [];                // numero_mesa => set dni
+  $idsPrio1PorNumero  = [];           // numero_mesa => [id_mesa prio1]
   $prio1CountPorNumero= [];
   $insertados = $omitidosExistentes = $omitidosSinCatedra = 0;
 
@@ -231,11 +262,10 @@ try {
       }
       $nmCandidato = $cacheNumeroPorMD[$claveBase];
 
-      // si ese numero_mesa ya tiene al mismo DNI, asignar/crear alterno exclusivo para este DNI
+      // si ese numero_mesa ya tiene al mismo DNI, asignar/crear alterno
       $dniYaEnBase = isset($dnisPorNumero[$nmCandidato][$dni]);
       if ($dniYaEnBase) {
         if (!isset($cacheNumeroPorMDAlumno[$claveAlumno])) {
-          // crear nuevo numero_mesa alterno
           $cacheNumeroPorMDAlumno[$claveAlumno] = ++$siguienteNumero;
         }
         $nm = $cacheNumeroPorMDAlumno[$claveAlumno];
@@ -289,8 +319,10 @@ try {
     for ($s=0; $s<$S; $s++) {
       $fechaS=$slots[$s]['fecha']; $turnoS=$slots[$s]['turno'];
 
-      if ($idDoc>0 && $slotProhibido($idDoc, $fechaS, $turnoS)) {
-        continue;
+      // indisponibilidad + NUEVO: máximo 3 slots distintos por docente
+      if ($idDoc>0) {
+        if ($slotProhibido($idDoc, $fechaS, $turnoS)) continue;
+        if ($docenteSuperaMax($idDoc, $fechaS, $turnoS)) continue;
       }
 
       $inter=0; foreach($dnisNM as $d){ if(isset($dnisEnSlot[$s][$d])) $inter++; }
@@ -304,6 +336,11 @@ try {
 
     $updates[$nm]=$mejor;
     foreach($dnisNM as $d){ $dnisEnSlot[$mejor][$d]=true; }
+
+    // registrar uso del slot por el docente (solo si no lo tenía)
+    if ($idDoc>0) {
+      $registrarDocenteEnSlot($idDoc, $slots[$mejor]['fecha'], $slots[$mejor]['turno']);
+    }
   }
 
   // UPDATE masivo de filas recién insertadas con prio1
@@ -336,7 +373,7 @@ try {
       'agendados_prio'=>array_sum(array_map('count',$idsPrio1PorNumero))
     ],
     'slots'=>$slots,
-    'nota'=>'Se agendaron SOLO prioridad=1. Además, se evitó duplicar al mismo alumno dentro de un mismo numero_mesa cuando tiene la misma materia con el mismo docente en cursos distintos.'
+    'nota'=>'Se agendaron SOLO prioridad=1. Se evitó duplicar al mismo alumno dentro de un mismo numero_mesa y se respetó el máximo de 3 turnos distintos por docente.'
   ]);
 
 } catch (Throwable $e) {

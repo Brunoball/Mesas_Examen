@@ -10,7 +10,7 @@ import BASE_URL from "../../../config/config";
  * - Para cada profesor, lista qué alumnos le corresponden (los de las mesas donde figura)
  *
  * Fuente de datos: POST  action=mesas_detalle
- *   - { id_grupo }  -> resuelve numero_mesa_1..3 y devuelve detalle por mesa
+ *   - { id_grupo }  -> resuelve numero_mesa_1..4 y devuelve detalle por mesa
  *   - { numeros_mesa: [ ... ] }
  */
 const ModalInfoMesas = ({ open, mesa, onClose }) => {
@@ -25,7 +25,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Detalle crudo desde el backend: arreglo de mesas [{numero_mesa, materia, fecha, turno, docentes[], alumnos[]}, ...]
+  // Detalle crudo desde el backend: [{numero_mesa, materia, fecha, turno, docentes[], alumnos[]}, ...]
   const [mesasDetalle, setMesasDetalle] = useState([]);
 
   /* ==========================
@@ -65,10 +65,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
 
     if (!open) return;
 
-    // Puede venir:
-    // - mesa.id_grupo (grupo)
-    // - mesa.numero_mesa: número único o array de números
-    // - mesa.id_mesa / mesa.id (no alcanza para este modal)
     const idGrupo = mesa?.id_grupo;
     const numeros = Array.isArray(mesa?.numero_mesa)
       ? mesa.numero_mesa
@@ -77,7 +73,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
       : [];
 
     if (!idGrupo && (!numeros || numeros.length === 0)) {
-      // No hay contexto suficiente
       return;
     }
 
@@ -100,7 +95,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
         }
 
         const data = Array.isArray(json.data) ? json.data : [];
-        // normalizar campos esperados
         const norm = data.map((m) => ({
           numero_mesa: m.numero_mesa ?? null,
           materia: m.materia ?? mesa?.materia ?? "",
@@ -133,24 +127,33 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
      Derivados para la UI
   ========================== */
 
-  // Materia/fecha/turno "representativos"
+  // Materia(s), fecha y turno “representativos”
   const resumenCab = useMemo(() => {
-    if (!mesasDetalle?.length) {
-      return {
-        materia: mesa?.materia ?? "-",
-        fecha: mesa?.fecha ?? "-",
-        turno: mesa?.turno ?? "-",
-        mesas: [],
-      };
-    }
-    const materia = mesasDetalle.find((x) => x.materia)?.materia ?? mesa?.materia ?? "-";
-    const fecha = mesasDetalle.find((x) => x.fecha)?.fecha ?? mesa?.fecha ?? "-";
-    const turno = mesasDetalle.find((x) => x.turno)?.turno ?? mesa?.turno ?? "-";
+    const materias =
+      mesasDetalle?.length
+        ? uniqPreserve(mesasDetalle.map((x) => x.materia).filter(Boolean))
+        : uniqPreserve([mesa?.materia].filter(Boolean));
 
-    const mesasNums = mesasDetalle.map((x) => x.numero_mesa).filter(Boolean);
+    const fecha =
+      mesasDetalle?.length
+        ? (mesasDetalle.find((x) => x.fecha)?.fecha ?? mesa?.fecha ?? "-")
+        : (mesa?.fecha ?? "-");
+
+    const turno =
+      mesasDetalle?.length
+        ? (mesasDetalle.find((x) => x.turno)?.turno ?? mesa?.turno ?? "-")
+        : (mesa?.turno ?? "-");
+
+    const mesasNums = mesasDetalle?.length
+      ? mesasDetalle.map((x) => x.numero_mesa).filter(Boolean)
+      : Array.isArray(mesa?.numero_mesa)
+      ? mesa.numero_mesa
+      : mesa?.numero_mesa
+      ? [mesa.numero_mesa]
+      : [];
 
     return {
-      materia,
+      materias,
       fecha,
       turno,
       mesas: uniqPreserve(mesasNums),
@@ -170,7 +173,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
         });
       }
     }
-    // Orden: por alumno
     out.sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
     return out;
   }, [mesasDetalle]);
@@ -181,7 +183,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     return uniqPreserve(all);
   }, [mesasDetalle]);
 
-  // Alumnos por docente: todos los alumnos de las mesas en las que figure el docente
+  // Alumnos por docente
   const alumnosPorDocente = useMemo(() => {
     const map = new Map(); // nombreDocente -> alumnos[]
     for (const d of docentesUnicos) {
@@ -201,7 +203,6 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
         }
       }
     }
-    // ordenar alumnos dentro de cada docente
     for (const [d, arr] of map.entries()) {
       arr.sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
       map.set(d, arr);
@@ -209,7 +210,25 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
     return map;
   }, [docentesUnicos, mesasDetalle]);
 
+  // Materias por docente (únicas, según en qué mesas aparece)
+  const materiasPorDocente = useMemo(() => {
+    const map = new Map(); // nombreDocente -> [materias]
+    for (const d of docentesUnicos) {
+      const mats = uniqPreserve(
+        mesasDetalle
+          .filter((m) => (m.docentes || []).includes(d))
+          .map((m) => m.materia)
+          .filter(Boolean)
+      );
+      map.set(d, mats);
+    }
+    return map;
+  }, [docentesUnicos, mesasDetalle]);
+
   if (!open) return null;
+
+  const materiasHeader =
+    resumenCab.materias?.length ? resumenCab.materias.join(" • ") : "-";
 
   return (
     <div
@@ -230,7 +249,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
               Información de Mesas
             </h2>
             <p className="mi-modal__subtitle">
-              {texto(resumenCab.materia)} &nbsp;|&nbsp; {fmtFechaISO(resumenCab.fecha)} &nbsp;|&nbsp;{" "}
+              {texto(materiasHeader)} &nbsp;|&nbsp; {fmtFechaISO(resumenCab.fecha)} &nbsp;|&nbsp;{" "}
               {texto(resumenCab.turno)}
             </p>
           </div>
@@ -275,8 +294,10 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
                 <article className="mi-card">
                   <h3 className="mi-card__title">Datos generales</h3>
                   <div className="mi-row">
-                    <span className="mi-label">Materia</span>
-                    <span className="mi-value">{texto(resumenCab.materia)}</span>
+                    <span className="mi-label">Materias</span>
+                    <span className="mi-value">
+                      {resumenCab.materias?.length ? resumenCab.materias.join(" • ") : "-"}
+                    </span>
                   </div>
                   <div className="mi-row">
                     <span className="mi-label">Fecha</span>
@@ -375,9 +396,13 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
               ) : (
                 docentesUnicos.map((doc) => {
                   const lista = alumnosPorDocente.get(doc) || [];
+                  const mats = materiasPorDocente.get(doc) || [];
+                  const matsText = mats.length ? mats.join(" • ") : "-";
                   return (
                     <article key={doc} className="mi-card mi-card--stretch">
-                      <h3 className="mi-card__title">Alumnos de {doc}</h3>
+                      <h3 className="mi-card__title">
+                        Alumnos de {doc} — <span className="mi-muted">{matsText}</span>
+                      </h3>
                       <div className="mi-table">
                         <div className="mi-thead">
                           <div className="mi-th">Alumno</div>

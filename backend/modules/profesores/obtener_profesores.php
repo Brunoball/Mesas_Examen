@@ -13,20 +13,20 @@ try {
 
     $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     $params = [];
-    $where  = 'WHERE d.activo = 1'; // 🔹 Solo docentes activos
 
+    // Si viene un ID, se respetará, pero SIEMPRE exigimos que tenga cátedras
+    $where = 'WHERE 1=1';
     if ($id > 0) {
         $where .= ' AND d.id_docente = :id';
         $params[':id'] = $id;
     }
 
     /**
-     * Traemos:
-     *  - Datos del docente + cargo
-     *  - Turnos: id/nombre (Sí y No) + fechas (fecha_si / fecha_no)
-     *  - Materias (DISTINCT)
-     *  - Cátedras (curso, división, materia)
-     *  - Fecha de carga
+     * REGLAS:
+     *  - Mostrar SOLO docentes que tengan materias registradas en CÁTEDRAS.
+     *  - Si un mismo nombre de docente existe con varios registros, devolver UN único registro
+     *    priorizando el que tenga id_cargo = 2 (si no hay, se usa el de mayor id_docente).
+     *  - Solo docentes activos.
      */
     $sql = "
         SELECT
@@ -49,7 +49,7 @@ try {
             -- Fecha de carga
             d.fecha_carga,
 
-            -- Materias (todas las que dicta)
+            -- Materias (todas las que dicta, según cátedras)
             GROUP_CONCAT(DISTINCT m.materia ORDER BY m.materia SEPARATOR '||') AS materias_concat,
 
             -- Cátedras: curso|division|materia
@@ -64,14 +64,43 @@ try {
             d.motivo
 
         FROM docentes d
-        LEFT JOIN cargos    c  ON c.id_cargo    = d.id_cargo
-        LEFT JOIN turnos    ts ON ts.id_turno   = d.id_turno_si
-        LEFT JOIN turnos    tn ON tn.id_turno   = d.id_turno_no
-        LEFT JOIN catedras  ct ON ct.id_docente = d.id_docente
-        LEFT JOIN materias  m  ON m.id_materia  = ct.id_materia
-        LEFT JOIN curso     cu ON cu.id_curso   = ct.id_curso
-        LEFT JOIN division  dv ON dv.id_division= ct.id_division
+
+        /* Subconsulta de preferencia:
+           - Toma SOLO docentes activos que APARECEN en cátedras
+           - Por cada NOMBRE (docente) elige:
+               1) algún id_docente con id_cargo=2 si existe,
+               2) caso contrario, el de mayor id_docente.
+        */
+        INNER JOIN (
+            SELECT
+                x.docente,
+                COALESCE(
+                    MAX(CASE WHEN x.id_cargo = 2 THEN x.id_docente END),
+                    MAX(x.id_docente)
+                ) AS id_docente_pref
+            FROM (
+                SELECT d2.id_docente, d2.docente, d2.id_cargo
+                FROM docentes d2
+                INNER JOIN catedras ct2 ON ct2.id_docente = d2.id_docente
+                WHERE d2.activo = 1
+                GROUP BY d2.id_docente, d2.docente, d2.id_cargo
+            ) x
+            GROUP BY x.docente
+        ) pref ON pref.id_docente_pref = d.id_docente
+
+        /* Desde aquí armamos los agregados de materias/cátedras.
+           Usamos INNER JOIN para GARANTIZAR que tenga cátedras. */
+        INNER JOIN catedras  ct ON ct.id_docente = d.id_docente
+        LEFT  JOIN materias  m  ON m.id_materia  = ct.id_materia
+        LEFT  JOIN curso     cu ON cu.id_curso   = ct.id_curso
+        LEFT  JOIN division  dv ON dv.id_division= ct.id_division
+
+        LEFT  JOIN cargos    c  ON c.id_cargo    = d.id_cargo
+        LEFT  JOIN turnos    ts ON ts.id_turno   = d.id_turno_si
+        LEFT  JOIN turnos    tn ON tn.id_turno   = d.id_turno_no
+
         $where
+
         GROUP BY
             d.id_docente, d.docente,
             d.id_cargo, c.cargo,
@@ -79,6 +108,7 @@ try {
             d.id_turno_no, tn.turno, d.fecha_no,
             d.fecha_carga,
             d.activo, d.motivo
+
         ORDER BY d.docente ASC
     ";
 
@@ -88,31 +118,24 @@ try {
 
     $out = [];
     foreach ($rows as $r) {
-        // ----- Materias (array único/ordenado) -----
+        // Materias en array
         $materias = [];
         if (!empty($r['materias_concat'])) {
-            $materias = array_values(array_filter(array_map('trim', explode('||', $r['materias_concat'] ?? ''))));
+            $materias = array_values(array_filter(array_map('trim', explode('||', $r['materias_concat']))));
         }
         $materia_principal = $materias[0] ?? null;
         $materias_total    = count($materias);
 
-        // ----- Cátedras (array de objetos: curso, division, materia) -----
+        // Cátedras en array de objetos
         $catedras = [];
         if (!empty($r['catedras_concat'])) {
-            $chunks = explode('§§', $r['catedras_concat']);
-            foreach ($chunks as $chunk) {
+            foreach (explode('§§', $r['catedras_concat']) as $chunk) {
                 $parts = explode('|', $chunk);
-                $curso    = isset($parts[0]) ? trim($parts[0]) : null;
-                $division = isset($parts[1]) ? trim($parts[1]) : null;
-                $materia  = isset($parts[2]) ? trim($parts[2]) : null;
-
-                if ($curso !== null || $division !== null || $materia !== null) {
-                    $catedras[] = [
-                        'curso'    => $curso,
-                        'division' => $division,
-                        'materia'  => $materia,
-                    ];
-                }
+                $catedras[] = [
+                    'curso'    => isset($parts[0]) ? trim($parts[0]) : null,
+                    'division' => isset($parts[1]) ? trim($parts[1]) : null,
+                    'materia'  => isset($parts[2]) ? trim($parts[2]) : null,
+                ];
             }
         }
 
@@ -127,27 +150,23 @@ try {
             // Turnos y fechas
             'id_turno_si'           => isset($r['id_turno_si']) ? (int)$r['id_turno_si'] : null,
             'turno_si_nombre'       => $r['turno_si_nombre'] ?? null,
-            'fecha_si'              => $r['fecha_si'] ?? null,  // YYYY-MM-DD
+            'fecha_si'              => $r['fecha_si'] ?? null,
 
             'id_turno_no'           => isset($r['id_turno_no']) ? (int)$r['id_turno_no'] : null,
             'turno_no_nombre'       => $r['turno_no_nombre'] ?? null,
-            'fecha_no'              => $r['fecha_no'] ?? null,  // YYYY-MM-DD
+            'fecha_no'              => $r['fecha_no'] ?? null,
 
             // Fecha de carga
-            'fecha_carga'           => $r['fecha_carga'] ?? null, // YYYY-MM-DD
+            'fecha_carga'           => $r['fecha_carga'] ?? null,
 
-            // Materias
+            // Materias / cátedras
             'materias'              => $materias,
             'materias_total'        => $materias_total,
             'materia_principal'     => $materia_principal,
-
-            // Compatibilidad histórica
-            'materia_nombre'        => $materia_principal,
-
-            // Cátedras (Curso – División — Materia)
+            'materia_nombre'        => $materia_principal, // compatibilidad UI
             'catedras'              => $catedras,
 
-            // Campos no modelados (placeholder para UI)
+            // Placeholders no modelados
             'departamento'          => null,
             'area'                  => null,
             'tipo_documento_nombre' => null,
@@ -160,7 +179,7 @@ try {
             'domicilio'             => null,
             'localidad'             => null,
 
-            // Estado real desde DB
+            // Estado
             'activo'                => isset($r['activo']) ? (int)$r['activo'] : 0,
             'motivo'                => $r['motivo'] ?? null,
         ];
