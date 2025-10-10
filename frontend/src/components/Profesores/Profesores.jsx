@@ -90,7 +90,6 @@ const Profesores = () => {
   const [profesores, setProfesores] = useState([]);
   const [profesoresDB, setProfesoresDB] = useState([]);
   const [cargando, setCargando] = useState(false);
-  const [profesorSeleccionado, setProfesorSeleccionado] = useState(null);
 
   // Estados modales
   const [mostrarModalEliminar, setMostrarModalEliminar] = useState(false);
@@ -103,7 +102,6 @@ const Profesores = () => {
   const [profesorDarBaja, setProfesorDarBaja] = useState(null);
 
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
-  const [bloquearInteraccion, setBloquearInteraccion] = useState(true);
 
   // flags de animación
   const [animacionActiva, setAnimacionActiva] = useState(false);
@@ -210,7 +208,7 @@ const Profesores = () => {
       const q = normalizar(busquedaDefer);
       resultados = resultados.filter(
         (p) =>
-          p._nyap.includes(q) || p._dni.includes(q) || p._id.includes(q) // ✅ ID parcial o completo
+          p._nyap.includes(q) || p._dni.includes(q) || p._id.includes(q)
       );
     }
 
@@ -271,30 +269,14 @@ const Profesores = () => {
      Efectos
   ================================= */
   useEffect(() => {
-    if (profesoresFiltrados.length > 0) {
-      const timer = setTimeout(() => setBloquearInteraccion(false), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [profesoresFiltrados]);
-
-  useEffect(() => {
     const handleClickOutsideFiltros = (event) => {
       if (filtrosRef.current && !filtrosRef.current.contains(event.target)) {
         setMostrarFiltros(false);
       }
     };
-
-    const handleClickOutsideTable = (event) => {
-      if (!event.target.closest('.glob-row')) {
-        setProfesorSeleccionado(null);
-      }
-    };
-
     document.addEventListener('mousedown', handleClickOutsideFiltros);
-    document.addEventListener('click', handleClickOutsideTable);
     return () => {
       document.removeEventListener('mousedown', handleClickOutsideFiltros);
-      document.removeEventListener('click', handleClickOutsideTable);
     };
   }, []);
 
@@ -365,7 +347,7 @@ const Profesores = () => {
               ...p,
               _nyap: normalizar(nyap),
               _dni: String(p?.dni ?? p?.num_documento ?? '').toLowerCase(),
-              _id: String(p?.id_profesor ?? '').trim().toLowerCase(), // ✅ index por ID
+              _id: String(p?.id_profesor ?? '').trim().toLowerCase(),
             };
           });
 
@@ -413,18 +395,8 @@ const Profesores = () => {
   }, [busquedaDefer, triggerCascadaConPreMask]);
 
   /* ================================
-     Acciones de fila/lista
+     Acciones (sin selección de filas)
   ================================= */
-  const manejarSeleccion = useCallback(
-    (profesor) => {
-      if (bloquearInteraccion || animacionActiva) return;
-      setProfesorSeleccionado((prev) =>
-        prev?.id_profesor !== profesor.id_profesor ? profesor : null
-      );
-    },
-    [bloquearInteraccion, animacionActiva]
-  );
-
   const eliminarProfesor = useCallback(
     async (id) => {
       try {
@@ -645,7 +617,7 @@ const Profesores = () => {
   }, []);
 
   /* ================================
-     Badge de materias (solo texto para usar CSS global)
+     Badge de materias
   ================================= */
   const BadgeMaterias = ({ total }) => {
     if (!total || total <= 1) return null;
@@ -653,13 +625,11 @@ const Profesores = () => {
   };
 
   /* ================================
-     Fila virtualizada (desktop)
+     Fila virtualizada (desktop) SIN selección y con acciones siempre visibles
   ================================= */
   const Row = React.memo(({ index, style, data }) => {
     const {
       rows,
-      profesorSeleccionado,
-      manejarSeleccion,
       isVista,
       abrirModalInfo,
       abrirModalEliminar,
@@ -670,7 +640,7 @@ const Profesores = () => {
     } = data;
 
     const profesor = rows[index];
-       const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
+    const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
 
     const materiaPrincipal = profesor.materia_principal ?? '';
@@ -678,10 +648,8 @@ const Profesores = () => {
 
     return (
       <div
-        className={`glob-row ${index % 2 === 0 ? 'glob-even-row' : 'glob-odd-row'} ${
-          profesorSeleccionado?.id_profesor === profesor.id_profesor ? 'glob-selected-row' : ''
-        } ${willAnimate ? 'glob-cascade' : ''}`}
-        onClick={() => manejarSeleccion(profesor)}
+        className={`glob-row ${index % 2 === 0 ? 'glob-even-row' : 'glob-odd-row'} ${willAnimate ? 'glob-cascade' : ''}`}
+        // sin onClick: no se selecciona
         style={{
           ...style,
           gridTemplateColumns: '0.5fr 1.6fr 1.4fr 0.5fr',
@@ -704,63 +672,61 @@ const Profesores = () => {
         </div>
 
         <div className="glob-column glob-icons-column">
-          {profesorSeleccionado?.id_profesor === profesor.id_profesor && (
-            <div className="glob-icons-container">
-              {/* INFO */}
-              <button
-                className="glob-iconchip is-info"
-                title="Ver información"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  abrirModalInfo(profesor);
-                }}
-                aria-label="Ver información"
-              >
-                <FaInfoCircle />
-              </button>
+          <div className="glob-icons-container">
+            {/* INFO (siempre visible) */}
+            <button
+              className="glob-iconchip is-info"
+              title="Ver información"
+              onClick={(e) => {
+                e.stopPropagation();
+                abrirModalInfo(profesor);
+              }}
+              aria-label="Ver información"
+            >
+              <FaInfoCircle />
+            </button>
 
-              {/* SOLO Admin: Editar / Eliminar / Dar de baja */}
-              {!isVista && (
-                <>
-                  <button
-                    className="glob-iconchip is-edit"
-                    title="Editar"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/profesores/editar/${profesor.id_profesor}`);
-                    }}
-                    aria-label="Editar"
-                  >
-                    <FaEdit />
-                  </button>
+            {/* SOLO Admin: Editar / Eliminar / Dar de baja (siempre visibles) */}
+            {!isVista && (
+              <>
+                <button
+                  className="glob-iconchip is-edit"
+                  title="Editar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/profesores/editar/${profesor.id_profesor}`);
+                  }}
+                  aria-label="Editar"
+                >
+                  <FaEdit />
+                </button>
 
-                  <button
-                    className="glob-iconchip is-delete"
-                    title="Eliminar"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      abrirModalEliminar(profesor);
-                    }}
-                    aria-label="Eliminar"
-                  >
-                    <FaTrash />
-                  </button>
+                <button
+                  className="glob-iconchip is-delete"
+                  title="Eliminar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    abrirModalEliminar(profesor);
+                  }}
+                  aria-label="Eliminar"
+                >
+                  <FaTrash />
+                </button>
 
-                  <button
-                    className="glob-iconchip is-baja"
-                    title="Dar de baja"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      abrirModalDarBaja(profesor);
-                    }}
-                    aria-label="Dar de baja"
-                  >
-                    <FaUserMinus />
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+                <button
+                  className="glob-iconchip is-baja"
+                  title="Dar de baja"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    abrirModalDarBaja(profesor);
+                  }}
+                  aria-label="Dar de baja"
+                >
+                  <FaUserMinus />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -990,7 +956,7 @@ const Profesores = () => {
 
               <div className="glob-body">
                 {!hayFiltros && filtroActivo !== 'todos' ? (
-                  // 👉 Estado vacío con icono grande centrado + botón "Mostrar todos"
+                  // Estado vacío con botón "Mostrar todos"
                   <div className="glob-no-data-message">
                     <div className="glob-message-content">
                       <FaFilter className="glob-empty-icon" aria-hidden="true" />
@@ -1027,8 +993,6 @@ const Profesores = () => {
                           itemSize={48}
                           itemData={{
                             rows: profesoresFiltrados,
-                            profesorSeleccionado,
-                            manejarSeleccion,
                             isVista,
                             abrirModalInfo,
                             abrirModalEliminar,
@@ -1058,7 +1022,6 @@ const Profesores = () => {
               }`}
             >
               {!hayFiltros && filtroActivo !== 'todos' ? (
-                // 👉 Estado vacío mobile con icono grande centrado + botón "Mostrar todos"
                 <div className="glob-no-data-message glob-no-data-mobile">
                   <div className="glob-message-content">
                     <FaFilter className="glob-empty-icon" aria-hidden="true" />
@@ -1101,7 +1064,6 @@ const Profesores = () => {
                         opacity: preMask ? 0 : undefined,
                         transform: preMask ? 'translateY(8px)' : undefined,
                       }}
-                      onClick={() => manejarSeleccion(profesor)}
                     >
                       <div className="glob-card-header">
                         <h3 className="glob-card-title">{nombreDesdeDB}</h3>
@@ -1126,10 +1088,7 @@ const Profesores = () => {
                         <button
                           className="glob-action-btn glob-iconchip is-info"
                           title="Información"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            abrirModalInfo(profesor);
-                          }}
+                          onClick={() => abrirModalInfo(profesor)}
                           aria-label="Información"
                         >
                           <FaInfoCircle />
@@ -1141,10 +1100,7 @@ const Profesores = () => {
                             <button
                               className="glob-action-btn glob-iconchip is-edit"
                               title="Editar"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/profesores/editar/${profesor.id_profesor}`);
-                              }}
+                              onClick={() => navigate(`/profesores/editar/${profesor.id_profesor}`)}
                               aria-label="Editar"
                             >
                               <FaEdit />
@@ -1152,10 +1108,7 @@ const Profesores = () => {
                             <button
                               className="glob-action-btn glob-iconchip is-delete"
                               title="Eliminar"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                abrirModalEliminar(profesor);
-                              }}
+                              onClick={() => abrirModalEliminar(profesor)}
                               aria-label="Eliminar"
                             >
                               <FaTrash />
@@ -1163,10 +1116,7 @@ const Profesores = () => {
                             <button
                               className="glob-action-btn glob-iconchip is-baja"
                               title="Dar de baja"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                abrirModalDarBaja(profesor);
-                              }}
+                              onClick={() => abrirModalDarBaja(profesor)}
                               aria-label="Dar de baja"
                             >
                               <FaUserMinus />
