@@ -224,8 +224,6 @@
   font-weight: 600;
   line-height: 1.5;
   font-size: 0.96rem;
-  word-break: break-word;
-  overflow-wrap: anywhere;
 }
 
 /* Valor largo (ej. tribunal) */

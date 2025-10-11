@@ -1,15 +1,14 @@
-/* =========================================================
-   ModalCrearMesas — Tema Rojo, misma estética que ModalInfoPrevia
-   ========================================================= */
+/* src/components/MesasExamen/modales/ModalCrearMesas.css */
+/* MISMA estética que ModalInfoPrevia.css */
 
 :root{
-  /* Paleta rojo */
   --reg-primary:#B71C1C;
   --reg-primary-light:#E53935;
   --reg-primary-dark:#7F0000;
 
   --reg-success:#10B981;
   --reg-warning:#F59E0B;
+  --reg-danger:#D32F2F;
 
   --reg-gray-100:#F1F5F9;
   --reg-gray-200:#E2E8F0;
@@ -21,11 +20,11 @@
 
   --reg-border-radius:10px;
   --reg-border-radius-lg:14px;
+  --reg-transition:all .25s cubic-bezier(.4,0,.2,1);
   --reg-shadow-lg:0 10px 15px -3px rgba(0,0,0,.1),
                   0 4px 6px -2px rgba(0,0,0,.05);
-  --reg-transition:all .25s cubic-bezier(.4,0,.2,1);
 
-  /* Alias usados por los componentes mi- */
+  /* Aliases mi- (igual que en ModalInfoPrevia) */
   --mi-primary:var(--reg-primary);
   --mi-primary-600:var(--reg-primary-light);
   --mi-primary-700:var(--reg-primary-dark);
@@ -51,7 +50,7 @@
   --mi-fs-lg:1.15rem;
 }
 
-/* ===== Overlay y contenedor (idénticos) ===== */
+/* Overlay / Container / Header — idénticos */
 .mi-modal__overlay{
   position:fixed; inset:0;
   background:rgba(15,23,42,.55);
@@ -60,7 +59,7 @@
   z-index:1000; animation:mi-fade .15s ease-out;
 }
 .mi-modal__container{
-  width:min(720px,94vw);
+  width:min(880px,94vw);
   max-height:88vh;
   background:var(--mi-bg);
   border-radius:var(--mi-radius-lg);
@@ -69,8 +68,6 @@
   overflow:hidden; animation:mi-slide .2s ease-out;
   border:1px solid rgba(0,0,0,.04);
 }
-
-/* ===== Header rojo ===== */
 .mi-modal__header{
   display:flex; align-items:center; justify-content:space-between;
   padding:var(--mi-space-lg) var(--mi-space-lg);
@@ -86,7 +83,7 @@
 }
 .mi-modal__close:hover{ background:rgba(255,255,255,.12); transform:rotate(90deg); }
 
-/* ===== Contenido scroll ===== */
+/* Contenido con scroll */
 .mi-modal__content{
   flex:1 1 auto; min-height:0; overflow:auto; background:var(--mi-bg-soft);
 }
@@ -95,32 +92,22 @@
 .mi-modal__content::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:8px; border:2px solid #f1f5f9; }
 .mi-modal__content::-webkit-scrollbar-thumb:hover{ background:#94a3b8; }
 
-/* ===== Panel / Grid / Card ===== */
-.mi-tabpanel{ padding:16px; background:linear-gradient(180deg,#fff 0%,#fbfcff 100%); }
+/* Panel / Grid / Card */
+.mi-tabpanel{ display:block; padding:16px; background:linear-gradient(180deg,#fff 0%,#fbfcff 100%); }
 .mi-grid{ display:grid; grid-template-columns:repeat(12,1fr); gap:12px; }
-.mi-cardd{
-  grid-column:1 / -1;
-  background:#fff; border:1px solid var(--mi-border);
-  border-radius:var(--mi-radius-md); padding:12px;
-  box-shadow:0 2px 10px rgba(15,23,42,.03);
-}
+.mi-card{ grid-column:1 / -1; background:#fff; border:1px solid var(--mi-border); border-radius:var(--mi-radius-md); padding:12px; box-shadow:0 2px 10px rgba(15,23,42,.03); }
+.mi-card--full{ grid-column:1 / -1; }
 .mi-card__title{
   margin:0 0 8px; font-size:var(--mi-fs-md);
   font-weight:800; color:var(--mi-text); letter-spacing:-.01em;
   padding-bottom:6px; border-bottom:1px solid var(--mi-border);
 }
 
-/* ===== Form ===== */
-.mi-form-grid-2{
-  display:grid; grid-template-columns:1fr 1fr; gap:12px;
-}
-@media (max-width:720px){
-  .mi-form-grid-2{ grid-template-columns:1fr; }
-}
-
+/* Form */
+.mi-form-grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:720px){ .mi-form-grid-2{ grid-template-columns:1fr; } }
 .mi-form-row{ display:flex; flex-direction:column; gap:8px; }
 .mi-label-strong{ color:var(--mi-muted); font-weight:800; font-size:var(--mi-fs-sm); }
-
 .mi-input{
   width:100%;
   background:#fff;
@@ -132,19 +119,15 @@
 }
 .mi-input:focus{
   border-color:var(--mi-primary-600);
-  box-shadow:0 0 0 3px rgba(229,57,53,.12); /* rojo soft */
+  box-shadow:0 0 0 3px rgba(229,57,53,.12);
 }
+.mi-help{ margin-top:8px; color:var(--mi-muted); font-size:var(--mi-fs-sm); }
 
-.mi-help{
-  margin-top:8px; color:var(--mi-muted); font-size:var(--mi-fs-sm);
-}
-
-/* ===== Footer / Botones ===== */
+/* Footer / Botones */
 .mi-modal__footer{
   display:flex; justify-content:flex-end; gap:10px;
   padding:12px 16px; border-top:1px solid var(--mi-border); background:#fff;
 }
-
 .mi-btn{
   appearance:none; border:1px solid transparent;
   padding:10px 14px; border-radius:12px;
@@ -152,19 +135,18 @@
   transition:transform .08s ease, filter .12s ease, background .12s ease, border-color .12s ease;
 }
 .mi-btn:disabled{ opacity:.6; cursor:not-allowed; }
-
-.mi-btn--primary{
-  background:var(--mi-primary); border-color:var(--mi-primary-700); color:#fff;
-}
+.mi-btn--primary{ background:var(--mi-primary); border-color:var(--mi-primary-700); color:#fff; }
 .mi-btn--primary:hover{ filter:brightness(1.05); }
+.mi-btn--ghost{ background:#fff; color:var(--mi-text); border-color:var(--mi-border); }
+.mi-btn--ghost:hover{ background:#fafafa; border-color:#dfe6ef; }
 
-.mi-btn--ghost{
-  background:#fff; color:var(--mi-text); border-color:var(--mi-border);
-}
-.mi-btn--ghost:hover{
-  background:#fafafa; border-color:#dfe6ef;
-}
-
-/* ===== Animaciones ===== */
+/* Animaciones */
 @keyframes mi-fade{ from{opacity:0} to{opacity:1} }
-@keyframes mi-slide{ from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:translateY(0)} }
+@keyframes mi-slide{ from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:translateY(0) } }
+
+/* Responsive */
+@media (max-width: 640px){
+  .mi-modal__container{ width:96vw; max-height:86vh; }
+  .mi-modal__title{ font-size:1.05rem; }
+  .mi-modal__subtitle{ font-size:.8rem; }
+}

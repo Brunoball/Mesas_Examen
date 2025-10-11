@@ -106,8 +106,12 @@ const MesasExamen = () => {
   const qDebounced = useDebounce(q, 220);
 
   // Filtros seleccionados
-  const [fechaSel, setFechaSel] = useState("");   // 👈 nuevo (reemplaza materia)
+  const [fechaSel, setFechaSel] = useState("");
   const [turnoSel, setTurnoSel] = useState("");
+
+  // Estado de acordeones (cerrados por defecto)
+  const [openFecha, setOpenFecha] = useState(false);
+  const [openTurno, setOpenTurno] = useState(false);
 
   // animación
   const [animacionActiva, setAnimacionActiva] = useState(false);
@@ -525,26 +529,6 @@ const MesasExamen = () => {
         <div className="glob-front-row-pro">
           <span className="glob-profesor-title">Mesas de Examen</span>
 
-          {/* Pestañas */}
-          <div className="glob-tabs" style={{ display: "flex", gap: 8 }}>
-            <button
-              className={`glob-tab ${vista === "grupos" ? "glob-tab--active" : ""}`}
-              onClick={() => setVista("grupos")}
-              title="Ver grupos armados"
-            >
-              <FaLayerGroup style={{ marginRight: 6 }} />
-              Grupos
-            </button>
-            <button
-              className={`glob-tab ${vista === "no-agrupadas" ? "glob-tab--active" : ""}`}
-              onClick={() => setVista("no-agrupadas")}
-              title="Ver mesas no agrupadas"
-            >
-              <FaUnlink style={{ marginRight: 6 }} />
-              No agrupadas
-            </button>
-          </div>
-
           {/* Buscador */}
           <div className="glob-search-input-container">
             <input
@@ -578,7 +562,17 @@ const MesasExamen = () => {
           <div className="glob-filtros-container" ref={filtrosRef}>
             <button
               className="glob-filtros-button"
-              onClick={() => setMostrarFiltros((p) => !p)}
+              onClick={() => {
+                setMostrarFiltros((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    // al abrir el panel, los acordeones arrancan cerrados
+                    setOpenFecha(false);
+                    setOpenTurno(false);
+                  }
+                  return next;
+                });
+              }}
               disabled={cargandoVista}
             >
               <FaFilter className="glob-icon-button" />
@@ -594,8 +588,9 @@ const MesasExamen = () => {
                 <div className="glob-filtros-group">
                   <button
                     type="button"
-                    className="glob-filtros-group-header is-open"
-                    aria-expanded
+                    className={`glob-filtros-group-header ${openFecha ? "is-open" : ""}`}
+                    aria-expanded={openFecha}
+                    onClick={() => setOpenFecha((v) => !v)}
                   >
                     <span className="glob-filtros-group-title">
                       <FaCalendarAlt style={{ marginRight: 8 }} /> Filtrar por fecha
@@ -603,7 +598,7 @@ const MesasExamen = () => {
                     <FaChevronDown className="glob-accordion-caret" />
                   </button>
 
-                  <div className="glob-filtros-group-body is-open">
+                  <div className={`glob-filtros-group-body ${openFecha ? "is-open" : "is-collapsed"}`}>
                     <div className="glob-grid-filtros">
                       {fechasUnicas.map((f) => (
                         <button
@@ -626,8 +621,9 @@ const MesasExamen = () => {
                 <div className="glob-filtros-group">
                   <button
                     type="button"
-                    className="glob-filtros-group-header is-open"
-                    aria-expanded
+                    className={`glob-filtros-group-header ${openTurno ? "is-open" : ""}`}
+                    aria-expanded={openTurno}
+                    onClick={() => setOpenTurno((v) => !v)}
                   >
                     <span className="glob-filtros-group-title">
                       <FaClock style={{ marginRight: 8 }} /> Filtrar por turno
@@ -635,7 +631,7 @@ const MesasExamen = () => {
                     <FaChevronDown className="glob-accordion-caret" />
                   </button>
 
-                  <div className="glob-filtros-group-body is-open">
+                  <div className={`glob-filtros-group-body ${openTurno ? "is-open" : "is-collapsed"}`}>
                     <div className="glob-grid-filtros">
                       {turnosUnicos.map((t) => (
                         <button
@@ -672,19 +668,47 @@ const MesasExamen = () => {
           </div>
         </div>
 
-        {/* Contador + Chips */}
+        {/* Contador + Tabs + Chips */}
         <div className="glob-profesores-list">
           <div className="glob-contenedor-list-items">
             <div className="glob-left-inline">
-              <div className="glob-contador-container">
-                <span className="glob-profesores-desktop">
-                  {vista === "grupos" ? "Grupos: " : "No agrupadas: "}
-                  {filasFiltradas.length}
-                </span>
-                <span className="glob-profesores-mobile">{filasFiltradas.length}</span>
-                <FaUsers className="glob-icono-profesor" />
+              {/* CONTADOR */}
+              <div className="contador-grups-noencontrado">
+                <div className="glob-contador-container">
+                  <span className="glob-profesores-desktop">
+                    {vista === "grupos" ? "Grupos: " : "No agrupadas: "}
+                    {filasFiltradas.length}
+                  </span>
+                  <span className="glob-profesores-mobile">{filasFiltradas.length}</span>
+                  <FaUsers className="glob-icono-profesor" />
+                </div>
+
+                {/* TABS AL LADO DEL CONTADOR */}
+                <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Cambiar vista">
+                  <button
+                    className={`glob-tab ${vista === "grupos" ? "glob-tab--active" : ""}`}
+                    onClick={() => setVista("grupos")}
+                    title="Ver grupos armados"
+                    aria-pressed={vista === "grupos"}
+                    role="tab"
+                  >
+                    <FaLayerGroup style={{ marginRight: 6 }} />
+                    Grupos
+                  </button>
+                  <button
+                    className={`glob-tab ${vista === "no-agrupadas" ? "glob-tab--active" : ""}`}
+                    onClick={() => setVista("no-agrupadas")}
+                    title="Ver mesas no agrupadas"
+                    aria-pressed={vista === "no-agrupadas"}
+                    role="tab"
+                  >
+                    <FaUnlink style={{ marginRight: 6 }} />
+                    No agrupadas
+                  </button>
+                </div>
               </div>
 
+              {/* CHIPS (si hay filtros activos) */}
               {(q || fechaSel || turnoSel) && (
                 <div className="glob-chips-container">
                   {q && (
@@ -759,7 +783,7 @@ const MesasExamen = () => {
               <div className="glob-column-header">Mesas</div>
               <div className="glob-column-header">Fecha</div>
               <div className="glob-column-header">Turno</div>
-              <div className="glob-column-header">Tribunal (único)</div>
+              <div className="glob-column-header">Tribunal </div>
               <div className="glob-column-header">Acciones</div>
             </div>
 

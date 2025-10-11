@@ -9,7 +9,7 @@
 $host = 'localhost';
 $dbname = 'mesas_examen';
 $user = 'root'; // Cambialo si usás otro usuario
-$pass = 'brunoball516'; // Cambialo si tenés contraseña
+$pass = 'Gastex2233'; // Cambialo si tenés contraseña
 
 
 try {

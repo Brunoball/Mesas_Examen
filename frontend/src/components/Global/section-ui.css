@@ -798,3 +798,83 @@ input:-webkit-autofill { background-color: transparent !important; }
 
   padding: 10px 12px;
 }
+
+
+/* ===== Tabs (Grupos / No agrupadas) — versión inline junto al contador ===== */
+.glob-left-inline{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;              /* espacio entre contador, tabs y chips */
+  flex-wrap: wrap;        /* que pueda saltar de línea si no entra */
+  min-width: 0;
+}
+
+/* contenedor de tabs para fondo claro */
+.glob-tabs--inline{
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+
+}
+
+.glob-tabs--inline .glob-tab{
+  color: var(--pro-primary);                             /* texto rojo */
+  background: transparent;
+  border-radius: 8px;
+  padding: .5rem .9rem;
+  font-weight: 650;
+  font-size: .92rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;                         /* para focus/hover */
+  transition: transform .12s ease, box-shadow .2s ease, background-color .2s ease, color .2s ease, border-color .2s ease;
+}
+
+.glob-tabs--inline .glob-tab:hover{
+  color:var(--pro-primary);
+  background: var(--pro-red-50);
+
+  transform: translateY(-1px);
+}
+
+.glob-tabs--inline .glob-tab:focus-visible{
+  outline: none;
+  border-color: var(--pro-red-300);
+  box-shadow: 0 0 0 3px rgba(244,67,54,.18);
+}
+
+/* activa: pastilla llena roja sobre fondo blanco */
+.glob-tabs--inline .glob-tab--active{
+  color: #fff;
+  background: var(--pro-primary);
+  border-color: var(--pro-primary-dark);
+  box-shadow: 0 6px 14px rgba(183,28,28,.16), inset 0 -2px 0 rgba(0,0,0,.06);
+}
+
+
+/* Responsive: que no desacomode el contador/chips en móviles */
+@media (max-width: 768px){
+  .glob-tabs--inline{
+    order: 2;                    /* aparece tras el contador si hay wrap */
+    width: 100%;                 /* ocupar ancho y quedar centrado */
+    justify-content: center;
+    background: #fff;
+    border-color: var(--pro-red-200);
+    margin-top: 6px;
+  }
+  .glob-tabs--inline .glob-tab{
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: .6rem .8rem;
+    font-size: .95rem;
+  }
+}
+
+
+.contador-grups-noencontrado{
+  display: flex;
+  gap: 20px;
+
+}

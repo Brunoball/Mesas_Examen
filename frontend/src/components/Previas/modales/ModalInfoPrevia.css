@@ -160,7 +160,7 @@
 .mi-row:last-child{ border-bottom:0; }
 
 .mi-label{ color:var(--mi-muted); font-weight:700; font-size:var(--mi-fs-sm); }
-.mi-value{ color:var(--mi-text); font-weight:600; text-align:right; max-width:60%; word-break:break-word; font-size:var(--mi-fs-md); }
+.mi-value{ color:var(--mi-text); font-weight:600; text-align:right;  font-size:var(--mi-fs-md); }
 
 /* Estados */
 .mi-value.is-ok{ color:var(--reg-success); }
