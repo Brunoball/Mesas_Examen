@@ -81,8 +81,8 @@ try {
       pr.id_previa, pr.dni, pr.alumno,
       pr.id_materia, pr.materia_id_curso, pr.materia_id_division,
       m.correlativa AS correlatividad
-    FROM mesas_examen.previas pr
-    INNER JOIN mesas_examen.materias m ON m.id_materia = pr.id_materia
+    FROM previas pr
+    INNER JOIN materias m ON m.id_materia = pr.id_materia
     WHERE pr.inscripcion = 1 AND pr.id_condicion = 3
   ";
   $previas = $pdo->query($sqlPrev)->fetchAll(PDO::FETCH_ASSOC);
@@ -112,7 +112,7 @@ try {
 
   // Disponibilidad docentes
   $docNo = []; // id_docente => ['fecha_no'=>?string,'turno_no'=>?int]
-  $rsDoc = $pdo->query("SELECT id_docente, id_turno_no, fecha_no FROM mesas_examen.docentes WHERE activo=1");
+  $rsDoc = $pdo->query("SELECT id_docente, id_turno_no, fecha_no FROM docentes WHERE activo=1");
   if ($rsDoc) {
     foreach ($rsDoc->fetchAll(PDO::FETCH_ASSOC) as $d) {
       $docNo[(int)$d['id_docente']] = [
@@ -134,7 +134,7 @@ try {
   $docenteSlots = []; // [id_docente] => ['YYYY-MM-DD|turno' => true, ...]
   $rsUsed = $pdo->query("
     SELECT DISTINCT m.id_docente, m.fecha_mesa, m.id_turno
-    FROM mesas_examen.mesas m
+    FROM mesas m
     WHERE m.fecha_mesa IS NOT NULL AND m.id_turno IS NOT NULL
   ");
   if ($rsUsed) {
@@ -159,36 +159,36 @@ try {
   };
 
   // Sentencias
-  $stExisteMesa = $pdo->prepare("SELECT 1 FROM mesas_examen.mesas WHERE id_previa=:idp LIMIT 1");
+  $stExisteMesa = $pdo->prepare("SELECT 1 FROM mesas WHERE id_previa=:idp LIMIT 1");
   $stBuscaCatedra = $pdo->prepare("
     SELECT id_catedra, id_docente
-    FROM mesas_examen.catedras
+    FROM catedras
     WHERE id_materia=:idm AND id_curso=:ic AND id_division=:idv
     LIMIT 1
   ");
   $stNumeroExistente = $pdo->prepare("
     SELECT m.numero_mesa
-    FROM mesas_examen.mesas m
-    INNER JOIN mesas_examen.catedras c ON c.id_catedra = m.id_catedra
+    FROM mesas m
+    INNER JOIN catedras c ON c.id_catedra = m.id_catedra
     WHERE c.id_materia=:idm AND m.id_docente=:idd
     ORDER BY m.numero_mesa ASC
     LIMIT 1
   ");
-  $rowMax = $pdo->query("SELECT COALESCE(MAX(numero_mesa),0) AS maxnum FROM mesas_examen.mesas")
+  $rowMax = $pdo->query("SELECT COALESCE(MAX(numero_mesa),0) AS maxnum FROM mesas")
                 ->fetch(PDO::FETCH_ASSOC);
   $siguienteNumero = (int)($rowMax['maxnum'] ?? 0);
 
   // Insert SIEMPRE sin fecha/turno (también prio=1)
   if ($colTurnoExiste && $colTurnoNotNull) {
     $stInsertSinFecha = $pdo->prepare("
-      INSERT INTO mesas_examen.mesas
+      INSERT INTO mesas
         (numero_mesa, prioridad, id_catedra, id_previa, id_docente, fecha_mesa, id_turno)
       VALUES
         (:nm,:prio,:cat,:idp,:idd,NULL,NULL)
     ");
   } else {
     $stInsertSinFecha = $pdo->prepare("
-      INSERT INTO mesas_examen.mesas
+      INSERT INTO mesas
         (numero_mesa, prioridad, id_catedra, id_previa, id_docente, fecha_mesa)
       VALUES
         (:nm,:prio,:cat,:idp,:idd,NULL)
@@ -354,9 +354,9 @@ try {
       $params = array_merge($params, $ids);
 
       if ($colTurnoExiste) {
-        $pdo->prepare("UPDATE mesas_examen.mesas SET fecha_mesa=?, id_turno=? WHERE id_mesa IN ($ph)")->execute($params);
+        $pdo->prepare("UPDATE mesas SET fecha_mesa=?, id_turno=? WHERE id_mesa IN ($ph)")->execute($params);
       } else {
-        $pdo->prepare("UPDATE mesas_examen.mesas SET fecha_mesa=? WHERE id_mesa IN ($ph)")->execute($params);
+        $pdo->prepare("UPDATE mesas SET fecha_mesa=? WHERE id_mesa IN ($ph)")->execute($params);
       }
     }
   }

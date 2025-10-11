@@ -1,6 +1,6 @@
 <?php
 // backend/modules/mesas/obtener_mesas_no_agrupadas.php
-// Muestra EXACTAMENTE lo que hay en mesas_examen.mesas_no_agrupadas,
+// Muestra EXACTAMENTE lo que hay en mesas_no_agrupadas,
 // y completa materia/tribunal vía joins suaves (si existen).
 
 declare(strict_types=1);
@@ -66,13 +66,13 @@ try {
     $docenteExpr = "''";
   }
 
-  // -------- Query: BASE mesas_no_agrupadas (lo que pediste) --------
+  // -------- Query: BASE mesas_no_agrupadas (sin prefijo de base) --------
   // Unimos a una sola fila representativa de cada numero_mesa en `mesas`
   // para poder traer id_catedra/id_docente y de ahí materia/tribunal.
   $sql = "
     WITH mesa_unica AS (
       SELECT numero_mesa, MIN(id_mesa) AS id_mesa
-      FROM mesas_examen.mesas
+      FROM mesas
       GROUP BY numero_mesa
     )
     SELECT
@@ -89,12 +89,12 @@ try {
       c.id_materia                                    AS id_materia,
       {$materiaExpr}                                  AS materia,
       {$docenteExpr}                                  AS tribunal
-    FROM mesas_examen.mesas_no_agrupadas na
-    LEFT JOIN mesa_unica mu       ON mu.numero_mesa = na.numero_mesa
-    LEFT JOIN mesas_examen.mesas m ON m.id_mesa      = mu.id_mesa
-    LEFT JOIN mesas_examen.catedras  c   ON c.id_catedra  = m.id_catedra
-    LEFT JOIN mesas_examen.materias  mat ON mat.id_materia = c.id_materia
-    LEFT JOIN mesas_examen.docentes  d   ON d.id_docente   = m.id_docente
+    FROM mesas_no_agrupadas na
+    LEFT JOIN mesa_unica mu   ON mu.numero_mesa = na.numero_mesa
+    LEFT JOIN mesas m         ON m.id_mesa      = mu.id_mesa
+    LEFT JOIN catedras  c     ON c.id_catedra   = m.id_catedra
+    LEFT JOIN materias  mat   ON mat.id_materia = c.id_materia
+    LEFT JOIN docentes  d     ON d.id_docente   = m.id_docente
     ORDER BY na.fecha_mesa ASC, na.id_turno ASC, na.numero_mesa ASC
   ";
 

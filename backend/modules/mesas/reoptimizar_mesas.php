@@ -83,7 +83,7 @@ try {
 
   // ---------------- Indisponibilidades docentes ----------------
   $docNo=[];
-  $rsDoc = $pdo->query("SELECT id_docente, id_turno_no, fecha_no FROM mesas_examen.docentes WHERE activo=1");
+  $rsDoc = $pdo->query("SELECT id_docente, id_turno_no, fecha_no FROM docentes WHERE activo=1");
   if ($rsDoc) {
     foreach ($rsDoc->fetchAll(PDO::FETCH_ASSOC) as $d) {
       $docNo[(int)$d['id_docente']] = [
@@ -105,8 +105,8 @@ try {
   $dnisPorNumero = [];
   $res = $pdo->query("
     SELECT m.numero_mesa, p.dni
-    FROM mesas_examen.mesas m
-    INNER JOIN mesas_examen.previas p ON p.id_previa=m.id_previa
+    FROM mesas m
+    INNER JOIN previas p ON p.id_previa=m.id_previa
   ")->fetchAll(PDO::FETCH_ASSOC);
   foreach($res as $r){
     $nm=(int)$r['numero_mesa']; $dni=(string)$r['dni'];
@@ -131,8 +131,8 @@ try {
   $horarioAlumno = []; // dni => [ "YYYY-MM-DD|turno" => true ]
   $res2 = $pdo->query("
     SELECT p.dni, m.fecha_mesa, m.id_turno
-    FROM mesas_examen.mesas m
-    INNER JOIN mesas_examen.previas p ON p.id_previa = m.id_previa
+    FROM mesas m
+    INNER JOIN previas p ON p.id_previa = m.id_previa
     WHERE m.fecha_mesa IS NOT NULL AND m.id_turno IS NOT NULL
   ")->fetchAll(PDO::FETCH_ASSOC);
   foreach($res2 as $r){
@@ -142,7 +142,7 @@ try {
 
   // ---------- Deducir rango de fechas si no viene ----------
   if (!$fi || !$ff) {
-    $rowMin = $pdo->query("SELECT MIN(fecha_mesa) AS fmin, MAX(fecha_mesa) AS fmax FROM mesas_examen.mesas WHERE fecha_mesa IS NOT NULL")->fetch(PDO::FETCH_ASSOC);
+    $rowMin = $pdo->query("SELECT MIN(fecha_mesa) AS fmin, MAX(fecha_mesa) AS fmax FROM mesas WHERE fecha_mesa IS NOT NULL")->fetch(PDO::FETCH_ASSOC);
     if (!$rowMin || !$rowMin['fmin'] || !$rowMin['fmax']) {
       bad_request("No hay fechas agendadas para deducir rango. Enviá 'fecha_inicio' y 'fecha_fin'.");
     }
@@ -161,10 +161,10 @@ try {
            g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4,
            g.fecha_mesa, g.id_turno,
            mat.id_area AS id_area
-    FROM mesas_examen.mesas_grupos g
-    INNER JOIN mesas_examen.mesas m1 ON m1.numero_mesa = g.numero_mesa_1
-    INNER JOIN mesas_examen.catedras c1 ON c1.id_catedra = m1.id_catedra
-    INNER JOIN mesas_examen.materias mat ON mat.id_materia = c1.id_materia
+    FROM mesas_grupos g
+    INNER JOIN mesas m1 ON m1.numero_mesa = g.numero_mesa_1
+    INNER JOIN catedras c1 ON c1.id_catedra = m1.id_catedra
+    INNER JOIN materias mat ON mat.id_materia = c1.id_materia
   ");
   $stGr->execute();
   $grupos = $stGr->fetchAll(PDO::FETCH_ASSOC);
@@ -186,10 +186,10 @@ try {
     SELECT l.numero_mesa, l.fecha_mesa, l.id_turno,
            mat.id_area AS id_area,
            MIN(m.id_docente) AS id_docente
-    FROM mesas_examen.mesas_no_agrupadas l
-    INNER JOIN mesas_examen.mesas m ON m.numero_mesa = l.numero_mesa
-    INNER JOIN mesas_examen.catedras c ON c.id_catedra = m.id_catedra
-    INNER JOIN mesas_examen.materias mat ON mat.id_materia = c.id_materia
+    FROM mesas_no_agrupadas l
+    INNER JOIN mesas m ON m.numero_mesa = l.numero_mesa
+    INNER JOIN catedras c ON c.id_catedra = m.id_catedra
+    INNER JOIN materias mat ON mat.id_materia = c.id_materia
   ";
   if ($soloArea !== null) $sqlNo .= " WHERE mat.id_area = ".(int)$soloArea." ";
   $sqlNo .= " GROUP BY l.numero_mesa, l.fecha_mesa, l.id_turno, mat.id_area
@@ -200,24 +200,24 @@ try {
   $docPorNM = [];
   $res3 = $pdo->query("
     SELECT m.numero_mesa, MIN(m.id_docente) AS id_docente
-    FROM mesas_examen.mesas m
+    FROM mesas m
     GROUP BY m.numero_mesa
   ")->fetchAll(PDO::FETCH_ASSOC);
   foreach($res3 as $r){ $docPorNM[(int)$r['numero_mesa']] = (int)$r['id_docente']; }
 
   // ---------- Helpers SQL ----------
   $stUpdMesaSlot = $pdo->prepare("
-    UPDATE mesas_examen.mesas
+    UPDATE mesas
        SET fecha_mesa=?, id_turno=?
      WHERE numero_mesa = ?
   ");
   $stInsGroup = $pdo->prepare("
-    INSERT INTO mesas_examen.mesas_grupos
+    INSERT INTO mesas_grupos
       (numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4, fecha_mesa, id_turno)
     VALUES (:a,:b,:c,:d,:f,:t)
   ");
   $stUpdGroupToAdd = $pdo->prepare("
-    UPDATE mesas_examen.mesas_grupos
+    UPDATE mesas_grupos
        SET numero_mesa_1 = IF(numero_mesa_1=0, :nm, numero_mesa_1),
            numero_mesa_2 = IF(numero_mesa_2=0, :nm, numero_mesa_2),
            numero_mesa_3 = IF(numero_mesa_3=0, :nm, numero_mesa_3),
@@ -226,15 +226,15 @@ try {
        AND (0 IN (numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4))
   ");
   $stDelLeftExact = $pdo->prepare("
-    DELETE FROM mesas_examen.mesas_no_agrupadas
+    DELETE FROM mesas_no_agrupadas
      WHERE numero_mesa=:n AND fecha_mesa=:f AND id_turno=:t
   ");
   $stInsLeft = $pdo->prepare("
-    INSERT IGNORE INTO mesas_examen.mesas_no_agrupadas (numero_mesa,fecha_mesa,id_turno)
+    INSERT IGNORE INTO mesas_no_agrupadas (numero_mesa,fecha_mesa,id_turno)
     VALUES (:n,:f,:t)
   ");
   $stDupGroupExact = $pdo->prepare("
-    SELECT 1 FROM mesas_examen.mesas_grupos
+    SELECT 1 FROM mesas_grupos
      WHERE fecha_mesa=:f AND id_turno=:t
        AND numero_mesa_1=:a AND numero_mesa_2=:b AND numero_mesa_3=:c AND numero_mesa_4=:d
      LIMIT 1
@@ -444,8 +444,8 @@ try {
     // Purga: si alguna mesa quedó en un grupo y también figura en no_agrupadas, limpiar no_agrupadas
     $pdo->exec("
       DELETE l
-      FROM mesas_examen.mesas_no_agrupadas l
-      JOIN mesas_examen.mesas_grupos g
+      FROM mesas_no_agrupadas l
+      JOIN mesas_grupos g
         ON g.fecha_mesa = l.fecha_mesa AND g.id_turno = l.id_turno
       WHERE l.numero_mesa IN (g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4)
     ");

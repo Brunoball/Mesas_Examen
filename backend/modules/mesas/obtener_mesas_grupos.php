@@ -74,7 +74,7 @@ try {
   // - Los JOIN con mesas m1..m4 se hacen solo si el numero_mesa_N > 0
   // - Se obtiene materia/área vía catedras -> materias (consistente con tu backend)
   // - Docente se obtiene de mesas.id_docente
-  // - turnos viene de mesas_examen.turnos (si no existiera, podés quitar el LEFT JOIN y el campo "turno")
+  // - turnos viene de turnos (si no existiera, podés quitar el LEFT JOIN y el campo "turno")
   // ---------------------------------------------------------------------------
 
   $sql = "
@@ -113,36 +113,36 @@ try {
       MIN(d3.docente) AS d3,
       MIN(d4.docente) AS d4
 
-    FROM mesas_examen.mesas_grupos g
-      LEFT JOIN mesas_examen.turnos tu ON tu.id_turno = g.id_turno
+    FROM mesas_grupos g
+      LEFT JOIN turnos tu ON tu.id_turno = g.id_turno
 
       /* Mesa 1 */
-      LEFT JOIN mesas_examen.mesas m1
+      LEFT JOIN mesas m1
         ON (g.numero_mesa_1 > 0 AND m1.numero_mesa = g.numero_mesa_1 AND m1.fecha_mesa = g.fecha_mesa AND m1.id_turno = g.id_turno)
-      LEFT JOIN mesas_examen.catedras c1 ON c1.id_catedra = m1.id_catedra
-      LEFT JOIN mesas_examen.materias mat1 ON mat1.id_materia = c1.id_materia
-      LEFT JOIN mesas_examen.docentes d1 ON d1.id_docente = m1.id_docente
+      LEFT JOIN catedras c1 ON c1.id_catedra = m1.id_catedra
+      LEFT JOIN materias mat1 ON mat1.id_materia = c1.id_materia
+      LEFT JOIN docentes d1 ON d1.id_docente = m1.id_docente
 
       /* Mesa 2 */
-      LEFT JOIN mesas_examen.mesas m2
+      LEFT JOIN mesas m2
         ON (g.numero_mesa_2 > 0 AND m2.numero_mesa = g.numero_mesa_2 AND m2.fecha_mesa = g.fecha_mesa AND m2.id_turno = g.id_turno)
-      LEFT JOIN mesas_examen.catedras c2 ON c2.id_catedra = m2.id_catedra
-      LEFT JOIN mesas_examen.materias mat2 ON mat2.id_materia = c2.id_materia
-      LEFT JOIN mesas_examen.docentes d2 ON d2.id_docente = m2.id_docente
+      LEFT JOIN catedras c2 ON c2.id_catedra = m2.id_catedra
+      LEFT JOIN materias mat2 ON mat2.id_materia = c2.id_materia
+      LEFT JOIN docentes d2 ON d2.id_docente = m2.id_docente
 
       /* Mesa 3 */
-      LEFT JOIN mesas_examen.mesas m3
+      LEFT JOIN mesas m3
         ON (g.numero_mesa_3 > 0 AND m3.numero_mesa = g.numero_mesa_3 AND m3.fecha_mesa = g.fecha_mesa AND m3.id_turno = g.id_turno)
-      LEFT JOIN mesas_examen.catedras c3 ON c3.id_catedra = m3.id_catedra
-      LEFT JOIN mesas_examen.materias mat3 ON mat3.id_materia = c3.id_materia
-      LEFT JOIN mesas_examen.docentes d3 ON d3.id_docente = m3.id_docente
+      LEFT JOIN catedras c3 ON c3.id_catedra = m3.id_catedra
+      LEFT JOIN materias mat3 ON mat3.id_materia = c3.id_materia
+      LEFT JOIN docentes d3 ON d3.id_docente = m3.id_docente
 
       /* Mesa 4 (si existiera) */
-      LEFT JOIN mesas_examen.mesas m4
+      LEFT JOIN mesas m4
         ON (g.numero_mesa_4 > 0 AND m4.numero_mesa = g.numero_mesa_4 AND m4.fecha_mesa = g.fecha_mesa AND m4.id_turno = g.id_turno)
-      LEFT JOIN mesas_examen.catedras c4 ON c4.id_catedra = m4.id_catedra
-      LEFT JOIN mesas_examen.materias mat4 ON mat4.id_materia = c4.id_materia
-      LEFT JOIN mesas_examen.docentes d4 ON d4.id_docente = m4.id_docente
+      LEFT JOIN catedras c4 ON c4.id_catedra = m4.id_catedra
+      LEFT JOIN materias mat4 ON mat4.id_materia = c4.id_materia
+      LEFT JOIN docentes d4 ON d4.id_docente = m4.id_docente
 
     $whereSql
     GROUP BY g.id_mesa_grupos

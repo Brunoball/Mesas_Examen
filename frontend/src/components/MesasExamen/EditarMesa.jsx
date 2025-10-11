@@ -7,14 +7,15 @@ import {
   FaTrash,
   FaCalendarAlt,
   FaClock,
-  FaEdit,
+  FaExchangeAlt,   // ⬅️ icono “cambiar/mover”
   FaPlus,
 } from "react-icons/fa";
 import BASE_URL from "../../config/config";
 import "../Global/section-ui.css";
 import Toast from "../Global/Toast";
 import ModalEliminarMesa from "./modales/ModalEliminarMesa";
-import ModalAgregarMesas from "./modales/ModalAgregarMesas"; // ✅ NUEVO
+import ModalAgregarMesas from "./modales/ModalAgregarMesas";
+import ModalMoverMesa from "./modales/ModalMoverMesa"; // ⬅️ NUEVO
 import "./EditarMesa.css";
 
 /* Utils */
@@ -64,8 +65,12 @@ const EditarMesa = () => {
 
   const [openDelete, setOpenDelete] = useState(false);
 
-  // ✅ NUEVO: modal “Agregar número”
+  // Modal “Agregar número”
   const [openAgregar, setOpenAgregar] = useState(false);
+
+  // Modal “Mover número”
+  const [openMover, setOpenMover] = useState(false);
+  const [numeroParaMover, setNumeroParaMover] = useState(null);
 
   const cargarTodo = useCallback(async () => {
     if (!numeroMesa || !Number.isFinite(numeroMesa)) {
@@ -306,19 +311,27 @@ const EditarMesa = () => {
                       {docentes.length ? `Docentes: ${docentes.join(" | ")}` : "Docentes: —"}
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-                      <button className="glob-iconchip is-edit" title="Editar este número"
-                        onClick={() => navigate(`/mesas/editar/${slot.numero_mesa}`)}>
-                        <FaEdit />
+                      {/* Botón CAMBIAR/MOVER */}
+                      <button
+                        className="glob-iconchip is-edit"
+                        title="Mover este número a otro grupo (con lugar)"
+                        onClick={() => { setNumeroParaMover(slot.numero_mesa); setOpenMover(true); }}
+                      >
+                        <FaExchangeAlt />
                       </button>
-                      <button className="glob-iconchip is-delete" title="Quitar del grupo (no borra la mesa)"
-                        onClick={() => quitarNumeroDelGrupo(slot.numero_mesa)} disabled={!idGrupo}>
+                      <button
+                        className="glob-iconchip is-delete"
+                        title="Quitar del grupo (no borra la mesa)"
+                        onClick={() => quitarNumeroDelGrupo(slot.numero_mesa)}
+                        disabled={!idGrupo}
+                      >
                         <FaTrash />
                       </button>
                     </div>
                   </div>
                 );
               }
-              // Libre → abre modal
+              // Libre → abre modal de agregar
               return (
                 <button key={`slot-free-${idx}`} onClick={() => setOpenAgregar(true)}
                   disabled={numerosGrupo.length >= 4} title="Agregar número al grupo" style={{
@@ -349,18 +362,36 @@ const EditarMesa = () => {
         />
       )}
 
-      {/* ✅ Modal agregar número */}
+      {/* Modal agregar número */}
       {openAgregar && (
         <ModalAgregarMesas
           open={openAgregar}
           onClose={() => setOpenAgregar(false)}
-          idGrupo={idGrupo}                 // puede ser null (crea grupo con actual)
+          idGrupo={idGrupo}
           numeroMesaActual={numeroMesa}
-          fechaObjetivo={fecha}             // fecha de esta mesa
+          fechaObjetivo={fecha}
           idTurnoObjetivo={idTurno ? Number(idTurno) : null}
           onAdded={() => {
             setOpenAgregar(false);
             notify({ tipo: "exito", mensaje: "Número agregado al grupo." });
+            cargarTodo();
+          }}
+          onError={(mensaje) => notify({ tipo: "error", mensaje })}
+        />
+      )}
+
+      {/* Modal mover número */}
+      {openMover && (
+        <ModalMoverMesa
+          open={openMover}
+          onClose={() => setOpenMover(false)}
+          numeroMesaOrigen={numeroParaMover ?? numeroMesa}
+          fechaObjetivo={fecha}
+          idTurnoObjetivo={idTurno ? Number(idTurno) : null}
+          onMoved={() => {
+            setOpenMover(false);
+            setNumeroParaMover(null);
+            notify({ tipo: "exito", mensaje: "Número movido de grupo." });
             cargarTodo();
           }}
           onError={(mensaje) => notify({ tipo: "error", mensaje })}

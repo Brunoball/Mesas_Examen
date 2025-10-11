@@ -145,6 +145,12 @@ try {
         case 'mesa_grupo_crear':
             include_module($MODULES_DIR . '/mesas/mesa_grupo_crear.php'); break;
 
+        // ✅ NUEVAS RUTAS — mover a grupo y listar grupos incompletos
+        case 'mesas_listar_grupos_incompletos':
+            include_module($MODULES_DIR . '/mesas/mesas_listar_grupos_incompletos.php'); break;
+        case 'mesa_mover_de_grupo':
+            include_module($MODULES_DIR . '/mesas/mesa_mover_de_grupo.php'); break;
+
         // ✅ Detalle para exportar PDF / modal
         case 'mesas_detalle':
             include_module($MODULES_DIR . '/mesas/obtener_mesas_detalle.php'); break;
@@ -174,9 +180,8 @@ try {
                     $n = (int)$_GET['numero_mesa'];
                     if ($n > 0) $nums[] = $n;
                 }
-                // ⚠️ IMPORTANTE: obtener_mesas_detalle.php espera 'numeros_mesa'
+                // ⚠️ obtener_mesas_detalle.php espera 'numeros_mesa'
                 if ($nums) {
-                    // Guardamos un helper global para que el módulo lo lea si está implementado
                     $GLOBALS['__FORCED_JSON_BODY__'] = ['numeros_mesa' => $nums];
                 }
             }
