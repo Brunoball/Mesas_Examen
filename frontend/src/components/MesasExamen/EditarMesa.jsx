@@ -1,12 +1,11 @@
 // src/components/MesasExamen/EditarMesa.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   FaArrowLeft,
   FaSave,
   FaTrash,
   FaCalendarAlt,
-  FaClock,
   FaExchangeAlt,
   FaPlus,
 } from "react-icons/fa";
@@ -22,6 +21,9 @@ import ModalMoverMesa from "./modales/ModalMoverMesa";
 
 import "../Previas/AgregarPrevia.css";
 import "./EditarMesa.css";
+
+// ⬅️ importo el CSS del modal rojo para reutilizar la estética
+import "./modales/ModalEliminarMesas.css";
 
 // Calendario inline (asegurate de tenerlo en src/components/Global/InlineCalendar.jsx)
 import InlineCalendar from "../Global/InlineCalendar";
@@ -72,6 +74,28 @@ const EditarMesa = () => {
   const [openAgregar, setOpenAgregar] = useState(false);
   const [openMover, setOpenMover] = useState(false);
   const [numeroParaMover, setNumeroParaMover] = useState(null);
+
+  // ⬇️ ESTADO del modal integrado "Quitar número"
+  const [openQuitar, setOpenQuitar] = useState(false);
+  const [numeroQuitar, setNumeroQuitar] = useState(null);
+  const [loadingQuitar, setLoadingQuitar] = useState(false);
+  const cancelQuitarBtnRef = useRef(null);
+
+  // focus al abrir modal quitar
+  useEffect(() => {
+    if (openQuitar) setTimeout(() => cancelQuitarBtnRef.current?.focus(), 0);
+  }, [openQuitar]);
+
+  // ESC/ENTER para el modal quitar
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!openQuitar) return;
+      if (e.key === "Escape" && !loadingQuitar) setOpenQuitar(false);
+      if ((e.key === "Enter" || e.key === "NumpadEnter") && !loadingQuitar) confirmarQuitarNumeroDelGrupo();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [openQuitar, loadingQuitar]); // eslint-disable-line
 
   const cargarTodo = useCallback(async () => {
     if (!numeroMesa || !Number.isFinite(numeroMesa)) {
@@ -206,27 +230,40 @@ const EditarMesa = () => {
     }
   };
 
-  const quitarNumeroDelGrupo = async (n) => {
-    if (!window.confirm(`¿Quitar el número ${n} de este grupo? (no se borra la mesa)`)) return;
+  // ⬇️ Abrir el modal de confirmación (integrado)
+  const pedirQuitarNumero = (n) => {
+    setNumeroQuitar(n);
+    setOpenQuitar(true);
+  };
+
+  // ⬇️ Acción real al confirmar en el modal (integrado)
+  const confirmarQuitarNumeroDelGrupo = async () => {
+    const n = Number(numeroQuitar);
+    if (!n) return;
     try {
+      setLoadingQuitar(true);
       const resp = await fetch(`${BASE_URL}/api.php?action=mesa_grupo_quitar_numero`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numero_mesa: Number(n) }),
+        body: JSON.stringify({ numero_mesa: n }),
       });
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok || !json?.exito) throw new Error(json?.mensaje || `HTTP ${resp.status}`);
       notify({ tipo: "exito", mensaje: `Número ${n} quitado del grupo.` });
       await cargarTodo();
+      setOpenQuitar(false);
+      setNumeroQuitar(null);
     } catch (e) {
       notify({ tipo: "error", mensaje: e.message || "No se pudo quitar el número." });
+    } finally {
+      setLoadingQuitar(false);
     }
   };
 
   if (cargando) {
     return (
       <div className="prev-add-container">
-        <div className="prev-add-box">
+        <div className="prev-add-box" >
           <div className="prev-add-header">
             <div className="prev-add-icon-title">
               <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" />
@@ -304,19 +341,19 @@ const EditarMesa = () => {
           </div>
 
           {/* ===== Contenido ===== */}
-          <div className="prev-add-form-wrapper">
-            {/* GRID 2 columnas: ahora Programación (izq angosta) | Slots (der fluida) */}
+          <div className="prev-add-form-wrapper" id="form-wrapper">
+            {/* GRID 2 columnas: Programación (izq) | Slots (der) */}
             <div className="mesa-two-col">
-              {/* IZQUIERDA: Programación (antes estaba a la derecha) */}
+              {/* IZQUIERDA: Programación */}
               <aside className="col-prog programacion-card">
-                <div className="prev-section " id="prev-section-program">
+                <div className="prev-section" id="prev-section-program">
                   <div className="prog-head">
                     <h3 className="prev-section-title">Programación</h3>
                     <div className="float-field">
                       <label className="float-label" htmlFor="turno-select">Turno</label>
                       <select
                         id="turno-select"
-                        className="prev-input "
+                        className="prev-input"
                         value={idTurno}
                         onChange={(e) => setIdTurno(e.target.value)}
                       >
@@ -331,7 +368,7 @@ const EditarMesa = () => {
                     </div>
                   </div>
 
-                  <div className="prog-block">
+                  <div className="prog-block calendar-block">
                     <label className="prev-label" style={{ display: "block", marginBottom: 6 }}>
                       <FaCalendarAlt style={{ marginRight: 6 }} />
                       Fecha
@@ -346,7 +383,7 @@ const EditarMesa = () => {
                 </div>
               </aside>
 
-              {/* DERECHA: Slots del grupo (antes estaba a la izquierda) */}
+              {/* DERECHA: Slots del grupo */}
               <section className="col-materia">
                 <div className="prev-section">
                   <h3 className="prev-section-title">Slots del grupo (hasta 4)</h3>
@@ -374,7 +411,7 @@ const EditarMesa = () => {
                                   <button
                                     className="mesa-chip danger"
                                     title="Quitar del grupo (no borra la mesa)"
-                                    onClick={() => quitarNumeroDelGrupo(slot.numero_mesa)}
+                                    onClick={() => pedirQuitarNumero(slot.numero_mesa)}
                                     disabled={!idGrupo}
                                   >
                                     <FaTrash />
@@ -407,7 +444,7 @@ const EditarMesa = () => {
             </div>
 
             {/* Botonera */}
-            <div className="prev-add-buttons "  id="v-add-buttons">
+            <div className="prev-add-buttons" id="v-add-buttons">
               <button
                 type="button"
                 className="prev-add-button prev-add-button--back"
@@ -431,7 +468,7 @@ const EditarMesa = () => {
             </div>
           </div>
 
-          {/* Modales */}
+          {/* Modales existentes */}
           {openDelete && (
             <ModalEliminarMesa
               open={openDelete}
@@ -478,6 +515,62 @@ const EditarMesa = () => {
               }}
               onError={(mensaje) => notify({ tipo: "error", mensaje })}
             />
+          )}
+
+          {/* ⬇️ MODAL INTEGRADO: “Quitar número del grupo” */}
+          {openQuitar && (
+            <div
+              className="logout-modal-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="confirm-quitar-title"
+              onMouseDown={() => (!loadingQuitar ? setOpenQuitar(false) : null)}
+            >
+              <div
+                className="logout-modal-container logout-modal--danger"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div className="logout-modal__icon is-danger" aria-hidden="true">
+                  <FaTrash />
+                </div>
+
+                <h3 id="confirm-quitar-title" className="logout-modal-title logout-modal-title--danger">
+                  Confirmar acción
+                </h3>
+
+                <p className="logout-modal-text">
+                  {`¿Quitar el número ${numeroQuitar} de este grupo? (no se borra la mesa)`}
+                </p>
+
+                <div className="prev-modal-item" style={{ marginTop: 10 }}>
+                  {(idGrupo ? `Grupo ${idGrupo}` : "Sin grupo") +
+                    (fecha ? ` • Fecha: ${fecha}` : "") +
+                    (idTurno ? ` • Turno ID: ${idTurno}` : "")}
+                </div>
+
+                <div className="logout-modal-buttons">
+                  <button
+                    type="button"
+                    className="logout-btn logout-btn--ghost"
+                    onClick={() => setOpenQuitar(false)}
+                    disabled={loadingQuitar}
+                    ref={cancelQuitarBtnRef}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    className="logout-btn logout-btn--solid-danger"
+                    onClick={confirmarQuitarNumeroDelGrupo}
+                    disabled={loadingQuitar}
+                    aria-disabled={loadingQuitar}
+                  >
+                    {loadingQuitar ? "Quitando…" : "Confirmar"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

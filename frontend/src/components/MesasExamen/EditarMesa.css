@@ -656,3 +656,45 @@ justify-content: space-between;
 #form-wrapper{padding: 0;}
 #v-add-buttons{padding: 0 1rem 1rem;}
 #prev-section-program{padding-bottom: 0;}
+
+/* === Variables para alinear calendario con altura de 2 tarjetas === */
+:root{
+  /* altura mínima de cada tarjeta de slot y gap del grid */
+  --slot-card-minh: 150px;   /* subí/bajá para ajustar */
+  --slot-gap: 16px;          /* mismo gap que uses en .mesa-cards */
+}
+
+/* Asegurá que las tarjetas respeten esa altura mínima */
+.mesa-card{
+  min-height: var(--slot-card-minh);
+}
+
+/* Usa el mismo gap que la variable (si ya tenés otro, podés omitir esto) */
+.mesa-cards{
+  gap: var(--slot-gap);
+}
+
+/* === Contenedor del calendario con altura ≈ 2 tarjetas === */
+
+
+/* El calendario ocupa el ancho del contenedor */
+.cal-inline, 
+.programacion-card .calendar-block > *{
+  width: 100%;
+}
+
+/* Sidebar “Programación” sigue fija en 360px (ya lo tenías) */
+.prog-block{ min-width: 350px; max-width: 350px; margin: auto; }
+@media (min-width: 1300px){
+  .mesa-two-col{ grid-template-columns: 400px 1fr; }
+}
+
+/* Si querés que en móviles el calendario no quede gigante */
+@media (max-width: 900px){
+  :root{
+    --slot-card-minh: 140px;
+  }
+  .programacion-card .calendar-block{
+    max-height: calc((var(--slot-card-minh) * 2) + var(--slot-gap));
+  }
+}

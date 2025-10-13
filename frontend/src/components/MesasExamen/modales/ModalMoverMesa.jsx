@@ -1,8 +1,15 @@
 // src/components/MesasExamen/modales/ModalMoverMesa.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { FaTimes } from "react-icons/fa";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { FaTimes, FaCheck } from "react-icons/fa";
 import BASE_URL from "../../../config/config";
-import "./ModalMoverMesa.css";
+
+/**
+ * MISMA estética que ModalCrearMesas / ModalInfoPrevia:
+ * - Reutiliza clases: mi-modal__*, mi-card, mi-input, mi-btn, etc.
+ * - Reutiliza el CSS de ModalCrearMesas.css (importado aquí).
+ */
+import "./ModalCrearMesas.css";      // ⬅️ Reutilizamos todo el theme ya existente
+import "./ModalMoverMesa.css";       // ⬅️ (Opcional) pequeños ajustes locales
 
 const ModalMoverMesa = ({
   open,
@@ -16,6 +23,10 @@ const ModalMoverMesa = ({
   const [loading, setLoading] = useState(false);
   const [grupos, setGrupos] = useState([]); // grupos incompletos
   const [destino, setDestino] = useState("");
+
+  const closeIfOverlay = useCallback((e) => {
+    if (e.target.classList.contains("mi-modal__overlay")) onClose?.();
+  }, [onClose]);
 
   const cargarGrupos = async () => {
     try {
@@ -32,7 +43,6 @@ const ModalMoverMesa = ({
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok || !json?.exito) throw new Error(json?.mensaje || `HTTP ${resp.status}`);
       const arr = Array.isArray(json.data) ? json.data : [];
-      // Evitar ofrecer el grupo que ya contiene al origen (el backend también lo valida)
       const filtrado = arr.filter(g =>
         ![g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
           .map(n => Number(n || 0))
@@ -62,12 +72,12 @@ const ModalMoverMesa = ({
         body: JSON.stringify({
           numero_mesa: Number(numeroMesaOrigen),
           id_grupo_destino: Number(destino),
-          // Al mover, sincronizamos la fecha/turno de la mesa a los del grupo destino (lo hace el backend).
         }),
       });
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok || !json?.exito) throw new Error(json?.mensaje || `HTTP ${resp.status}`);
       onMoved?.();
+      onClose?.();
     } catch (e) {
       onError?.(e.message || "No se pudo mover la mesa.");
     }
@@ -75,59 +85,95 @@ const ModalMoverMesa = ({
 
   if (!open) return null;
 
+  const subTitle = [
+    fechaObjetivo ? `Fecha: ${fechaObjetivo}` : null,
+    Number.isFinite(Number(idTurnoObjetivo)) ? `Turno: ${idTurnoObjetivo}` : null,
+  ].filter(Boolean).join(" · ");
+
   return (
-    <div className="modalMovMesa-backdrop">
-      <div className="modalMovMesa-modal">
-        <div className="modalMovMesa-header">
-          <h3>Mover número {numeroMesaOrigen} a otro grupo</h3>
-          <button className="modalMovMesa-close" onClick={onClose} aria-label="Cerrar">
+    <div className="mi-modal__overlay" onClick={closeIfOverlay}>
+      <div
+        className="mi-modal__container"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-mover-mesa"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header con look rojo */}
+        <div className="mi-modal__header">
+          <div className="mi-modal__head-left">
+            <h2 id="titulo-mover-mesa" className="mi-modal__title">
+              Mover número {numeroMesaOrigen}
+            </h2>
+            <p className="mi-modal__subtitle">
+              {subTitle || "Seleccioná el grupo de destino"}
+            </p>
+          </div>
+          <button className="mi-modal__close" onClick={onClose} aria-label="Cerrar" type="button">
             <FaTimes />
           </button>
         </div>
 
-        <div className="modalMovMesa-body" style={{ display: "grid", gap: 12 }}>
-          <p>Seleccioná un grupo que <b>no esté completo</b> para mover este número.</p>
+        {/* Contenido scrollable */}
+        <div className="mi-modal__content">
+          <section className="mi-tabpanel is-active">
+            <div className="mi-grid">
+              <article className="mi-card mi-card--full">
+                <h3 className="mi-card__title">Grupo destino</h3>
 
-          {loading ? (
-            <div>Cargando grupos…</div>
-          ) : grupos.length === 0 ? (
-            <div>No hay grupos con lugar para la fecha/turno seleccionados.</div>
-          ) : (
-            <label className="modalMovMesa-form-field">
-              <span className="modalMovMesa-form-label">Grupo destino</span>
-              <select
-                className="modalMovMesa-input"
-                value={destino}
-                onChange={(e) => setDestino(e.target.value)}
-              >
-                <option value="">Seleccionar…</option>
-                {grupos.map((g) => {
-                  const numeros = [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
-                    .filter((n) => Number(n || 0) > 0)
-                    .join(" · ");
-                  const libres = 4 - [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
-                    .filter((n) => Number(n || 0) > 0).length;
-                  return (
-                    <option key={g.id_grupo} value={g.id_grupo}>
-                      {`Grupo ${g.id_grupo} – ${g.fecha_mesa} (turno ${g.id_turno}) — ocupa: ${numeros || "—"} — libres: ${libres}`}
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-          )}
+                {loading ? (
+                  <p className="mi-help">Cargando grupos…</p>
+                ) : grupos.length === 0 ? (
+                  <p className="mi-help">
+                    No hay grupos con lugar para la fecha/turno seleccionados.
+                  </p>
+                ) : (
+                  <div className="mi-form-grid-2">
+                    <div className="mi-form-row">
+                      <label className="mi-label-strong">Seleccionar grupo</label>
+                      <select
+                        className="mi-input"
+                        value={destino}
+                        onChange={(e) => setDestino(e.target.value)}
+                      >
+                        <option value="">Seleccionar…</option>
+                        {grupos.map((g) => {
+                          const numeros = [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
+                            .filter((n) => Number(n || 0) > 0)
+                            .join(" · ");
+                          const libres = 4 - [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
+                            .filter((n) => Number(n || 0) > 0).length;
+                          return (
+                            <option key={g.id_grupo} value={g.id_grupo}>
+                              {`Grupo ${g.id_grupo} – ${g.fecha_mesa} (turno ${g.id_turno}) — ocupa: ${numeros || "—"} — libres: ${libres}`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <p className="mi-help">
+                        Al mover, la mesa adoptará la fecha/turno del grupo destino.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </article>
+            </div>
+          </section>
         </div>
 
-        <div className="modalMovMesa-footer">
-          <button className="modalMovMesa-button modalMovMesa-hover-effect" onClick={onClose}>
+        {/* Footer */}
+        <div className="mi-modal__footer">
+          <button type="button" className="mi-btn mi-btn--ghost" onClick={onClose}>
             Cancelar
           </button>
           <button
-            className="modalMovMesa-button modalMovMesa-hover-effect"
+            type="button"
+            className="mi-btn mi-btn--primary"
             onClick={mover}
             disabled={!puedeMover}
             title="Mover al grupo destino"
           >
+            <FaCheck style={{ marginRight: 6 }} />
             Mover
           </button>
         </div>

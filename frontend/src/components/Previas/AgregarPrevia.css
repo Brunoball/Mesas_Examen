@@ -36,7 +36,6 @@
   flex-direction: column;
   color: var(--text-primary, #0f172a);
   box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.15);
-  margin: 4vh 0;
 }
 
 /* ==============================
