@@ -1,0 +1,74 @@
+/* src/components/Global/InlineCalendar.css */
+.cal-inline{
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: var(--border-radius, 8px);
+  background: var(--surface-color, #fff);
+  padding: 10px;
+  box-shadow: var(--pro-shadow-sm, 0 1px 3px rgba(0,0,0,.06));
+  width: 100%;
+}
+
+
+.cal-header{
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cal-title{
+  font-weight: 800; color: var(--text-primary, #0f172a);
+  text-transform: capitalize;
+}
+.cal-nav{
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--border-color, #e2e8f0);
+  background: #fff; color: var(--text-primary, #0f172a); cursor: pointer;
+}
+.cal-nav:hover{ box-shadow: var(--pro-shadow-sm, 0 1px 3px rgba(0,0,0,.06)); }
+
+.cal-weekdays{
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 4px; margin: 4px 0 6px;
+}
+.cal-weekday{
+  text-align: center; font-size: .8rem; font-weight: 700; color: var(--text-secondary, #475569);
+}
+
+.cal-grid{
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-cell{
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: #fff;
+  color: var(--text-primary, #0f172a);
+  font-weight: 700;
+  cursor: pointer;
+}
+.cal-cell:hover{
+  border-color: var(--primary-400, #EF5350);
+  background: var(--primary-50, #ffebee);
+}
+.cal-cell.is-other{
+  color: var(--text-secondary, #94a3b8);
+  opacity: .7;
+}
+.cal-cell.is-today{
+  border-color: var(--primary-400, #EF5350);
+}
+.cal-cell.is-selected{
+  background: var(--primary-600, #B71C1C);
+  color: var(--text-on-primary, #fff);
+  border-color: var(--primary-600, #B71C1C);
+}
+
+.cal-cell:disabled{
+  opacity: .45; cursor: not-allowed;
+}
+
+
+.cal-inline{
+  /* ... */
+  width: 100%;
+  max-width: 320px; /* <- cambiá este valor */
+}
+.cal-cell{ height: 35px; width: 35px;} /* <- alto de cada día */

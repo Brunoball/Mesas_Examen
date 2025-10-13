@@ -1,5 +1,5 @@
 /* =========================================================
-   ModalInfoMesas.css — versión mejorada (stack Docentes + scroll Por docente)
+   ModalInfoProfesor.css — prefijo: INFOPROF-
    ========================================================= */
 
 /* =============== PALETA / THEME ================= */
@@ -31,7 +31,7 @@
 }
 
 /* =============== OVERLAY Y CONTENEDOR ============ */
-.infomesas-modal__overlay {
+.INFOPROF-modal__overlay {
   position: fixed;
   inset: 0;
   background: rgba(2, 6, 23, 0.55);
@@ -39,35 +39,35 @@
   display: grid;
   place-items: center;
   z-index: 1000;
-  animation: infomesas-fade 160ms ease-out;
+  animation: infoprof-fade 160ms ease-out;
   font-family: var(--mi-font);
 }
 
-.infomesas-modal__container {
+.INFOPROF-modal__container {
   width: min(960px, 92vw);
   max-height: 94vh;
   background: var(--mi-bg);
   border-radius: var(--mi-radius-lg);
   box-shadow: var(--mi-shadow-lg);
   overflow: hidden;
-  animation: infomesas-slide 220ms ease-out;
+  animation: infoprof-slide 220ms ease-out;
   border: 1px solid rgba(2, 6, 23, 0.06);
 }
 
 /* =============== HEADER ========================== */
-.infomesas-modal__header {
+.INFOPROF-modal__header {
+    background: var(--mi-primary);
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 16px;
   align-items: center;
   padding: 18px 22px;
   color: #fff;
-  background: var(--mi-primary);
 }
 
-.infomesas-modal__head-left { min-width: 0; }
+.INFOPROF-modal__head-left { min-width: 0; }
 
-.infomesas-modal__title {
+.INFOPROF-modal__title {
   margin: 0;
   font-size: 1.35rem;
   font-weight: 800;
@@ -75,7 +75,7 @@
   line-height: 1.2;
 }
 
-.infomesas-modal__subtitle {
+.INFOPROF-modal__subtitle {
   margin: 6px 0 0;
   font-size: 0.92rem;
   opacity: 0.95;
@@ -86,7 +86,7 @@
   text-overflow: ellipsis;
 }
 
-.infomesas-modal__close {
+.INFOPROF-modal__close {
   appearance: none;
   border: 0;
   background: rgba(255, 255, 255, 0.14);
@@ -99,10 +99,10 @@
   cursor: pointer;
   transition: transform .15s ease, background .15s ease, opacity .15s ease;
 }
-.infomesas-modal__close:hover { background: rgba(255,255,255,.22); transform: rotate(90deg); }
+.INFOPROF-modal__close:hover { background: rgba(255,255,255,.22); transform: rotate(90deg); }
 
 /* =============== TABS ============================ */
-.infomesas-tabs {
+.INFOPROF-tabs {
   display: flex;
   gap: 8px;
   padding: 0 14px;
@@ -110,7 +110,7 @@
   border-bottom: 1px solid var(--mi-border);
 }
 
-.infomesas-tab {
+.INFOPROF-tab {
   position: relative;
   appearance: none;
   border: 0;
@@ -123,12 +123,9 @@
   border-radius: 10px 10px 0 0;
   transition: color .15s ease, background .15s ease;
 }
-.infomesas-tab:hover { color: var(--mi-primary-600); background: rgba(239, 68, 68, 0.06); }
-.infomesas-tab.is-active {
-  color: var(--mi-primary-700);
-  background: #fff;
-}
-.infomesas-tab.is-active::after {
+.INFOPROF-tab:hover { color: var(--mi-primary-600); background: rgba(239, 68, 68, 0.06); }
+.INFOPROF-tab.is-active { color: var(--mi-primary-700); background: #fff; }
+.INFOPROF-tab.is-active::after {
   content: "";
   position: absolute;
   left: 12px;
@@ -140,29 +137,24 @@
 }
 
 /* =============== CONTENIDO ======================= */
-.infomesas-modal__content {
+.INFOPROF-modal__content {
   background: var(--mi-bg-soft);
   overflow: hidden; /* el scroll va dentro de los paneles */
 }
 
-/* Panel con scroll y padding consistente */
-.infomesas-tabpanel {
+.INFOPROF-tabpanel {
   display: none;
   height: 100%;
   overflow: auto;
-  padding: 14px;
 }
-.infomesas-tabpanel.is-active { display: block; }
+.INFOPROF-tabpanel.is-active { display: block; }
 
 /* =============== CAJAS / TARJETAS =============== */
-.infomesas-section { margin-bottom: 18px; }
+.INFOPROF-section { margin-bottom: 18px; }
 
-.infomesas-grid {
-  display: grid;
-  gap: 16px;
-}
+.INFOPROF-grid { display: grid; gap: 16px; }
 
-.infomesas-card {
+.INFOPROF-card {
   background: var(--mi-panel);
   border: 1px solid var(--mi-border);
   border-radius: var(--mi-radius);
@@ -170,7 +162,7 @@
   padding: 16px;
 }
 
-.infomesas-card__title {
+.INFOPROF-card__title {
   margin: 0 0 12px;
   font-size: 1rem;
   font-weight: 800;
@@ -180,23 +172,18 @@
   border-bottom: 1px solid var(--mi-border);
 }
 
-/* Variantes de grid */
+/* Variantes de grid (solo si las usás en otro lado) */
 @media (min-width: 900px) {
-  .infomesas-grid { grid-template-columns: repeat(12, 1fr); }
-  .infomesas-grid-mesa .infomesas-card:first-child { grid-column: span 7; }
-  .infomesas-grid-mesa .infomesas-card:last-child  { grid-column: span 5; }
-
-  /* Antes: docentes en 3 columnas. Ahora se sustituye por la clase --stack */
-  .infomesas-grid-docentes .infomesas-card { grid-column: span 4; }
+  .INFOPROF-grid { grid-template-columns: repeat(12, 1fr); }
+  .INFOPROF-grid-mesa .INFOPROF-card:first-child { grid-column: span 7; }
+  .INFOPROF-grid-mesa .INFOPROF-card:last-child  { grid-column: span 5; }
+  .INFOPROF-grid-docentes .INFOPROF-card { grid-column: span 4; }
 }
 
 /* =============== FILAS LABEL / VALOR ============= */
-.infomesas-rows {
-  display: grid;
-  gap: 10px;
-}
+.INFOPROF-rows { display: grid; gap: 10px; }
 
-.infomesas-row {
+.INFOPROF-row {
   display: grid;
   grid-template-columns: 180px 1fr;
   gap: 12px;
@@ -204,24 +191,23 @@
   padding: 8px 0;
   border-top: 1px dashed rgba(15, 23, 42, 0.08);
 }
-.infomesas-row:first-child { border-top: 0; }
+.INFOPROF-row:first-child { border-top: 0; }
 
-.infomesas-label {
+.INFOPROF-label {
   color: var(--mi-muted);
   font-weight: 700;
   font-size: 0.92rem;
   line-height: 1.35;
 }
 
-.infomesas-value {
+.INFOPROF-value {
   color: var(--mi-text);
   font-weight: 600;
   line-height: 1.5;
   font-size: 0.96rem;
 }
 
-/* Valor largo (ej. tribunal) */
-.infomesas-value.is-tribunal {
+.INFOPROF-value.is-tribunal {
   background: #fafafa;
   border: 1px dashed var(--mi-border);
   border-radius: 10px;
@@ -229,8 +215,10 @@
   line-height: 1.5;
 }
 
+.INFOPROF-muted { color: var(--mi-muted); }
+
 /* =============== TABLAS ========================== */
-.infomesas-table {
+.INFOPROF-table {
   background: var(--mi-panel);
   border: 1px solid var(--mi-border);
   border-radius: var(--mi-radius);
@@ -238,20 +226,19 @@
   overflow: hidden;
 }
 
-/* contenedor con scroll propio y sticky header */
-.infomesas-tbody {
-  max-height: 48vh;           /* altura máxima en panel */
+.INFOPROF-tbody {
+  max-height: 48vh;
   overflow: auto;
 }
 
-.infomesas-thead, .infomesas-tr {
+.INFOPROF-thead, .INFOPROF-tr {
   display: grid;
   grid-template-columns: 1.4fr 0.9fr 1fr 0.7fr; /* Alumno / DNI / Curso/Div / Mesa */
   gap: 12px;
   align-items: center;
 }
 
-.infomesas-thead {
+.INFOPROF-thead {
   position: sticky;
   top: 0;
   background: #fff;
@@ -259,7 +246,7 @@
   z-index: 1;
 }
 
-.infomesas-th {
+.INFOPROF-th {
   padding: 12px 14px;
   font-weight: 800;
   font-size: 0.9rem;
@@ -268,32 +255,30 @@
   letter-spacing: 0.03em;
 }
 
-.infomesas-tr { border-bottom: 1px solid var(--mi-border); }
-.infomesas-tr:last-child { border-bottom: 0; }
+.INFOPROF-tr { border-bottom: 1px solid var(--mi-border); }
+.INFOPROF-tr:last-child { border-bottom: 0; }
 
-.infomesas-td {
+.INFOPROF-td {
   padding: 12px 14px;
   font-size: 0.96rem;
   color: var(--mi-text);
   line-height: 1.45;
-  min-width: 0; /* truncamiento correcto */
+  min-width: 0;
 }
 
 /* Zebra */
-.infomesas-tbody .infomesas-tr:nth-child(odd) .infomesas-td {
-  background: #fcfdff;
-}
+.INFOPROF-tbody .INFOPROF-tr:nth-child(odd) .INFOPROF-td { background: #fcfdff; }
 
 /* Estados de tabla */
-.infomesas-row-empty {
+.INFOPROF-row-empty {
   padding: 18px 16px;
   color: var(--mi-muted);
   text-align: center;
 }
 
 /* =============== ESTADOS / FEEDBACK ============= */
-.infomesas-loader,
-.infomesas-error {
+.INFOPROF-loader,
+.INFOPROF-error {
   background: var(--mi-panel);
   border: 1px solid var(--mi-border);
   border-radius: var(--mi-radius);
@@ -302,122 +287,62 @@
   box-shadow: var(--mi-shadow-sm);
 }
 
-.infomesas-loader {
-  color: var(--mi-muted);
-  font-weight: 600;
-}
+.INFOPROF-loader { color: var(--mi-muted); font-weight: 600; }
 
-.infomesas-error {
+.INFOPROF-error {
   color: #b91c1c;
   border-color: #fecaca;
   background: #fff1f2;
 }
 
-/* =============== UTILIDADES Y LAYOUTS ============ */
-/* Forzar 2 columnas de tarjetas en resumen */
-.infomesas-grid--2cols {
-  display: grid;
-  grid-template-columns: 1fr;       /* 1 col en mobile */
-  gap: 18px;
-}
-
-/* ≥ 720px: 2 columnas iguales */
-@media (min-width: 720px) {
-  .infomesas-grid--2cols {
-    grid-template-columns: 1fr 1fr; /* 2 cols en desktop */
-  }
-}
-
-/* Evitar que las reglas previas de "span" afecten a este layout */
-.infomesas-grid--2cols .infomesas-card {
-  grid-column: auto !important;
-}
-
-/* ---- NUEVO: Stack (Docentes 100% width, uno debajo del otro) ---- */
-.infomesas-grid--stack {
-  display: grid;
-  grid-template-columns: 1fr !important;  /* siempre una sola columna */
-  gap: 16px;
-}
-.infomesas-grid--stack .infomesas-card {
-  grid-column: auto !important;
-  width: 100%;
-}
-
-/* ---- NUEVO: Scroll para la pestaña "Por docente" ---- */
-.infomesas-por-docente-scroll {
-  max-height: 58vh;   /* controlás el alto visible del listado */
-  overflow-y: auto;
-  padding-right: 6px; /* evita que la barra tape contenido */
-}
-
-/* Scrollbar sutil (webkit) */
-.infomesas-por-docente-scroll::-webkit-scrollbar,
-.infomesas-tbody::-webkit-scrollbar {
-  width: 10px;
-}
-.infomesas-por-docente-scroll::-webkit-scrollbar-thumb,
-.infomesas-tbody::-webkit-scrollbar-thumb {
-  background: #d8dee9;
-  border-radius: 8px;
-  border: 2px solid #f5f7fb;
-}
-
 /* =============== RESPONSIVE ===================== */
 @media (max-width: 900px) {
-  .infomesas-modal__container { width: 96vw; max-height: 90vh; }
+  .INFOPROF-modal__container { width: 96vw; max-height: 90vh; }
 
-  /* tarjetas a 1 columna */
-  .infomesas-grid,
-  .infomesas-grid-mesa,
-  .infomesas-grid-docentes { grid-template-columns: 1fr; }
+  .INFOPROF-grid,
+  .INFOPROF-grid-mesa,
+  .INFOPROF-grid-docentes { grid-template-columns: 1fr; }
 
-  /* filas label/valor en columna */
-  .infomesas-row { grid-template-columns: 1fr; gap: 6px; }
+  .INFOPROF-row { grid-template-columns: 1fr; gap: 6px; }
 
-  /* tabla: pasa a columnas más cómodas */
-  .infomesas-thead, .infomesas-tr {
+  .INFOPROF-thead, .INFOPROF-tr {
     grid-template-columns: 1.5fr 1fr 1.2fr 0.7fr;
   }
 }
 
 @media (max-width: 560px) {
-  .infomesas-thead, .infomesas-tr {
+  .INFOPROF-thead, .INFOPROF-tr {
     grid-template-columns: 1.6fr 1fr; /* 2 columnas */
   }
-  /* mostrar curso/div y mesa en líneas secundarias usando block */
-  .infomesas-td:nth-child(3), /* Curso/Div */
-  .infomesas-td:nth-child(4)  /* Mesa */ {
+  .INFOPROF-td:nth-child(3),
+  .INFOPROF-td:nth-child(4) {
     grid-column: 1 / -1;
     padding-top: 4px;
     color: var(--mi-muted);
     font-size: 0.9rem;
   }
-  .infomesas-modal__subtitle { white-space: normal; }
+  .INFOPROF-modal__subtitle { white-space: normal; }
 }
 
 /* =============== ANIMACIONES ==================== */
-@keyframes infomesas-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes infomesas-slide {
-  from { opacity: 0; transform: translateY(18px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes infoprof-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes infoprof-slide { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+/* === Forzar 2 columnas de tarjetas === */
+.INFOPROF-grid--2cols {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
 }
 
-/* Utilidad */
-.infomesas-muted { color: var(--mi-muted); }
-/* Scroll vertical para la pestaña "Docentes" */
-.infomesas-docentes-scroll {
-  max-height: 58vh;       /* ajustá a gusto: 50–65vh suele ir bien */
-  overflow-y: auto;
-  padding-right: 6px;     /* que la barra no tape contenido */
+@media (min-width: 720px) {
+  .INFOPROF-grid--2cols { grid-template-columns: 1fr 1fr; }
 }
 
-/* Scrollbar sutil (opcional, igual que en "Por docente") */
-.infomesas-docentes-scroll::-webkit-scrollbar {
-  width: 10px;
-}
-.infomesas-docentes-scroll::-webkit-scrollbar-thumb {
-  background: #d8dee9;
-  border-radius: 8px;
-  border: 2px solid #f5f7fb;
-}
+.INFOPROF-grid--2cols .INFOPROF-card { grid-column: auto !important; }
+
+
+
+/* ocupar 100% del grid */
+.INFOPROF-card--full { grid-column: 1 / -1; }
+.INFOPROF-value{text-align: end;}

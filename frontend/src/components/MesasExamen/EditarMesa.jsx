@@ -7,16 +7,24 @@ import {
   FaTrash,
   FaCalendarAlt,
   FaClock,
-  FaExchangeAlt,   // ⬅️ icono “cambiar/mover”
+  FaExchangeAlt,
   FaPlus,
 } from "react-icons/fa";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPenToSquare } from "@fortawesome/free-solid-svg-icons";
+
 import BASE_URL from "../../config/config";
 import "../Global/section-ui.css";
 import Toast from "../Global/Toast";
 import ModalEliminarMesa from "./modales/ModalEliminarMesa";
 import ModalAgregarMesas from "./modales/ModalAgregarMesas";
-import ModalMoverMesa from "./modales/ModalMoverMesa"; // ⬅️ NUEVO
+import ModalMoverMesa from "./modales/ModalMoverMesa";
+
+import "../Previas/AgregarPrevia.css";
 import "./EditarMesa.css";
+
+// Calendario inline (asegurate de tenerlo en src/components/Global/InlineCalendar.jsx)
+import InlineCalendar from "../Global/InlineCalendar";
 
 /* Utils */
 const fmtISO = (d) => {
@@ -29,7 +37,6 @@ const fmtISO = (d) => {
   const day = String(dd.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
-
 const norm = (s) =>
   String(s ?? "")
     .toLowerCase()
@@ -46,11 +53,9 @@ const EditarMesa = () => {
   const [guardando, setGuardando] = useState(false);
 
   const [mesa, setMesa] = useState(null);
-
   const [idGrupo, setIdGrupo] = useState(null);
   const [numerosGrupo, setNumerosGrupo] = useState([]);
   const [detalleGrupo, setDetalleGrupo] = useState([]);
-
   const [turnos, setTurnos] = useState([]);
 
   const [fecha, setFecha] = useState("");
@@ -64,11 +69,7 @@ const EditarMesa = () => {
   );
 
   const [openDelete, setOpenDelete] = useState(false);
-
-  // Modal “Agregar número”
   const [openAgregar, setOpenAgregar] = useState(false);
-
-  // Modal “Mover número”
   const [openMover, setOpenMover] = useState(false);
   const [numeroParaMover, setNumeroParaMover] = useState(null);
 
@@ -79,7 +80,6 @@ const EditarMesa = () => {
 
     const resListas = await fetch(`${BASE_URL}/api.php?action=obtener_listas`, { cache: "no-store" });
     const jListas = await resListas.json().catch(() => ({}));
-
     const ts = (jListas?.listas?.turnos || [])
       .map((t) => ({
         id_turno: Number(t.id_turno ?? t.id ?? 0),
@@ -87,13 +87,11 @@ const EditarMesa = () => {
         _n: norm(t.turno ?? t.nombre ?? ""),
       }))
       .filter((t) => t.id_turno && t.turno);
-
     setTurnos(ts);
 
     const rGr = await fetch(`${BASE_URL}/api.php?action=mesas_listar_grupos`, { cache: "no-store" });
     const jGr = await rGr.json().catch(() => ({}));
     if (!rGr.ok || !jGr?.exito) throw new Error(jGr?.mensaje || "No se pudieron obtener los grupos.");
-
     const grupos = Array.isArray(jGr.data) ? jGr.data : [];
     const filaGrupo = grupos.find((g) =>
       [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
@@ -225,179 +223,55 @@ const EditarMesa = () => {
     }
   };
 
-  const slots = useMemo(() => {
-    const ocupados = [...detalleGrupo].sort((a, b) => a.numero_mesa - b.numero_mesa);
-    const arr = [];
-    for (let i = 0; i < 4; i++) arr.push(ocupados[i] ?? null);
-    return arr;
-  }, [detalleGrupo]);
-
   if (cargando) {
     return (
-      <div className="glob-profesor-container">
-        <div className="glob-profesor-box">
-          <div className="glob-no-data-message"><div className="glob-message-content"><p>Cargando mesa…</p></div></div>
+      <div className="prev-add-container">
+        <div className="prev-add-box">
+          <div className="prev-add-header">
+            <div className="prev-add-icon-title">
+              <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" />
+              <div>
+                <h1>Editar Mesa</h1>
+                <p>Cargando…</p>
+              </div>
+            </div>
+            <button type="button" className="prev-add-back-btn" onClick={() => navigate(-1)} title="Volver">
+              <FaArrowLeft style={{ marginRight: 8 }} /> Volver
+            </button>
+          </div>
+          <div className="prev-add-form-wrapper" id="form-wrapper">
+            <p className="mesa-muted">Cargando mesa…</p>
+          </div>
         </div>
       </div>
     );
   }
   if (!mesa) {
     return (
-      <div className="glob-profesor-container">
-        <div className="glob-profesor-box">
-          <div className="glob-no-data-message"><div className="glob-message-content"><p>No se encontró la mesa solicitada.</p></div></div>
+      <div className="prev-add-container">
+        <div className="prev-add-box">
+          <div className="prev-add-header">
+            <div className="prev-add-icon-title">
+              <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" />
+              <div>
+                <h1>Editar Mesa</h1>
+                <p>No se encontró la mesa solicitada</p>
+              </div>
+            </div>
+            <button type="button" className="prev-add-back-btn" onClick={() => navigate(-1)} title="Volver">
+              <FaArrowLeft style={{ marginRight: 8 }} /> Volver
+            </button>
+          </div>
+          <div className="prev-add-form-wrapper">
+            <p className="mesa-muted">No se encontró la mesa solicitada.</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="glob-profesor-container">
-      <div className="glob-profesor-box">
-        <div className="glob-front-row-pro">
-          <button className="glob-profesor-button glob-hover-effect glob-volver-atras"
-            onClick={() => navigate("/mesas-examen")} aria-label="Volver" title="Volver">
-            <FaArrowLeft className="glob-profesor-icon-button" /><p>Volver</p>
-          </button>
-          <span className="glob-profesor-title">
-            Editar Mesa Nº {mesa.numero_mesa}{idGrupo ? ` — Grupo ${idGrupo}` : ""}
-          </span>
-        </div>
-
-        <div className="glob-box-table" style={{ padding: 16 }}>
-          <div style={{ marginBottom: 12, fontWeight: 600 }}>{materiaTitle}</div>
-
-          <h3 style={{ margin: "8px 0 12px 0" }}>Mesa</h3>
-          <div className="glob-grid-form" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <label className="glob-form-field">
-              <span className="glob-form-label"><FaCalendarAlt style={{ marginRight: 6 }} />Fecha de mesa</span>
-              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="glob-search-input" />
-            </label>
-            <label className="glob-form-field">
-              <span className="glob-form-label"><FaClock style={{ marginRight: 6 }} />Turno</span>
-              <select className="glob-search-input" value={idTurno} onChange={(e) => setIdTurno(e.target.value)}>
-                <option value="">Seleccionar…</option>
-                {turnos.map((t) => (<option key={t.id_turno} value={t.id_turno}>{t.turno}</option>))}
-              </select>
-            </label>
-          </div>
-
-          <div className="glob-down-container" style={{ marginTop: 16 }}>
-            <div />
-            <div className="glob-botones-container">
-              <button className="glob-profesor-button glob-hover-effect" onClick={onSave} disabled={guardando} title="Guardar cambios">
-                <FaSave className="glob-profesor-icon-button" /><p>Guardar</p>
-              </button>
-              <button className="glob-profesor-button glob-hover-effect" onClick={() => setOpenDelete(true)}
-                style={{ background: "var(--glob-danger,#c0392b)" }} title="Eliminar mesa (alumno)">
-                <FaTrash className="glob-profesor-icon-button" /><p>Eliminar Mesa</p>
-              </button>
-            </div>
-          </div>
-
-          <h3 style={{ margin: "24px 0 12px 0" }}>Slots del grupo (hasta 4)</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(180px, 1fr))", gap: 12 }}>
-            {slots.map((slot, idx) => {
-              if (slot) {
-                const docentes = Array.isArray(slot.docentes) ? slot.docentes : [];
-                return (
-                  <div key={`slot-ok-${slot.numero_mesa}`} style={{
-                    border: "1px solid var(--glob-border,#ddd)", borderRadius: 12, padding: 12,
-                    background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: 8,
-                  }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>N° {slot.numero_mesa}</div>
-                    <div style={{ fontSize: 13, minHeight: 36 }} title={slot.materia}>{slot.materia || "—"}</div>
-                    <div style={{ fontSize: 12, color: "#555", minHeight: 32 }}>
-                      {docentes.length ? `Docentes: ${docentes.join(" | ")}` : "Docentes: —"}
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-                      {/* Botón CAMBIAR/MOVER */}
-                      <button
-                        className="glob-iconchip is-edit"
-                        title="Mover este número a otro grupo (con lugar)"
-                        onClick={() => { setNumeroParaMover(slot.numero_mesa); setOpenMover(true); }}
-                      >
-                        <FaExchangeAlt />
-                      </button>
-                      <button
-                        className="glob-iconchip is-delete"
-                        title="Quitar del grupo (no borra la mesa)"
-                        onClick={() => quitarNumeroDelGrupo(slot.numero_mesa)}
-                        disabled={!idGrupo}
-                      >
-                        <FaTrash />
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-              // Libre → abre modal de agregar
-              return (
-                <button key={`slot-free-${idx}`} onClick={() => setOpenAgregar(true)}
-                  disabled={numerosGrupo.length >= 4} title="Agregar número al grupo" style={{
-                    border: "1px dashed var(--glob-border,#bbb)", borderRadius: 12, padding: 12,
-                    background: "#fafafa", minHeight: 120, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                    fontWeight: 600, fontSize: 14,
-                  }}>
-                  <FaPlus /> Agregar número
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {openDelete && (
-        <ModalEliminarMesa
-          open={openDelete}
-          mesa={{ numero_mesa: numeroMesa }}
-          onClose={() => setOpenDelete(false)}
-          onSuccess={() => {
-            setOpenDelete(false);
-            notify({ tipo: "exito", mensaje: "Mesa eliminada." });
-            setTimeout(() => navigate("/mesas-examen"), 400);
-          }}
-          onError={(mensaje) => notify({ tipo: "error", mensaje: mensaje || "No se pudo eliminar la mesa." })}
-        />
-      )}
-
-      {/* Modal agregar número */}
-      {openAgregar && (
-        <ModalAgregarMesas
-          open={openAgregar}
-          onClose={() => setOpenAgregar(false)}
-          idGrupo={idGrupo}
-          numeroMesaActual={numeroMesa}
-          fechaObjetivo={fecha}
-          idTurnoObjetivo={idTurno ? Number(idTurno) : null}
-          onAdded={() => {
-            setOpenAgregar(false);
-            notify({ tipo: "exito", mensaje: "Número agregado al grupo." });
-            cargarTodo();
-          }}
-          onError={(mensaje) => notify({ tipo: "error", mensaje })}
-        />
-      )}
-
-      {/* Modal mover número */}
-      {openMover && (
-        <ModalMoverMesa
-          open={openMover}
-          onClose={() => setOpenMover(false)}
-          numeroMesaOrigen={numeroParaMover ?? numeroMesa}
-          fechaObjetivo={fecha}
-          idTurnoObjetivo={idTurno ? Number(idTurno) : null}
-          onMoved={() => {
-            setOpenMover(false);
-            setNumeroParaMover(null);
-            notify({ tipo: "exito", mensaje: "Número movido de grupo." });
-            cargarTodo();
-          }}
-          onError={(mensaje) => notify({ tipo: "error", mensaje })}
-        />
-      )}
-
+    <>
       {toast && (
         <Toast
           tipo={toast.tipo}
@@ -406,7 +280,208 @@ const EditarMesa = () => {
           onClose={() => setToast(null)}
         />
       )}
-    </div>
+
+      <div className="prev-add-container">
+        <div className="prev-add-box">
+          {/* ===== Header ===== */}
+          <div className="prev-add-header">
+            <div className="prev-add-icon-title">
+              <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" aria-hidden="true" />
+              <div>
+                <h1>Editar Mesa Nº {mesa.numero_mesa}{idGrupo ? ` — Grupo ${idGrupo}` : ""}</h1>
+                <p>{materiaTitle}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="prev-add-back-btn"
+              onClick={() => navigate(-1)}
+              title="Volver"
+            >
+              <FaArrowLeft style={{ marginRight: 8 }} />
+              Volver
+            </button>
+          </div>
+
+          {/* ===== Contenido ===== */}
+          <div className="prev-add-form-wrapper">
+            {/* GRID 2 columnas: ahora Programación (izq angosta) | Slots (der fluida) */}
+            <div className="mesa-two-col">
+              {/* IZQUIERDA: Programación (antes estaba a la derecha) */}
+              <aside className="col-prog programacion-card">
+                <div className="prev-section " id="prev-section-program">
+                  <div className="prog-head">
+                    <h3 className="prev-section-title">Programación</h3>
+                    <div className="float-field">
+                      <label className="float-label" htmlFor="turno-select">Turno</label>
+                      <select
+                        id="turno-select"
+                        className="prev-input "
+                        value={idTurno}
+                        onChange={(e) => setIdTurno(e.target.value)}
+                      >
+                        <option value="">Seleccionar…</option>
+                        {turnos.map((t) => (
+                          <option key={t.id_turno} value={t.id_turno}>
+                            {t.turno}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="prev-input-highlight" />
+                    </div>
+                  </div>
+
+                  <div className="prog-block">
+                    <label className="prev-label" style={{ display: "block", marginBottom: 6 }}>
+                      <FaCalendarAlt style={{ marginRight: 6 }} />
+                      Fecha
+                    </label>
+                    <InlineCalendar
+                      value={fecha}
+                      onChange={(v) => setFecha(v)}
+                      locale="es-AR"
+                      weekStartsOn={1}
+                    />
+                  </div>
+                </div>
+              </aside>
+
+              {/* DERECHA: Slots del grupo (antes estaba a la izquierda) */}
+              <section className="col-materia">
+                <div className="prev-section">
+                  <h3 className="prev-section-title">Slots del grupo (hasta 4)</h3>
+
+                  <div className="mesa-cards">
+                    {(() => {
+                      const ocupados = [...detalleGrupo].sort((a, b) => a.numero_mesa - b.numero_mesa);
+                      const arr = [];
+                      for (let i = 0; i < 4; i++) arr.push(ocupados[i] ?? null);
+                      return arr.map((slot, idx) => {
+                        if (slot) {
+                          const docentes = Array.isArray(slot.docentes) ? slot.docentes : [];
+                          return (
+                            <article key={`slot-ok-${slot.numero_mesa}`} className="mesa-card">
+                              <div className="mesa-card-head">
+                                <span className="mesa-badge">N° {slot.numero_mesa}</span>
+                                <div className="mesa-card-actions">
+                                  <button
+                                    className="mesa-chip info"
+                                    title="Mover este número a otro grupo"
+                                    onClick={() => { setNumeroParaMover(slot.numero_mesa); setOpenMover(true); }}
+                                  >
+                                    <FaExchangeAlt />
+                                  </button>
+                                  <button
+                                    className="mesa-chip danger"
+                                    title="Quitar del grupo (no borra la mesa)"
+                                    onClick={() => quitarNumeroDelGrupo(slot.numero_mesa)}
+                                    disabled={!idGrupo}
+                                  >
+                                    <FaTrash />
+                                  </button>
+                                </div>
+                              </div>
+                              <h4 className="mesa-card-title">{slot.materia || "Sin materia"}</h4>
+                              <p className="mesa-card-sub">
+                                {docentes.length ? `Docentes: ${docentes.join(" | ")}` : "Docentes: —"}
+                              </p>
+                            </article>
+                          );
+                        }
+                        return (
+                          <button
+                            key={`slot-free-${idx}`}
+                            className="mesa-card add"
+                            onClick={() => setOpenAgregar(true)}
+                            disabled={numerosGrupo.length >= 4}
+                            title="Agregar número al grupo"
+                          >
+                            <FaPlus /> Agregar número
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            {/* Botonera */}
+            <div className="prev-add-buttons "  id="v-add-buttons">
+              <button
+                type="button"
+                className="prev-add-button prev-add-button--back"
+                onClick={() => setOpenDelete(true)}
+                title="Eliminar mesa (alumno)"
+              >
+                <FaTrash style={{ marginRight: 8 }} />
+                Eliminar
+              </button>
+
+              <button
+                type="button"
+                className="prev-add-button"
+                disabled={guardando}
+                onClick={onSave}
+                title="Guardar"
+              >
+                <FaSave style={{ marginRight: 8 }} />
+                {guardando ? "Guardando..." : "Guardar Cambios"}
+              </button>
+            </div>
+          </div>
+
+          {/* Modales */}
+          {openDelete && (
+            <ModalEliminarMesa
+              open={openDelete}
+              mesa={{ numero_mesa: numeroMesa }}
+              onClose={() => setOpenDelete(false)}
+              onSuccess={() => {
+                setOpenDelete(false);
+                notify({ tipo: "exito", mensaje: "Mesa eliminada." });
+                setTimeout(() => navigate("/mesas-examen"), 400);
+              }}
+              onError={(mensaje) => notify({ tipo: "error", mensaje: mensaje || "No se pudo eliminar la mesa." })}
+            />
+          )}
+
+          {openAgregar && (
+            <ModalAgregarMesas
+              open={openAgregar}
+              onClose={() => setOpenAgregar(false)}
+              idGrupo={idGrupo}
+              numeroMesaActual={numeroMesa}
+              fechaObjetivo={fecha}
+              idTurnoObjetivo={idTurno ? Number(idTurno) : null}
+              onAdded={() => {
+                setOpenAgregar(false);
+                notify({ tipo: "exito", mensaje: "Número agregado al grupo." });
+                cargarTodo();
+              }}
+              onError={(mensaje) => notify({ tipo: "error", mensaje })}
+            />
+          )}
+
+          {openMover && (
+            <ModalMoverMesa
+              open={openMover}
+              onClose={() => setOpenMover(false)}
+              numeroMesaOrigen={numeroParaMover ?? numeroMesa}
+              fechaObjetivo={fecha}
+              idTurnoObjetivo={idTurno ? Number(idTurno) : null}
+              onMoved={() => {
+                setOpenMover(false);
+                setNumeroParaMover(null);
+                notify({ tipo: "exito", mensaje: "Número movido de grupo." });
+                cargarTodo();
+              }}
+              onError={(mensaje) => notify({ tipo: "error", mensaje })}
+            />
+          )}
+        </div>
+      </div>
+    </>
   );
 };
 

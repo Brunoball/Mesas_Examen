@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { FaTimes } from "react-icons/fa";
 import BASE_URL from "../../../config/config";
+import "./ModalMoverMesa.css";
 
 const ModalMoverMesa = ({
   open,
@@ -75,16 +76,16 @@ const ModalMoverMesa = ({
   if (!open) return null;
 
   return (
-    <div className="glob-modal-backdrop">
-      <div className="glob-modal">
-        <div className="glob-modal-header">
+    <div className="modalMovMesa-backdrop">
+      <div className="modalMovMesa-modal">
+        <div className="modalMovMesa-header">
           <h3>Mover número {numeroMesaOrigen} a otro grupo</h3>
-          <button className="glob-modal-close" onClick={onClose} aria-label="Cerrar">
+          <button className="modalMovMesa-close" onClick={onClose} aria-label="Cerrar">
             <FaTimes />
           </button>
         </div>
 
-        <div className="glob-modal-body" style={{ display: "grid", gap: 12 }}>
+        <div className="modalMovMesa-body" style={{ display: "grid", gap: 12 }}>
           <p>Seleccioná un grupo que <b>no esté completo</b> para mover este número.</p>
 
           {loading ? (
@@ -92,10 +93,10 @@ const ModalMoverMesa = ({
           ) : grupos.length === 0 ? (
             <div>No hay grupos con lugar para la fecha/turno seleccionados.</div>
           ) : (
-            <label className="glob-form-field">
-              <span className="glob-form-label">Grupo destino</span>
+            <label className="modalMovMesa-form-field">
+              <span className="modalMovMesa-form-label">Grupo destino</span>
               <select
-                className="glob-search-input"
+                className="modalMovMesa-input"
                 value={destino}
                 onChange={(e) => setDestino(e.target.value)}
               >
@@ -117,12 +118,12 @@ const ModalMoverMesa = ({
           )}
         </div>
 
-        <div className="glob-modal-footer">
-          <button className="glob-profesor-button glob-hover-effect" onClick={onClose}>
+        <div className="modalMovMesa-footer">
+          <button className="modalMovMesa-button modalMovMesa-hover-effect" onClick={onClose}>
             Cancelar
           </button>
           <button
-            className="glob-profesor-button glob-hover-effect"
+            className="modalMovMesa-button modalMovMesa-hover-effect"
             onClick={mover}
             disabled={!puedeMover}
             title="Mover al grupo destino"

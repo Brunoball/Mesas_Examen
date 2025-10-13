@@ -1,148 +1,658 @@
-/* ================================
-   EditarMesa – estilos locales
-   ================================ */
+/* ====== :root ROJO (con más tonalidades rojas) — variables con prefijo reg- ====== */
+:root {
+  /* 🎨 PALETA ROJA AMPLIADA */
+  --pro-primary: #C62828;
+  --pro-primary-light: #EF5350;
+  --pro-primary-dark: #B71C1C;
+  --pro-primary-darker: #8B0000;
 
-/* Títulos/secciones */
-.glob-profesor-box h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #1f2937; /* gris oscuro */
-  margin: 12px 0 10px 0;
+  --pro-secondary: #D32F2F;
+  --pro-accent: #F44336;
+  --pro-accent-light: #FFCDD2;
+  --pro-accent-dark: #C62828;
+
+  --pro-coral: #FF5722;
+  --pro-crimson: #DC143C;
+  --pro-burgundy: #8B1538;
+  --pro-rose: #E91E63;
+
+  --pro-success: #2E7D32;
+  --pro-warning: #FF8F00;
+  --pro-danger: #D32F2F;
+
+  --pro-light: #FAFAFA;
+  --pro-dark: #212121;
+
+  --pro-gray-50: #FAFAFA;
+  --pro-gray-100: #F5F5F5;
+  --pro-gray-200: #EEEEEE;
+  --pro-gray-300: #E0E0E0;
+  --pro-gray-400: #BDBDBD;
+  --pro-gray-500: #9E9E9E;
+  --pro-gray-600: #757575;
+  --pro-gray-700: #616161;
+  --pro-gray-800: #424242;
+  --pro-gray-900: #212121;
+
+  --pro-red-50: #FFEBEE;
+  --pro-red-100: #FFCDD2;
+  --pro-red-200: #EF9A9A;
+  --pro-red-300: #E57373;
+  --pro-red-400: #EF5350;
+  --pro-red-500: #F44336;
+  --pro-red-600: #E53935;
+  --pro-red-700: #D32F2F;
+  --pro-red-800: #C62828;
+  --pro-red-900: #B71C1C;
+
+  --pro-border-radius: 12px;
+  --pro-border-radius-lg: 16px;
+  --pro-border-radius-xl: 20px;
+
+  --pro-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  --pro-shadow-sm: 0 1px 3px rgba(183, 28, 28, 0.08);
+  --pro-shadow-md: 0 4px 6px -1px rgba(183, 28, 28, 0.12), 0 2px 4px -1px rgba(183, 28, 28, 0.08);
+  --pro-shadow-lg: 0 10px 15px -3px rgba(183, 28, 28, 0.12), 0 4px 6px -2px rgba(183, 28, 28, 0.08);
+
+  /* Aliases */
+  --primary-500: var(--pro-primary);
+  --primary-600: var(--pro-primary-dark);
+  --primary-700: var(--pro-primary-darker);
+  --primary-400: var(--pro-primary-light);
+  --primary-50: var(--pro-red-50);
+  --primary-200: var(--pro-red-200);
+  --secondary-50:  #eef2ff;
+  --secondary-100: #e0e7ff;
+
+  --success-500: var(--pro-success);
+  --warning-500: var(--pro-warning);
+  --danger-500: var(--pro-danger);
+  --danger-600: var(--pro-primary-dark);
+  --danger-200: var(--pro-red-200);
+  --danger-50: var(--pro-red-50);
+
+  --text-primary: var(--pro-gray-800);
+  --text-secondary: var(--pro-gray-600);
+  --text-muted: var(--pro-gray-500);
+  --text-on-primary: #FFFFFF;
+
+  --background-color: #FFFFFF;
+  --surface-color: #FFFFFF;
+  --surface-secondary: var(--pro-red-50);
+
+  --border-color: var(--pro-red-200);
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --spacing-xs: 0.5rem;
+
+  --border-radius: var(--pro-border-radius);
+  --border-radius-sm: 8px;
 }
 
-/* Grilla base usada en el componente */
-.glob-grid-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* en desktop */
-  gap: 16px;
-}
-
-/* Campos: label + input/select */
-.glob-form-field {
+/* ====== Wrapper LOCAL para centrar vertical sin globales ====== */
+.editar-mesa-page{
+  min-height: 100vh;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.glob-form-label {
-  font-size: 0.88rem;
-  color: #374151;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* Inputs/Selects – heredan el estilo global pero aseguramos contraste */
-.glob-search-input,
-.glob-form-field input,
-.glob-form-field select,
-.glob-form-field textarea {
-  display: block;
-  width: 100%;
-  min-height: 38px;
-  padding: 8px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #111827;
-  outline: none;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
-  font-size: 0.95rem;
-  line-height: 1.2;
+  align-items: center;       /* centra vertical */
+  justify-content: center;   /* centra horizontal */
+  padding: 16px;
   box-sizing: border-box;
 }
 
-.glob-search-input:focus,
-.glob-form-field input:focus,
-.glob-form-field select:focus,
-.glob-form-field textarea:focus {
-  border-color: #2563eb;              /* azul */
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
+/* ============ Shell & background ============ */
+.ecourse-shell{
+background-color: white;
+  border-radius: 18px;
+  width:100%;
+  max-width: 1200px;
+  overflow: hidden;
 }
 
-/* Asegurar legibilidad en disabled / readOnly (por defecto algunos navegadores bajan demasiado el contraste) */
-.glob-search-input[disabled],
-.glob-form-field input[disabled],
-.glob-form-field select[disabled],
-.glob-form-field textarea[disabled],
-.glob-form-field input[readonly],
-.glob-form-field textarea[readonly] {
-  background: #f3f4f6;                /* gris claro */
-  color: #111827 !important;          /* texto visible */
-  -webkit-text-fill-color: #111827;   /* Safari/Chromium */
-  opacity: 1;                         /* NO bajar opacidad */
-  cursor: default;
-  border-color: #d1d5db;
+/* ============ Header ============ */
+.ecourse-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 14px; 
 }
 
-/* Placeholders y valores en inputs */
-.glob-search-input::placeholder,
-.glob-form-field input::placeholder,
-.glob-form-field textarea::placeholder {
-  color: #9ca3af;
+/* Variante primaria: fondo primario, texto blanco */
+.header-primary{
+  background: var(--gradient-primary, linear-gradient(135deg, #64748b, #334155));
+  color: var(--text-on-primary);
+  box-shadow: var(--pro-shadow-lg);
+}
+.header-primary .title-inverted{ color: var(--text-on-primary); }
+.header-primary .ecourse-ghost,
+.header-primary .ecourse-pill{
+  color: var(--text-on-primary);
 }
 
-/* Select – quitar estilos nativos feos en algunos browsers */
-.glob-form-field select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, #6b7280 50%),
-    linear-gradient(135deg, #6b7280 50%, transparent 50%),
-    linear-gradient(to right, transparent, transparent);
-  background-position:
-    calc(100% - 18px) calc(50% - 3px),
-    calc(100% - 12px) calc(50% - 3px),
-    100% 0;
-  background-size: 6px 6px, 6px 6px, 2.2em 100%;
-  background-repeat: no-repeat;
-  padding-right: 2.4em;
+/* Botón Volver invertido (borde suave blanco) */
+.ghost-inverted{
+  display:inline-flex; gap:8px; align-items:center;
+  border:1px solid rgba(255,255,255,.35); background:transparent; color:var(--text-on-primary);
+  padding:10px 12px; border-radius:12px; font-weight:700; cursor:pointer;
+  box-shadow:none;
+}
+.ghost-inverted:hover{ background: rgba(255,255,255,.08); }
+
+/* Acciones del header con variantes invertidas */
+.ecourse-actions{ display:flex; align-items:center; gap:10px; }
+.ecourse-pill{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:10px 14px; border-radius:18px; border:0; cursor:pointer;
+  font-weight:700; letter-spacing:.2px;
+  background:var(--primary-50); color:var(--primary-600);
+  transition: var(--pro-transition);
 }
 
-/* Fila de botones inferior – ajustar separación */
-.glob-botones-container .glob-profesor-button {
-  min-height: 40px;
+.ecourse-pill.primary.inverted:hover{
+  background: rgba(255,255,255,.25);
 }
 
-/* Responsive: en pantallas chicas, la grilla pasa a 1 columna */
-@media (max-width: 880px) {
-  .glob-grid-form {
-    grid-template-columns: 1fr;
-    gap: 12px;
+.ecourse-pill.danger.inverted-outline:hover{
+  background: rgba(255,255,255,.12);
+}
+
+.ecourse-header-left{ display:flex; align-items:center; gap:12px; }
+.ecourse-title{
+  font-size:1.6rem; font-weight:800; color:var(--primary-700); letter-spacing:.2px;
+}
+
+/* ============ Panel blanco con sombra suave ============ */
+.ecourse-panel{
+
+  box-shadow: var(--pro-shadow-lg);
+  padding:18px;
+}
+.ecourse-empty{ margin:0; padding:36px; text-align:center; color:var(--text-secondary); }
+
+/* Meta materia */
+.ecourse-meta{ margin-bottom:8px; }
+.ecourse-subtle{ font-size:.8rem; color:var(--text-muted); font-weight:700; }
+.ecourse-materia{ font-size:1.05rem; font-weight:800; color:var(--text-primary); }
+
+/* ============ Filter bar (pills) ============ */
+.ecourse-filterbar{
+  display:grid; grid-template-columns: repeat(2, minmax(180px, 240px) );
+  gap:12px; align-items:end; margin:12px 0 8px;
+}
+.ecourse-filter{ display:flex; flex-direction:column; gap:6px; }
+.ecourse-filter .label{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:.88rem; font-weight:700; color:var(--primary-600);
+}
+.ecourse-filter input, .ecourse-filter select{
+  padding:10px 12px; border:1px solid var(--border-color); border-radius:12px;
+  background:#fff; outline:none; color:var(--text-primary);
+  transition: var(--pro-transition);
+}
+.ecourse-filter input:focus, .ecourse-filter select:focus{
+  border-color:var(--primary-400);
+  box-shadow:0 0 0 3px rgba(198, 40, 40, .15);
+}
+
+/* ============ Cards estilo “My Courses” ============ */
+.ecourse-section-title{
+  margin:12px 0 10px; color:var(--primary-600); font-weight:800; font-size:1rem;
+}
+.ecourse-cards{
+  display:grid; grid-template-columns:repeat(3, minmax(240px, 1fr));
+  gap:14px;
+}
+.ecourse-card{
+  position:relative; display:flex; gap:14px; align-items:stretch;
+  padding:16px; border-radius:16px; border:1px solid var(--border-color);
+  background: var(--surface-secondary);
+  box-shadow: var(--pro-shadow-md);
+}
+.ecourse-card.add{
+  justify-content:center; align-items:center; font-weight:700; color:var(--primary-700);
+  background:var(--primary-50); border:1px dashed var(--primary-200); cursor:pointer;
+}
+.ecourse-card.add:hover{ filter:brightness(0.98); }
+.ecourse-card-media{
+  width:110px; min-width:110px; border-radius:12px;
+  background: linear-gradient(135deg, rgba(244,67,54,.12), rgba(220,20,60,.12));
+}
+.ecourse-card-body{ display:flex; justify-content:space-between; width:100%; }
+.ecourse-card-title h4{ margin:6px 0 2px; font-size:1rem; color:var(--text-primary); font-weight:800; }
+.ecourse-card-title .badge{
+  display:inline-block; font-size:.75rem; font-weight:800; color:var(--primary-600);
+  background:var(--primary-50); padding:4px 8px; border-radius:999px;
+}
+.ecourse-card-title .muted{ color:var(--text-secondary); font-size:.88rem; }
+
+.ecourse-card-actions{ display:flex; gap:10px; align-items:flex-start; }
+.iconchip{
+  width:38px; height:38px; border-radius:999px; display:grid; place-items:center;
+  border:0; cursor:pointer; background:var(--primary-50); color:var(--primary-600);
+  box-shadow: var(--pro-shadow-sm);
+  transition: var(--pro-transition);
+}
+.iconchip.edit{ background:#ecfeff; color:#0891b2; }
+.iconchip.danger{ background:var(--danger-50); color:var(--danger-600); }
+
+/* Variantes de tono */
+.tone-1{ background:linear-gradient(180deg,#ffffff 0%, var(--primary-50) 100%); }
+.tone-2{ background:linear-gradient(180deg,#ffffff 0%, #fff5f5 100%); }
+.tone-3{ background:linear-gradient(180deg,#ffffff 0%, #fff9f9 100%); }
+
+/* Responsive */
+@media (max-width: 1100px){
+  .ecourse-cards{ grid-template-columns:repeat(2, minmax(220px, 1fr)); }
+}
+@media (max-width: 760px){
+  .ecourse-shell{ padding:14px; }
+  .ecourse-header{ gap:8px; flex-direction:column; align-items:stretch; }
+  .ecourse-actions{ justify-content:space-between; }
+  .ecourse-cards{ grid-template-columns:1fr; }
+  .ecourse-filterbar{ grid-template-columns:1fr; }
+}
+
+/* ======================= Interacciones y hovers ======================= */
+.ecourse-ghost,
+.ecourse-pill,
+.iconchip,
+.ecourse-card,
+.ecourse-filter input,
+.ecourse-filter select {
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-normal),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    filter var(--transition-fast),
+    opacity var(--transition-fast);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ecourse-ghost,
+  .ecourse-pill,
+  .iconchip,
+  .ecourse-card,
+  .ecourse-filter input,
+  .ecourse-filter select { transition: none; }
+}
+
+.ghost-inverted:hover { transform: translateY(-1px); }
+.ghost-inverted:active { transform: translateY(0); filter: brightness(0.96); }
+
+.ecourse-actions .ecourse-pill:hover {
+  filter: brightness(1.02);
+  transform: translateY(-1px);
+  box-shadow: var(--pro-shadow-lg);
+}
+.ecourse-actions .ecourse-pill:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+.ecourse-actions .ecourse-pill[disabled]{
+  opacity:.6; cursor:not-allowed; box-shadow:none; transform:none;
+}
+
+/* Ripple */
+.ecourse-ghost,
+.ecourse-pill,
+.iconchip {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.ecourse-ghost::after,
+.ecourse-pill::after,
+.iconchip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120px 120px at var(--x,50%) var(--y,50%), rgba(0,0,0,.12), transparent 60%);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+.ecourse-ghost:active::after,
+.ecourse-pill:active::after,
+.iconchip:active::after { opacity: 1; }
+
+/* Inputs focus */
+.ecourse-filter input:hover,
+.ecourse-filter select:hover { border-color: var(--primary-400); }
+.ecourse-filter input:focus-visible,
+.ecourse-filter select:focus-visible {
+  outline:none; border-color:var(--primary-600);
+  box-shadow:0 0 0 4px rgba(198,40,40,.18);
+}
+
+/* Cards hover */
+.ecourse-card { transform: translateY(0); }
+@media (hover: hover) {
+  .ecourse-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 26px -12px rgba(183,28,28,.18), 0 8px 12px -8px rgba(183,28,28,.08);
+  }
+  .ecourse-card:hover .ecourse-card-media {
+    transform: translateY(-2px) scale(1.02);
+    filter: contrast(1.02) saturate(1.03);
+  }
+}
+.ecourse-card:active { transform: translateY(0); }
+
+.ecourse-card.add{ border-style:dashed; }
+.ecourse-card.add:hover{
+  background: linear-gradient(180deg,#ffffff 0%, var(--primary-50) 100%);
+  border-color: var(--primary-400);
+}
+
+/* Accesibilidad focus */
+.ghost-inverted:focus-visible,
+.ecourse-pill:focus-visible,
+.iconchip:focus-visible,
+.ecourse-card.add:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgba(255,255,255,.25),
+    0 0 0 1px rgba(255,255,255,.6) inset;
+}
+
+/* Estados disabled */
+.ecourse-pill.primary[disabled] {
+  background: rgba(255,255,255,.25);
+  opacity: .85;
+  cursor: not-allowed;
+}
+.iconchip[disabled] {
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ============ Footer de acciones (al fondo) ============ */
+.ecourse-shell{
+  /* Para que el footer quede realmente abajo cuando el contenido es corto */
+  display: flex;
+  flex-direction: column;
+}
+
+.ecourse-panel{
+  flex: 1; /* empuja el footer hacia abajo si hay poco contenido */
+}
+
+.ecourse-footer-actions{
+  padding: 14px;
+  background: #fff;
+  border-top: 1px solid var(--border-color);
+}
+
+.ecourse-footer-actions__inner{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* Responsivo: botones en columna en pantallas muy chicas */
+@media (max-width: 480px){
+  .ecourse-footer-actions__inner{
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .ecourse-footer-actions .ecourse-pill{
+    width: 100%;
+    justify-content: center;
   }
 }
 
-/* Pequeños refinamientos visuales */
-.glob-box-table {
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
+
+/* Reutilizamos el theme de Previas (prev-add-*) importado arriba.
+   Acá solo damos estilo a las tarjetas de slots para que "calcen" en el look. */
+
+/* Grid de tarjetas */
+.mesa-cards{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 14px 16px;
+}
+
+@media (max-width: 1100px){
+  .mesa-cards{ grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+}
+@media (max-width: 640px){
+  .mesa-cards{ grid-template-columns: 1fr; }
+}
+
+/* Tarjeta base */
+.mesa-card{
+  background: var(--surface-color, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: var(--border-radius, 8px);
+  padding: 14px 12px;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.06));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Tarjeta "agregar" como botón */
+.mesa-card.add{
+  background: var(--danger-50, #ffe4e6);
+  border-style: dashed;
+  color: var(--danger-600, #dc2626);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.mesa-card.add[disabled]{
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* Cabecera y acciones */
+.mesa-card-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.mesa-badge{
+  display:inline-block;
+  font-size:.78rem;
+  font-weight:800;
+  color: var(--danger-700, #b91c1c);
+  background: var(--danger-50, #ffe4e6);
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+.mesa-card-actions{
+  display:flex; gap:8px; align-items:center;
+}
+.mesa-chip{
+  width:36px; height:36px; border-radius:999px;
+  display:grid; place-items:center;
+  border:1px solid var(--border-color, #e2e8f0);
   background: #fff;
+  cursor:pointer;
+}
+.mesa-chip.info{
+  background: #ecfeff;
+  border-color: #bae6fd;
+}
+.mesa-chip.danger{
+  background: var(--danger-50, #ffe4e6);
+  border-color: var(--danger-200, #fecaca);
+  color: var(--danger-700, #b91c1c);
 }
 
-.glob-profesor-title {
-  letter-spacing: .2px;
+/* Título y subtítulo */
+.mesa-card-title{
+  margin: 2px 0 0;
+  font-weight: 800;
+  color: var(--text-primary, #0f172a);
+}
+.mesa-card-sub{
+  margin: 0;
+  color: var(--text-secondary, #475569);
+  font-size: .92rem;
 }
 
-.mi-muted {
-  color: #6b7280;
-  font-size: .9rem;
+/* Texto sutil reutilizable */
+.mesa-muted{
+  color: var(--text-secondary, #475569);
 }
 
-/* Enlaces/botones primarios dentro de esta página */
-.glob-profesor-button {
-  border-radius: 12px;
-  font-weight: 600;
+.mesa-two-col{
+  display:flex;
+  gap:16px;
+justify-content: space-between;
+}
+@media (max-width: 900px){
+  .mesa-two-col{ grid-template-columns: 1fr; }
 }
 
-/* Compatibilidad con inputs de fecha (en algunos temas quedaban transparentes) */
-input[type="date"].glob-search-input {
-  background-color: #ffffff;
+/* === Layout principal de dos columnas === */
+.mesa-two-col{
+  display: grid;
+  grid-template-columns: 1fr 360px;   /* izquierda fluida, derecha fija */
+  gap: 24px;
+  align-items: start;
 }
-input[type="date"].glob-search-input[disabled] {
-  background-color: #f3f4f6;
-  color: #111827 !important;
-  -webkit-text-fill-color: #111827;
+
+/* Un poco más ancho en pantallas grandes */
+@media (min-width: 1300px){
+  .mesa-two-col{ grid-template-columns: 1fr 400px; }
 }
+
+/* Columnas en stack en mobile */
+@media (max-width: 900px){
+  .mesa-two-col{ grid-template-columns: 1fr; }
+}
+
+/* Sidebar de Programación con look de tarjeta y sticky */
+
+
+/* Bloques dentro de Programación (calendario/turno) */
+.prog-block{ margin:auto; min-width: 350px; max-width: 350px; }
+.prog-block:last-child{ display: flex; justify-content: center; }
+
+/* El calendario ocupa el ancho de la sidebar */
+.cal-inline{ width: 100%; max-width: none; }
+
+/* Reducimos un poco márgenes verticales globales para compactar */
+
+/* === Grid de slots: ocupa huecos automáticamente === */
+.mesa-cards{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* En pantallas muy anchas, que no quede demasiado chico */
+@media (min-width: 1400px){
+  .mesa-cards{ grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+}
+
+/* Botonera alineada a la derecha y con respiración */
+.prev-add-buttons{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ===== Programación: título + turno en la misma fila ===== */
+.programacion-card .prog-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Contenedor del floating label */
+.programacion-card .float-field{
+  position: relative;
+  width: 220px;            /* ajustá si lo querés más ancho/angosto */
+}
+
+/* Label flotante SIEMPRE visible (activo) */
+.programacion-card .float-field .float-label{
+  position: absolute;
+  top: 0;                  /* fijo arriba */
+  left: 12px;
+  transform: translateY(-50%);   /* queda “sobre” el borde superior */
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary-600, #b71c1c);
+  background: #fff;        /* para que se “corte” el borde debajo */
+  padding: 0 6px;
+  pointer-events: none;     /* no interfiere con el select */
+}
+
+/* Le damos espacio arriba al select para que no tape el label */
+
+
+/* Mantener el highlight si ya lo usás */
+.programacion-card .float-field .prev-input:focus-visible{
+  outline: none;
+}
+
+/* Responsive: si no entra, el turno baja debajo del título */
+@media (max-width: 560px){
+  .programacion-card .prog-head{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .programacion-card .float-field{
+    width: 100%;
+  }
+}
+
+#turno-select{padding: .7rem 1rem;}
+
+/* === Layout principal de dos columnas (Programación izq angosta | Slots der fluida) === */
+.mesa-two-col{
+  padding: 10px 0 0;
+  display: grid;
+  grid-template-columns: 360px 1fr;   /* antes: 1fr 360px */
+  gap: 24px;
+  align-items: start;
+}
+
+/* Un poco más ancho en pantallas grandes */
+@media (min-width: 1300px){
+  .mesa-two-col{ grid-template-columns: 400px 1fr; }
+}
+
+/* Columnas en stack en mobile */
+@media (max-width: 900px){
+  .mesa-two-col{ grid-template-columns: 1fr; }
+}
+
+#form-wrapper{padding: 0;}
+#v-add-buttons{padding: 0 1rem 1rem;}
+#prev-section-program{padding-bottom: 0;}

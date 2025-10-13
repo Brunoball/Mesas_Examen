@@ -1,0 +1,215 @@
+/* src/components/MesasExamen/modales/ModalMoverMesa.css */
+
+/***** Modal Mover Mesa — estilos con prefijo modalMovMesa- *****/
+
+/* Backdrop */
+.modalMovMesa-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  animation: mm-fade-in 140ms ease-out;
+}
+
+/* Contenedor del modal */
+.modalMovMesa-modal {
+  width: min(640px, 92vw);
+  max-height: min(80vh, 820px);
+  background: var(--surface-color, #fff);
+  color: var(--text-primary, #0f172a);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: var(--border-radius, 12px);
+  box-shadow:
+    0 24px 56px -20px rgba(183, 28, 28, 0.20),
+    0 10px 24px -10px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: mm-pop 160ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* Header */
+.modalMovMesa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  background: linear-gradient(180deg, var(--primary-50, #ffebee) 0%, #ffffff 90%);
+}
+
+.modalMovMesa-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--primary-600, #b71c1c);
+}
+
+.modalMovMesa-close {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: #fff;
+  color: var(--text-primary, #0f172a);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 160ms ease, background-color 120ms ease;
+}
+.modalMovMesa-close:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px -8px rgba(183, 28, 28, 0.25);
+  background: var(--primary-50, #ffebee);
+}
+.modalMovMesa-close:active { transform: translateY(0); }
+.modalMovMesa-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.18);
+}
+
+/* Body */
+.modalMovMesa-body {
+  padding: 16px;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  color: var(--text-primary, #0f172a);
+}
+
+.modalMovMesa-body p {
+  margin: 0 0 6px 0;
+  color: var(--text-secondary, #475569);
+}
+
+/* Footer */
+.modalMovMesa-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  background: #fff;
+}
+
+/* Botones */
+.modalMovMesa-button {
+  appearance: none;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 800;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 160ms ease, filter 120ms ease, background-color 120ms ease;
+  background: var(--primary-50, #ffebee);
+  color: var(--primary-600, #b71c1c);
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+.modalMovMesa-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -10px rgba(183, 28, 28, 0.25);
+  background: #fff;
+}
+.modalMovMesa-button:active { transform: translateY(0); }
+.modalMovMesa-button[disabled] {
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Clase opcional para acción primaria (si querés usarla en el botón “Mover”) */
+.modalMovMesa-button.primary {
+  background: var(--primary-600, #b71c1c);
+  color: var(--text-on-primary, #fff);
+  border-color: transparent;
+}
+.modalMovMesa-button.primary:hover {
+  filter: brightness(1.02);
+  box-shadow: 0 12px 22px -10px rgba(183, 28, 28, 0.35);
+}
+
+/* Campos / Form */
+.modalMovMesa-form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.modalMovMesa-form-label {
+  font-size: .85rem;
+  font-weight: 800;
+  color: var(--primary-600, #b71c1c);
+}
+
+/* Input/select */
+.modalMovMesa-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: #fff;
+  color: var(--text-primary, #0f172a);
+  transition: border-color 140ms ease, box-shadow 160ms ease, background-color 140ms ease;
+  outline: none;
+}
+.modalMovMesa-input:hover {
+  border-color: var(--primary-400, #ef5350);
+}
+.modalMovMesa-input:focus-visible {
+  border-color: var(--primary-600, #b71c1c);
+  box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.18);
+}
+.modalMovMesa-input option {
+  color: var(--text-primary, #0f172a);
+}
+
+/* Estados */
+.modalMovMesa-modal .modalMovMesa-is-danger {
+  color: var(--danger-600, #b71c1c);
+  background: var(--danger-50, #ffe4e6);
+  border-color: var(--danger-200, #fecaca);
+}
+
+/* Animaciones */
+@keyframes mm-fade-in {
+  from { opacity: 0; } to { opacity: 1; }
+}
+@keyframes mm-pop {
+  from { transform: translateY(6px) scale(0.98); opacity: 0.96; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .modalMovMesa-backdrop,
+  .modalMovMesa-modal,
+  .modalMovMesa-close,
+  .modalMovMesa-button,
+  .modalMovMesa-input {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Responsivo */
+@media (max-width: 520px) {
+  .modalMovMesa-modal {
+    width: 94vw;
+    border-radius: 10px;
+  }
+  .modalMovMesa-header { padding: 12px; }
+  .modalMovMesa-body { padding: 12px; }
+  .modalMovMesa-footer {
+    padding: 10px 12px;
+    gap: 8px;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .modalMovMesa-button { width: 100%; }
+}
