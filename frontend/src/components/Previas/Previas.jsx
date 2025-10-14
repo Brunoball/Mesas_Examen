@@ -24,13 +24,16 @@ import {
   FaPlus,
   FaEdit,
   FaCheckCircle,
+  FaBroom,         // ⬅️ para “limpiar pruebas”
+  FaUpload,        // ⬅️ para “importar excel”
 } from 'react-icons/fa';
 
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import Toast from '../Global/Toast';
-import InscribirModal from './modales/InscribirModal'; // <— variante success (verde)
+import InscribirModal from './modales/InscribirModal';
 import ModalInfoPrevia from './modales/ModalInfoPrevia';
+import ImportarPreviasModal from './modales/ImportarPreviasModal'; // ⬅️ nuevo modal
 import '../Global/roots.css';
 import './Previas.css';
 
@@ -173,9 +176,7 @@ const Previas = () => {
   const [cargando, setCargando] = useState(false);
 
   const [tab, setTab] = useState('todos'); // 'todos' | 'inscriptos'
-
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
-
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
 
@@ -217,6 +218,9 @@ const Previas = () => {
     open: false,
     item: null,
   });
+
+  // ⬇️ NUEVO: modal de importación (tabla de pruebas)
+  const [modalImport, setModalImport] = useState(false);
 
   // Listas básicas (desde backend)
   const [listas, setListas] = useState({ cursos: [], divisiones: [] });
@@ -338,12 +342,15 @@ const Previas = () => {
   }, [dispararCascadaUnaVez]);
 
   /* ================================
-     Efectos
+     Helpers UI
   ================================= */
   const mostrarToast = useCallback((mensaje, tipo = 'exito') => {
     setToast({ mostrar: true, tipo, mensaje });
   }, []);
 
+  /* ================================
+     Efectos
+  ================================= */
   useEffect(() => {
     const handleClickOutsideFiltros = (event) => {
       if (filtrosRef.current && !filtrosRef.current.contains(event.target)) {
@@ -421,7 +428,7 @@ const Previas = () => {
   }, [busquedaDefer, triggerCascadaConPreMask]);
 
   /* ================================
-     Handlers
+     Handlers filtros/búsqueda
   ================================= */
   const handleMostrarTodos = useCallback(() => {
     setFiltros({
@@ -673,8 +680,23 @@ const Previas = () => {
   // ⬇️ Nuevo: tab change con cascada
   const handleTabChange = useCallback((nuevoTab) => {
     setTab(nuevoTab);
-    triggerCascadaConPreMask(); // dispara la animación al cambiar entre "Todos" e "Inscriptos"
+    triggerCascadaConPreMask();
   }, [triggerCascadaConPreMask]);
+
+  /* ================================
+     NUEVO: Acciones de PRUEBAS (previas_lab)
+  ================================= */
+  const limpiarTablaPruebas = useCallback(async () => {
+    if (!window.confirm('¿Vaciar completamente la tabla de PRUEBAS (previas_lab)? Esta acción no afecta la tabla real.')) return;
+    try {
+      const res = await fetch(`${BASE_URL}/api.php?action=previas_lab_truncate`, { method: 'POST' });
+      const js = await res.json();
+      if (!js?.exito) throw new Error(js?.mensaje || 'No se pudo limpiar previas_lab');
+      mostrarToast('Tabla de PRUEBAS vaciada correctamente', 'exito');
+    } catch (e) {
+      mostrarToast(e.message || 'Error al limpiar tabla de pruebas', 'error');
+    }
+  }, [mostrarToast]);
 
   /* ================================
      Fila virtualizada (desktop)
@@ -799,6 +821,9 @@ const Previas = () => {
           previa={modalInfo.item}
           onClose={cerrarModalInfo}
         />
+
+        {/* Modal Importar Excel (tabla de PRUEBAS) */}
+        <ImportarPreviasModal open={modalImport} onClose={() => setModalImport(false)} />
 
         {/* Header superior */}
         <div className="glob-front-row-pro">
@@ -1253,6 +1278,27 @@ const Previas = () => {
             >
               <FaPlus className="glob-profesor-icon-button" />
               <p>Agregar Previa</p>
+            </button>
+
+            {/* ⬇️ NUEVOS BOTONES (no tocan la tabla real, solo la de PRUEBAS) */}
+            <button
+              className="glob-profesor-button glob-hover-effect"
+              onClick={() => setModalImport(true)}
+              aria-label="Importar Excel (PRUEBAS)"
+              title="Importar Excel a previas_lab (PRUEBAS)"
+            >
+              <FaUpload className="glob-profesor-icon-button" />
+              <p>Importar Excel (PRUEBAS)</p>
+            </button>
+
+            <button
+              className="glob-profesor-button glob-hover-effect"
+              onClick={limpiarTablaPruebas}
+              aria-label="Limpiar tabla de PRUEBAS"
+              title="Vaciar completamente previas_lab"
+            >
+              <FaBroom className="glob-profesor-icon-button" />
+              <p>Limpiar PRUEBAS</p>
             </button>
           </div>
         </div>

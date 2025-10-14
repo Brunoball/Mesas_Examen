@@ -92,6 +92,12 @@ try {
         case 'previa_get':
             include_module($MODULES_DIR . '/previas/obtener_previa.php'); break;
 
+        // -------- 🔬 Previas LAB (tabla de PRUEBAS) --------
+        case 'previas_lab_ensure':
+        case 'previas_lab_import':
+        case 'previas_lab_truncate':
+            include_module($MODULES_DIR . '/previas/previas_lab_endpoints.php'); break;
+
         // -------- Profesores --------
         case 'profesores':
             include_module($MODULES_DIR . '/profesores/obtener_profesores.php'); break;
@@ -158,7 +164,7 @@ try {
         // ✅ No agrupadas (listado general + candidatas con validación)
         case 'mesas_listar_no_agrupadas':
             include_module($MODULES_DIR . '/mesas/obtener_mesas_no_agrupadas.php'); break;
-        case 'mesas_no_agrupadas_candidatas': // NUEVO para el modal
+        case 'mesas_no_agrupadas_candidatas':
             include_module($MODULES_DIR . '/mesas/mesas_no_agrupadas_candidatas.php'); break;
 
         case 'mesas_detalle_pdf':

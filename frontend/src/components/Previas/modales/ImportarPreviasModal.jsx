@@ -1,0 +1,310 @@
+// src/components/Previas/modales/ImportarPreviasModal.jsx
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
+import './ImportarPreviasModal.css';
+import { FaTimes, FaUpload } from 'react-icons/fa';
+import BASE_URL from '../../../config/config';
+
+// Campos REALES que se envían al backend (sin fecha_carga: la pone la DB)
+const DB_COLS = [
+  'dni','alumno',
+  'cursando_id_curso','cursando_id_division',
+  'id_materia','materia_id_curso','materia_id_division',
+  'id_condicion','inscripcion','anio'
+];
+
+// Mapeo EXACTO/FLEXIBLE -> SOLO tomamos el ID de materia.
+// ⚠️ NO incluimos "MATERIA" a secas para evitar leer el nombre de la materia.
+const EXCEL_TO_DB = {
+  dni: ['dni', 'DNI'],
+  alumno: ['APELLIDO Y NOMBRE', 'apellido y nombre', 'alumno', 'nombre alumno'],
+  cursando_id_curso: ['CURSANDO AÑO', 'CURSANDO ANIO', 'cursando año', 'cursando anio', 'cursando año (id)'],
+  cursando_id_division: ['CURSANDO DIVISIÓN', 'CURSANDO DIVISION', 'cursando division', 'cursando división (id)'],
+
+  // ✅ ACEPTAMOS SOLO VARIANTES DE ID DE MATERIA:
+  // (descartamos "MATERIA" de texto para no confundir)
+  id_materia: [
+    'IDMATERIA', 'ID MATERIA', 'ID_MATERIA',
+    'COD MATERIA', 'CODMATERIA', 'COD_MATERIA',
+    'id_materia', 'idmateria'
+  ],
+
+  materia_id_curso: ['AÑO MATERIA', 'ANIO MATERIA', 'anio materia', 'año materia (id)'],
+  materia_id_division: ['DIVISIÓN MATERIA', 'DIVISION MATERIA', 'division materia', 'división materia (id)'],
+  id_condicion: ['CONDICIÓN', 'CONDICION', 'id condicion', 'id_condicion'],
+  anio: ['AÑO', 'ANIO', 'anio']
+};
+
+// Normalizador: minúsculas y sin tildes
+const norm = (s = '') =>
+  s.toString().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+// ¿Fila del XLSX vacía?
+const isEmptyXlsxRow = (row) => {
+  const vals = Object.values(row || {});
+  if (vals.length === 0) return true;
+  return vals.every(v => String(v ?? '').trim() === '');
+};
+
+// Busca por cualquiera de los alias: igualdad exacta o que el encabezado comience con el alias.
+// (Como NO incluimos "materia" a secas en id_materia, no habrá falsos positivos por el nombre.)
+const pickByAliases = (row, aliases) => {
+  const entries = Object.entries(row || {});
+  const normEntries = entries.map(([k, v]) => [k, norm(k), v]);
+
+  for (const alias of aliases) {
+    const a = norm(alias);
+    const exact = normEntries.find(([, nk]) => nk === a);
+    if (exact) return exact[2];
+    const starts = normEntries.find(([, nk]) => nk.startsWith(a));
+    if (starts) return starts[2];
+  }
+  return undefined;
+};
+
+export default function ImportarPreviasModal({ open, onClose }) {
+  const dropRef = useRef(null);
+  const [fileName, setFileName] = useState('');
+  const [rows, setRows] = useState([]);
+  const [preview, setPreview] = useState([]);
+  const [errores, setErrores] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const onDropFile = useCallback(async (file) => {
+    if (!file) return;
+    setFileName(file.name);
+    setErrores([]);
+
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+
+    const json = XLSX.utils.sheet_to_json(ws, {
+      defval: '',
+      raw: false,
+      blankrows: false,
+    });
+
+    const normalized = [];
+    const errs = [];
+
+    json.forEach((r, idx) => {
+      if (isEmptyXlsxRow(r)) return;
+
+      const out = {};
+
+      // Mapear SOLO los campos que vienen del Excel (inscripcion se setea luego a 0)
+      const requiredFromExcel = [
+        'dni','alumno','cursando_id_curso','cursando_id_division',
+        'id_materia','materia_id_curso','materia_id_division','id_condicion','anio'
+      ];
+
+      for (const col of requiredFromExcel) {
+        const aliases = EXCEL_TO_DB[col] || [col];
+        const rawVal = pickByAliases(r, aliases);
+        if (rawVal === undefined) {
+          errs.push(`Fila ${idx + 2}: falta el encabezado/valor para "${col}" (p.ej.: "${aliases[0]}")`);
+          return; // descarta la fila
+        }
+        out[col] = (rawVal ?? '').toString().trim();
+      }
+
+      // Setear inscripcion a 0 (requerido)
+      out.inscripcion = 0;
+
+      // Parseos seguros (sin “forzar” a 0 silencioso)
+      const toInt = (val) => {
+        const n = parseInt(String(val).replace(/[^\d\-]/g, '').trim(), 10);
+        return Number.isFinite(n) ? n : NaN;
+      };
+
+      out.cursando_id_curso    = toInt(out.cursando_id_curso);
+      out.cursando_id_division = toInt(out.cursando_id_division);
+      out.id_materia           = toInt(out.id_materia);       // ← SOLO desde IDMATERIA / ID MATERIA / etc.
+      out.materia_id_curso     = toInt(out.materia_id_curso);
+      out.materia_id_division  = toInt(out.materia_id_division);
+      out.id_condicion         = toInt(out.id_condicion);
+      out.anio                 = toInt(out.anio);
+
+      // Validaciones estrictas
+      if (!out.dni || !out.alumno) {
+        errs.push(`Fila ${idx + 2}: "dni" y "alumno" son obligatorios`);
+        return;
+      }
+      if (!Number.isFinite(out.id_materia) || out.id_materia <= 0) {
+        errs.push(`Fila ${idx + 2}: "IDMATERIA" (ID numérico) es obligatorio y debe ser entero > 0`);
+        return;
+      }
+
+      const numericChecks = [
+        ['cursando_id_curso','CURSANDO AÑO (ID)'],
+        ['cursando_id_division','CURSANDO DIVISIÓN (ID)'],
+        ['materia_id_curso','AÑO MATERIA (ID)'],
+        ['materia_id_division','DIVISIÓN MATERIA (ID)'],
+        ['id_condicion','CONDICIÓN (ID)'],
+        ['anio','AÑO (de la previa)'],
+      ];
+      for (const [key, label] of numericChecks) {
+        if (!Number.isFinite(out[key])) {
+          errs.push(`Fila ${idx + 2}: "${label}" debe ser entero`);
+          return;
+        }
+      }
+
+      normalized.push(out);
+    });
+
+    setRows(normalized);
+    setPreview(normalized.slice(0, 10));
+    setErrores(errs);
+  }, []);
+
+  const onInputChange = useCallback((e) => {
+    const f = e.target.files?.[0];
+    if (f) onDropFile(f);
+  }, [onDropFile]);
+
+  const onDropHandler = useCallback((e) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) onDropFile(f);
+  }, [onDropFile]);
+
+  const onDragOver = useCallback((e) => {
+    e.preventDefault();
+  }, []);
+
+  const puedeEnviar = useMemo(
+    () => rows.length > 0 && errores.length === 0 && !submitting,
+    [rows, errores, submitting]
+  );
+
+  const enviar = useCallback(async () => {
+    if (!puedeEnviar) return;
+    try {
+      setSubmitting(true);
+      // asegurar tabla lab
+      await fetch(`${BASE_URL}/api.php?action=previas_lab_ensure`, { method: 'POST' });
+
+      const CHUNK = 500;
+      let insertados = 0;
+      let allErrs = [];
+
+      // Inserta en el MISMO ORDEN que vienen del Excel
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const slice = rows.slice(i, i + CHUNK);
+        const res = await fetch(`${BASE_URL}/api.php?action=previas_lab_import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ create_if_needed: false, rows: slice }),
+        });
+        const js = await res.json();
+        if (!js?.exito) {
+          allErrs.push(js?.mensaje || `Bloque ${i}-${i + CHUNK}: error`);
+        } else {
+          insertados += js.data?.insertados || 0;
+          if (Array.isArray(js.data?.errores) && js.data.errores.length) {
+            allErrs = allErrs.concat(js.data.errores);
+          }
+        }
+      }
+
+      setErrores(allErrs);
+      alert(`Importación finalizada. Insertados: ${insertados}. Errores: ${allErrs.length}`);
+      onClose?.();
+    } catch (e) {
+      console.error(e);
+      alert('Error enviando datos al servidor');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [rows, puedeEnviar, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="ipm-overlay" onMouseDown={onClose} role="dialog" aria-modal="true" aria-labelledby="ipm-title">
+      <div className="ipm-container" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="ipm-header">
+          <h3 id="ipm-title">Importar previas (tabla de PRUEBAS: <code>previas_lab</code>)</h3>
+          <button className="ipm-close" onClick={onClose} aria-label="Cerrar"><FaTimes /></button>
+        </div>
+
+        <div
+          ref={dropRef}
+          className="ipm-drop"
+          onDrop={onDropHandler}
+          onDragOver={onDragOver}
+        >
+          <FaUpload className="ipm-upload-ico" />
+          <p>Arrastrá tu archivo .xlsx aquí o</p>
+          <label className="ipm-file-btn">
+            Seleccionar archivo
+            <input type="file" accept=".xlsx,.xls" onChange={onInputChange} hidden />
+          </label>
+          {fileName && <div className="ipm-file-name">{fileName}</div>}
+        </div>
+
+        <div className="ipm-specs">
+          <h4>Usá estos encabezados en el Excel:</h4>
+          <ul>
+            <li><b>DNI</b></li>
+            <li><b>APELLIDO Y NOMBRE</b></li>
+            <li><b>CURSANDO AÑO</b> (ID)</li>
+            <li><b>CURSANDO DIVISIÓN</b> (ID)</li>
+
+            {/* ⚠️ Específicamente ID de materia */}
+            <li><b>IDMATERIA</b> / <b>ID MATERIA</b> / <b>ID_MATERIA</b> / <b>COD MATERIA</b></li>
+
+            <li><b>AÑO MATERIA</b> (ID)</li>
+            <li><b>DIVISIÓN MATERIA</b> (ID)</li>
+            <li><b>CONDICIÓN</b> (ID)</li>
+            <li><b>AÑO</b> (de la previa)</li>
+          </ul>
+          <p style={{marginTop:8}}>
+            <b>Inscripción</b> se carga <code>0</code> para todos.<br/>
+            <b>Fecha de carga</b> la pone el sistema automáticamente.<br/>
+            <span style={{display:'inline-block', marginTop:6}}>
+              <b>Importante:</b> la columna <code>MATERIA</code> (texto) se ignora; solo se lee el <code>IDMATERIA</code>.
+            </span>
+          </p>
+        </div>
+
+        {errores.length > 0 && (
+          <div className="ipm-errors" role="alert">
+            <b>Errores detectados ({errores.length}):</b>
+            <div className="ipm-errors-box">
+              {errores.slice(0, 50).map((e, i) => <div key={i}>• {e}</div>)}
+              {errores.length > 50 && <div>… (hay más)</div>}
+            </div>
+          </div>
+        )}
+
+        {preview.length > 0 && (
+          <div className="ipm-preview">
+            <b>Vista previa (primeras {preview.length} filas):</b>
+            <div className="ipm-table">
+              <div className="ipm-tr ipm-head">
+                {DB_COLS.map(c => <div key={c} className="ipm-td">{c}</div>)}
+              </div>
+              {preview.map((r, idx) => (
+                <div key={idx} className="ipm-tr">
+                  {DB_COLS.map(c => <div key={c} className="ipm-td">{String(r[c] ?? '')}</div>)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="ipm-actions">
+          <button className="ipm-btn ipm-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
+          <button className="ipm-btn ipm-primary" onClick={enviar} disabled={!puedeEnviar}>
+            {submitting ? 'Importando…' : 'Importar a previas_lab'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
