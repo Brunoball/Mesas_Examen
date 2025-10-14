@@ -336,54 +336,203 @@ const MesasExamen = () => {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // Exportar visible (Excel) — general
-  const exportarExcel = useCallback(() => {
-    if (!filasFiltradas.length) return;
+  /* =======================================================
+   *  Exportar Excel — DETALLADO (mismo endpoint que el PDF)
+   * ======================================================= */
+  // Reemplazá COMPLETA esta función en MesasExamen.jsx
+  const exportarExcel = useCallback(async () => {
+    try {
+      if (!filasFiltradas.length) return;
 
-    const filas = filasFiltradas.map((m) => ({
-      [vista === "grupos" ? "ID Grupo" : "ID NoAgrupada"]: m.id_grupo ?? m.id,
-      Mesas:
-        [m.numero_mesa_1, m.numero_mesa_2, m.numero_mesa_3, m.numero_mesa_4]
-          .filter(Boolean)
-          .join(" • ") || "",
-      Materia: m.materia || "",
-      Fecha: formatearFechaISO(m.fecha),
-      Turno: m.turno || "",
-      "Tribunal (único)": m.profesor || "",
-    }));
+      // --- Fallbacks por N° de mesa usando lo visible en la grilla ---
+      const mapaNumero = new Map(); // n° mesa -> { id_grupo, fecha, turno }
+      for (const g of filasFiltradas) {
+        const nums = [
+          g.numero_mesa_1,
+          g.numero_mesa_2,
+          g.numero_mesa_3,
+          g.numero_mesa_4,
+        ].filter((n) => n != null);
 
-    const headers = [
-      vista === "grupos" ? "ID Grupo" : "ID NoAgrupada",
-      "Mesas",
-      "Materia",
-      "Fecha",
-      "Turno",
-      "Tribunal (único)",
-    ];
+        for (const n of nums) {
+          const nn = parseInt(n, 10);
+          if (!Number.isFinite(nn)) continue;
+          if (!mapaNumero.has(nn)) {
+            mapaNumero.set(nn, {
+              id_grupo: g.id_grupo ?? null,
+              fecha: g.fecha ?? "",
+              turno: g.turno ?? "",
+            });
+          }
+        }
+      }
 
-    const ws = XLSX.utils.json_to_sheet(filas, { header: headers });
-    ws["!cols"] = [{ wch: 12 }, { wch: 18 }, { wch: 26 }, { wch: 12 }, { wch: 10 }, { wch: 36 }];
+      // 1) Todos los números visibles
+      const numerosOrdenados = Array.from(mapaNumero.keys()).sort((a, b) => a - b);
+      if (!numerosOrdenados.length) {
+        notify({ tipo: "warning", mensaje: "No hay números de mesa visibles para exportar." });
+        return;
+      }
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      wb,
-      ws,
-      vista === "grupos" ? "Grupos" : "NoAgrupadas"
-    );
+      // 2) MISMO endpoint que el PDF
+      const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle_pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numeros_mesa: numerosOrdenados }),
+      });
 
-    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([buf], { type: "application/octet-stream" });
+      const raw = await resp.text();
+      let json;
+      try { json = JSON.parse(raw); } catch {
+        throw new Error(raw.slice(0, 400) || "Respuesta no JSON del servidor.");
+      }
+      if (!resp.ok || !json?.exito) {
+        throw new Error(json?.mensaje || "No se pudo obtener el detalle para Excel.");
+      }
 
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const nombre =
-      vista === "grupos"
-        ? `MesasDeExamen_Grupos_${yyyy}-${mm}-${dd}(${filas.length}).xlsx`
-        : `MesasDeExamen_NoAgrupadas_${yyyy}-${mm}-${dd}(${filas.length}).xlsx`;
-    saveAs(blob, nombre);
-  }, [filasFiltradas, vista]);
+      const detalle = Array.isArray(json.data) ? json.data : [];
+      if (!detalle.length) {
+        notify({ tipo: "warning", mensaje: "El servidor no devolvió detalle para exportar." });
+        return;
+      }
+
+      // Helpers
+      const limpiarCurso = (s) => String(s ?? "")
+        .replace(/°\s*°/g, "°")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      const turnoRank = (t) => {
+        const x = (t || "").toLowerCase();
+        if (x.includes("mañ") || x.includes("man")) return 0; // mañana
+        if (x.includes("tar")) return 1;                      // tarde
+        return 2;
+      };
+
+      const horaPorTurno = (t, fallback = "") => {
+        const x = (t || "").toLowerCase();
+        if (x.includes("mañ") || x.includes("man")) return "07:30";
+        if (x.includes("tar")) return "13:30";
+        return fallback; // si no reconoce el turno, usa lo que vino del backend
+      };
+
+      // 3) Filas planas (Docente × Alumno) con FALLBACKS de fecha/turno y hora por turno
+      const filas = [];
+
+      for (const m of detalle) {
+        const numeroMesa = m.numero_mesa ?? null;
+
+        // Fallbacks desde la grilla:
+        const fb = mapaNumero.get(numeroMesa) || { id_grupo: "", fecha: "", turno: "" };
+        const fechaISO = m.fecha || fb.fecha || "";    // <<<<<< fallback de fecha
+        const turno    = m.turno || fb.turno || "";    // <<<<<< fallback de turno
+        const idGrupo  = fb.id_grupo ?? "";
+
+        // Hora calculada por turno (si no reconoce, queda la del backend o vacío)
+        const horaCalculada = horaPorTurno(turno, m.hora ?? "");
+
+        const materia = m.materia ?? "";
+
+        const docentes = Array.isArray(m.docentes) && m.docentes.length ? m.docentes : ["—"];
+        const alumnos  = Array.isArray(m.alumnos) && m.alumnos.length
+          ? m.alumnos
+          : [{ alumno: "—", dni: "—", curso: "—" }];
+
+        for (const d of docentes) {
+          for (const a of alumnos) {
+            filas.push({
+              "ID Grupo": idGrupo || "",
+              "N° Mesa": numeroMesa ?? "",
+              Fecha: fechaISO ? formatearFechaISO(fechaISO) : "",
+              Turno: turno || "",
+              Hora: horaCalculada, // <<<<<< aquí va la hora por turno
+              "Espacio Curricular": materia || "",
+              Docente: d || "—",
+              Estudiante: a?.alumno || "—",
+              DNI: a?.dni || "—",
+              Curso: limpiarCurso(a?.curso || "—"),
+              _sortFechaISO: fechaISO || "9999-12-31", // vacíos al final
+              _sortTurnoRank: turnoRank(turno),
+            });
+          }
+        }
+      }
+
+      // 4) Orden amigable (los sin fecha quedan al final)
+      filas.sort((A, B) => {
+        if (A._sortFechaISO !== B._sortFechaISO) return A._sortFechaISO < B._sortFechaISO ? -1 : 1;
+        if (A._sortTurnoRank !== B._sortTurnoRank) return A._sortTurnoRank - B._sortTurnoRank;
+        const nA = parseInt(A["N° Mesa"] || 0, 10);
+        const nB = parseInt(B["N° Mesa"] || 0, 10);
+        if (nA !== nB) return nA - nB;
+        const d = String(A.Docente || "").localeCompare(String(B.Docente || ""), "es", { sensitivity: "base" });
+        if (d !== 0) return d;
+        return String(A.Estudiante || "").localeCompare(String(B.Estudiante || ""), "es", { sensitivity: "base" });
+      });
+
+      const filasFinales = filas.map(({ _sortFechaISO, _sortTurnoRank, ...rest }) => rest);
+
+      // 5) XLSX
+      const headers = [
+        "ID Grupo",
+        "N° Mesa",
+        "Fecha",
+        "Turno",
+        "Hora",
+        "Espacio Curricular",
+        "Docente",
+        "Estudiante",
+        "DNI",
+        "Curso",
+      ];
+      const ws = XLSX.utils.json_to_sheet(filasFinales, { header: headers });
+      ws["!cols"] = [
+        { wch: 10 }, // ID Grupo
+        { wch: 9 },  // N° Mesa
+        { wch: 12 }, // Fecha
+        { wch: 10 }, // Turno
+        { wch: 9 },  // Hora
+        { wch: 28 }, // Espacio
+        { wch: 26 }, // Docente
+        { wch: 28 }, // Estudiante
+        { wch: 12 }, // DNI
+        { wch: 14 }, // Curso
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        ws,
+        vista === "grupos" ? "Mesas (detalle)" : "No agrupadas (detalle)"
+      );
+
+      const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([buf], { type: "application/octet-stream" });
+
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const nombre =
+        vista === "grupos"
+          ? `MesasDeExamen_Detalle_${yyyy}-${mm}-${dd}(${filasFinales.length} filas).xlsx`
+          : `MesasNoAgrupadas_Detalle_${yyyy}-${mm}-${dd}(${filasFinales.length} filas).xlsx`;
+      saveAs(blob, nombre);
+
+      notify({
+        tipo: "exito",
+        mensaje: `Exportadas ${filasFinales.length} filas detalladas.`,
+      });
+    } catch (e) {
+      console.error("Excel detalle — error:", e);
+      notify({
+        tipo: "error",
+        mensaje: e?.message || "No se pudo exportar el Excel detallado.",
+      });
+    }
+  }, [filasFiltradas, notify, vista]);
+
+
 
   // ===== Exportar PDF SOLO del registro (fila actual) =====
   const exportarPDFDeRegistro = useCallback(
@@ -1029,7 +1178,7 @@ const MesasExamen = () => {
               aria-label="Exportar"
               title={
                 filasFiltradas.length
-                  ? "Exportar a Excel"
+                  ? "Exportar Excel (detalle completo por mesa)"
                   : "No hay filas visibles para exportar"
               }
             >

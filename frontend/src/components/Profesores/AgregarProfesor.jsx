@@ -32,12 +32,9 @@ export default function AgregarProfesor() {
   const [nombre, setNombre] = useState('');
   const [idCargo, setIdCargo] = useState('');
 
-  const [idTurnoSi, setIdTurnoSi] = useState('');
+  // 🔻 Solo "NO": se eliminaron idTurnoSi y fechaSi
   const [idTurnoNo, setIdTurnoNo] = useState('');
-  const [fechaSi, setFechaSi] = useState('');
   const [fechaNo, setFechaNo] = useState('');
-
-  const fechaSiCtl = useClickOpensDatepicker();
   const fechaNoCtl = useClickOpensDatepicker();
 
   const [toast, setToast] = useState({ show: false, message: '', type: 'exito' });
@@ -76,7 +73,7 @@ export default function AgregarProfesor() {
     if (!/^[A-ZÑÁÉÍÓÚÜ.\s-]+$/.test(ap)) return 'Apellido: solo letras y espacios.';
     if (!/^[A-ZÑÁÉÍÓÚÜ.\s-]+$/.test(no)) return 'Nombre: solo letras y espacios.';
     const isDate = (d) => !d || /^\d{4}-\d{2}-\d{2}$/.test(d);
-    if (!isDate(fechaSi) || !isDate(fechaNo)) return 'Formato de fecha inválido (use YYYY-MM-DD).';
+    if (!isDate(fechaNo)) return 'Formato de fecha inválido en "Fecha NO" (use YYYY-MM-DD).';
     return null;
   };
 
@@ -95,9 +92,8 @@ export default function AgregarProfesor() {
         body: JSON.stringify({
           docente,
           id_cargo: idCargo,
-          id_turno_si: idTurnoSi === '' ? null : Number(idTurnoSi),
+          // 🔻 Solo se envían los campos "NO"
           id_turno_no: idTurnoNo === '' ? null : Number(idTurnoNo),
-          fecha_si: fechaSi || null,
           fecha_no: fechaNo || null,
         }),
       });
@@ -186,39 +182,7 @@ export default function AgregarProfesor() {
                 </div>
               </div>
 
-              {/* Disponibilidad (opcional) */}
-              <div className="add-group">
-                <div className="add-input-wrapper always-active" style={{ flex: 1 }}>
-                  <label className="add-label">Turno SÍ</label>
-                  <select
-                    name="id_turno_si"
-                    value={idTurnoSi}
-                    onChange={(e) => setIdTurnoSi(e.target.value)}
-                    className="add-input"
-                    disabled={loading}
-                  >
-                    <option value="">-- Sin especificar --</option>
-                    {turnos.map((t) => (
-                      <option key={t.id_turno} value={t.id_turno}>{t.turno}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Fecha SÍ (floating siempre activo) */}
-                <div className="add-input-wrapper always-active" style={{ flex: 1 }} onClick={fechaSiCtl.onClick}>
-                  <label className="add-label">Fecha SÍ</label>
-                  <input
-                    ref={fechaSiCtl.ref}
-                    type="date"
-                    name="fecha_si"
-                    value={fechaSi}
-                    onChange={(e) => setFechaSi(e.target.value)}
-                    className="add-input"
-                  />
-                  <span className="add-input-highlight" />
-                </div>
-              </div>
-
+              {/* ✅ Solo Disponibilidad "NO" */}
               <div className="add-group">
                 <div className="add-input-wrapper always-active" style={{ flex: 1 }}>
                   <label className="add-label">Turno NO</label>
