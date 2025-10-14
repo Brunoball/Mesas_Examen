@@ -41,25 +41,40 @@ const ConfigForm = () => {
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
 
-  // Slot único de toast
+  // Toast (slot único)
   const [toast, setToast] = useState(null);
   const pushToast = useCallback((t) => {
     setToast({
       id: crypto.randomUUID(),
-      tipo: t.tipo,
+      tipo: t.tipo,            // 'exito' | 'error' | 'advertencia' | 'info' | 'cargando'
       mensaje: t.mensaje,
       duracion: t.duracion ?? 3000,
     });
   }, []);
   const clearToast = useCallback(() => setToast(null), []);
 
+  // Helpers de notificación centralizados
+  const notifyError = useCallback((mensaje, duracion = 4000) => {
+    setError(mensaje);
+    pushToast({ tipo: "error", mensaje, duracion });
+  }, [pushToast]);
+
+  const notifyWarn = useCallback((mensaje, duracion = 3000) => {
+    pushToast({ tipo: "advertencia", mensaje, duracion });
+  }, [pushToast]);
+
+  const notifySuccess = useCallback((mensaje, duracion = 3000) => {
+    setOkMsg(mensaje);
+    pushToast({ tipo: "exito", mensaje, duracion });
+  }, [pushToast]);
+
+  // Estado del formulario (sin "activo")
   const [form, setForm] = useState({
     id_config: null,
     nombre: "",
     insc_inicio_local: "",
     insc_fin_local: "",
     mensaje_cerrado: "La inscripción está cerrada. Consultá Secretaría.",
-    activo: 1,
   });
 
   const fetchConfig = useCallback(async (silent = true) => {
@@ -67,15 +82,15 @@ const ConfigForm = () => {
     setError("");
     setOkMsg("");
     try {
-      const resp = await fetch(
-        `${BASE_URL}/api.php?action=form_obtener_config_inscripcion`
-      );
+      const resp = await fetch(`${BASE_URL}/api.php?action=form_obtener_config_inscripcion`);
+      if (!resp.ok) {
+        throw new Error(`Fallo HTTP ${resp.status} al obtener configuración`);
+      }
       const json = await resp.json();
 
       if (!json.exito) {
         const msg = json.mensaje || "No se pudo obtener la configuración.";
-        setError(msg);
-        pushToast({ tipo: "error", mensaje: msg });
+        notifyError(msg);
         setCargando(false);
         return;
       }
@@ -88,7 +103,6 @@ const ConfigForm = () => {
           insc_inicio_local: "",
           insc_fin_local: "",
           mensaje_cerrado: "La inscripción está cerrada. Consultá Secretaría.",
-          activo: 1,
         }));
       } else {
         setForm({
@@ -96,59 +110,63 @@ const ConfigForm = () => {
           nombre: json.titulo || "Mesas Examen",
           insc_inicio_local: isoToLocalInput(json.inicio),
           insc_fin_local: isoToLocalInput(json.fin),
-          mensaje_cerrado:
-            json.mensaje_cerrado ||
-            "La inscripción está cerrada. Consultá Secretaría.",
-          activo: Number(json.activo ?? 1),
+          mensaje_cerrado: json.mensaje_cerrado || "La inscripción está cerrada. Consultá Secretaría.",
         });
       }
 
       if (!silent) {
-        pushToast({ tipo: "exito", mensaje: "Configuración cargada.", duracion: 3000 });
+        notifySuccess("Configuración cargada.");
       }
-    } catch {
-      setError("Error de red al consultar la configuración.");
-      pushToast({ tipo: "error", mensaje: "Error de red al consultar la configuración." });
+    } catch (e) {
+      notifyError(
+        e instanceof Error
+          ? `Error al consultar la configuración: ${e.message}`
+          : "Error de red al consultar la configuración."
+      );
     } finally {
       setCargando(false);
     }
-  }, [pushToast]);
+  }, [BASE_URL, notifyError, notifySuccess]);
 
   useEffect(() => {
     fetchConfig(true);
   }, [fetchConfig]);
 
+  // Abierta solo por fechas
   const abiertaPreview = useMemo(() => {
     if (!form.insc_inicio_local || !form.insc_fin_local) return false;
     const now = new Date();
     const ini = new Date(form.insc_inicio_local);
     const fin = new Date(form.insc_fin_local);
-    return now >= ini && now <= fin && Number(form.activo) === 1;
-  }, [form.insc_inicio_local, form.insc_fin_local, form.activo]);
+    return now >= ini && now <= fin;
+  }, [form.insc_inicio_local, form.insc_fin_local]);
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm((f) => ({
-      ...f,
-      [name]: type === "checkbox" ? (checked ? 1 : 0) : value,
-    }));
-    if (name === "activo") {
-      pushToast({
-        tipo: "advertencia",
-        mensaje: checked ? "Esta configuración quedará ACTIVA." : "Configuración marcada como INACTIVA.",
-        duracion: 2500,
-      });
-    }
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: value }));
   };
 
+  // Validación (devuelve string de error o null)
   const validar = () => {
     if (!form.nombre.trim()) return "Ingresá un título.";
     if (!form.insc_inicio_local) return "Seleccioná fecha/hora de inicio.";
     if (!form.insc_fin_local) return "Seleccioná fecha/hora de fin.";
+
     const ini = new Date(form.insc_inicio_local);
     const fin = new Date(form.insc_fin_local);
+    if (isNaN(ini.getTime()) || isNaN(fin.getTime())) {
+      return "Formato de fecha/hora inválido.";
+    }
     if (!(ini < fin)) return "La fecha de inicio debe ser anterior a la de fin.";
     return null;
+  };
+
+  // Toast inmediato ante errores de validación al hacer blur en fechas (UX extra)
+  const onBlurCampoFecha = (e) => {
+    const err = validar();
+    if (err) {
+      notifyWarn(err, 3500);
+    }
   };
 
   const onGuardar = async (e) => {
@@ -157,8 +175,7 @@ const ConfigForm = () => {
 
     const err = validar();
     if (err) {
-      setError(err);
-      pushToast({ tipo: "advertencia", mensaje: err });
+      notifyWarn(err);
       return;
     }
 
@@ -173,32 +190,40 @@ const ConfigForm = () => {
         insc_inicio: localInputToMySQL(form.insc_inicio_local),
         insc_fin: localInputToMySQL(form.insc_fin_local),
         mensaje_cerrado: form.mensaje_cerrado.trim(),
-        activo: Number(form.activo) || 0,
+        activo: 1, // compat con backend, UI siempre por fechas
       };
 
-      const resp = await fetch(
-        `${BASE_URL}/api.php?action=admin_guardar_config_inscripcion`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
-      const json = await resp.json();
+      const resp = await fetch(`${BASE_URL}/api.php?action=admin_guardar_config_inscripcion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Fallo HTTP ${resp.status} al guardar configuración`);
+      }
+
+      let json;
+      try {
+        json = await resp.json();
+      } catch {
+        throw new Error("Respuesta del servidor inválida (no es JSON).");
+      }
 
       if (!json.exito) {
         const msg = json.mensaje || "No se pudo guardar la configuración.";
-        setError(msg);
-        pushToast({ tipo: "error", mensaje: msg, duracion: 3500 });
+        notifyError(msg, 4500);
         return;
       }
 
-      setOkMsg("Configuración guardada correctamente.");
-      pushToast({ tipo: "exito", mensaje: "Actualizado correctamente", duracion: 3000 });
+      notifySuccess("Configuración guardada correctamente.");
       await fetchConfig(true);
-    } catch {
-      setError("Error de red al guardar la configuración.");
-      pushToast({ tipo: "error", mensaje: "Error de red al guardar la configuración." });
+    } catch (e) {
+      notifyError(
+        e instanceof Error
+          ? `Error al guardar la configuración: ${e.message}`
+          : "Error de red al guardar la configuración."
+      );
     } finally {
       setGuardando(false);
     }
@@ -223,7 +248,7 @@ const ConfigForm = () => {
         <header className="topbar">
           <div className="topbar-left">
             <h1>Configurar Formulario</h1>
-            <p>Definí el período de inscripción, el mensaje de cierre y el estado.</p>
+            <p>Definí el período de inscripción y el mensaje de cierre.</p>
           </div>
           <div className="topbar-right">
             <span className={`status-dot ${abiertaPreview ? "ok" : "off"}`} />
@@ -266,6 +291,7 @@ const ConfigForm = () => {
                   name="insc_inicio_local"
                   value={form.insc_inicio_local}
                   onChange={handleChange}
+                  onBlur={onBlurCampoFecha}
                   required
                 />
               </label>
@@ -278,6 +304,7 @@ const ConfigForm = () => {
                   name="insc_fin_local"
                   value={form.insc_fin_local}
                   onChange={handleChange}
+                  onBlur={onBlurCampoFecha}
                   required
                 />
               </label>
@@ -291,19 +318,6 @@ const ConfigForm = () => {
                   value={form.mensaje_cerrado}
                   onChange={handleChange}
                 />
-              </label>
-
-              <label className="switch field col-12">
-                <input
-                  type="checkbox"
-                  name="activo"
-                  checked={!!Number(form.activo)}
-                  onChange={handleChange}
-                />
-                <span className="switch-track">
-                  <span className="switch-thumb" />
-                </span>
-                <span className="switch-text">Config activa</span>
               </label>
             </div>
 
@@ -329,8 +343,14 @@ const ConfigForm = () => {
             <div className="aside-card">
               <div className="aside-title">Previsualización</div>
               <ul className="meta">
-                <li><b>Desde</b><span>{fmtLargo(form.insc_inicio_local)}</span></li>
-                <li><b>Hasta</b><span>{fmtLargo(form.insc_fin_local)}</span></li>
+                <li>
+                  <b>Desde</b>
+                  <span>{fmtLargo(form.insc_inicio_local)}</span>
+                </li>
+                <li>
+                  <b>Hasta</b>
+                  <span>{fmtLargo(form.insc_fin_local)}</span>
+                </li>
                 <li>
                   <b>Estado</b>
                   <span className={`chip ${abiertaPreview ? "chip-ok" : "chip-off"}`}>
@@ -341,7 +361,9 @@ const ConfigForm = () => {
             </div>
 
             <div className="aside-tip">
-              <p>Consejo: usá rangos cortos y mantené la “config activa” solo cuando el formulario esté listo.</p>
+              <p>
+                Consejo: usá rangos de fechas claros. El formulario queda abierto solo entre inicio y fin.
+              </p>
             </div>
           </aside>
         </div>

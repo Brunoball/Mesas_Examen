@@ -11,7 +11,6 @@ import '../Previas/AgregarPrevia.css';
 import '../Global/roots.css';
 import './EditarProfesor.css';
 
-
 const toMayus = (v) => (typeof v === 'string' ? v.toUpperCase() : v);
 
 // Split seguro "APELLIDO, NOMBRE" -> [apellido, nombre]
@@ -52,20 +51,17 @@ const EditarProfesor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Datos del form (SIN agregar nuevos campos)
+  // Datos del form
   const [apellido, setApellido] = useState('');
   const [nombre, setNombre] = useState('');
   const [idCargo, setIdCargo] = useState('');
   const [cargos, setCargos] = useState([]);
 
   const [turnos, setTurnos] = useState([]); // [{id_turno, turno}]
-  const [idTurnoSi, setIdTurnoSi] = useState('');
-  const [idTurnoNo, setIdTurnoNo] = useState('');
-  const [fechaSi, setFechaSi] = useState('');
-  const [fechaNo, setFechaNo] = useState('');
+  const [idTurnoNo, setIdTurnoNo] = useState(''); // dejamos "Turno NO"
+  const [fechaNo, setFechaNo] = useState('');     // dejamos "Fecha NO"
   const [fechaCarga, setFechaCarga] = useState('');
 
-  const fechaSiCtl = useClickOpensDatepicker();
   const fechaNoCtl = useClickOpensDatepicker();
   const fechaCargaCtl = useClickOpensDatepicker();
 
@@ -87,7 +83,10 @@ const EditarProfesor = () => {
       try {
         setCargando(true);
         setError('');
-        const res = await fetch(`${BASE_URL}/api.php?action=editar_profesor&id=${encodeURIComponent(id)}`, { signal: ctrl.signal });
+        const res = await fetch(
+          `${BASE_URL}/api.php?action=editar_profesor&id=${encodeURIComponent(id)}`,
+          { signal: ctrl.signal }
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -101,9 +100,8 @@ const EditarProfesor = () => {
         setNombre(toMayus(no));
         setIdCargo(p.id_cargo ?? '');
 
-        setIdTurnoSi(p.id_turno_si ?? '');
+        // Solo dejamos Turno NO y Fecha NO
         setIdTurnoNo(p.id_turno_no ?? '');
-        setFechaSi(p.fecha_si ?? '');
         setFechaNo(p.fecha_no ?? '');
         setFechaCarga(p.fecha_carga ?? '');
 
@@ -144,9 +142,8 @@ const EditarProfesor = () => {
           nombre: nombre.trim() ? toMayus(nombre.trim()) : null,
           id_cargo: idCargo,
 
-          id_turno_si: idTurnoSi === '' ? null : Number(idTurnoSi),
+          // Eliminados turno/fecha SÍ
           id_turno_no: idTurnoNo === '' ? null : Number(idTurnoNo),
-          fecha_si: fechaSi || null,
           fecha_no: fechaNo || null,
           fecha_carga: fechaCarga || null,
         }),
@@ -261,7 +258,7 @@ const EditarProfesor = () => {
                     <span className="prev-input-highlight" />
                   </div>
 
-                  {/* 🔴 Fecha de carga -> always-active */}
+                  {/* Fecha de carga */}
                   <div className="prev-input-wrapper always-active">
                     <label className="prev-label">Fecha de carga</label>
                     <input
@@ -278,53 +275,10 @@ const EditarProfesor = () => {
                   </div>
                 </div>
 
-                {/* Sección 3: Turnos (Sí/No) */}
+                {/* Sección 3: Turno NO + Fecha NO (únicos) */}
                 <div className="prev-section">
                   <h3 className="prev-section-title">Turnos</h3>
 
-                  {/* Turno SÍ + Fecha SÍ */}
-                  <div className="prev-rowsd">
-                    <div className="prev-col">
-                      <div className="prev-input-wrapper always-active">
-                        <label className="prev-label">Turno SÍ</label>
-                        <select
-                          className="prev-input"
-                          name="id_turno_si"
-                          value={idTurnoSi === null ? '' : idTurnoSi || ''}
-                          onChange={(e) => setIdTurnoSi(e.target.value)}
-                          disabled={cargando}
-                        >
-                          <option value="">Seleccionar…</option>
-                          {turnos.map((t) => (
-                            <option key={t.id_turno} value={t.id_turno}>
-                              {t.turno}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="prev-input-highlight" />
-                      </div>
-                    </div>
-
-                    <div className="prev-col">
-                      {/* 🔴 Fecha SÍ -> always-active */}
-                      <div className="prev-input-wrapper always-active">
-                        <label className="prev-label">Fecha SÍ</label>
-                        <input
-                          ref={fechaSiCtl.ref}
-                          className="prev-input"
-                          type="date"
-                          name="fecha_si"
-                          value={fechaSi || ''}
-                          onChange={(e) => setFechaSi(e.target.value)}
-                          onMouseDown={fechaSiCtl.openCalendar}
-                          onFocus={fechaSiCtl.openCalendar}
-                        />
-                        <span className="prev-input-highlight" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Turno NO + Fecha NO */}
                   <div className="prev-rowsd">
                     <div className="prev-col">
                       <div className="prev-input-wrapper always-active">
@@ -348,7 +302,6 @@ const EditarProfesor = () => {
                     </div>
 
                     <div className="prev-col">
-                      {/* 🔴 Fecha NO -> always-active */}
                       <div className="prev-input-wrapper always-active">
                         <label className="prev-label">Fecha NO</label>
                         <input

@@ -330,7 +330,8 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
                 <div className="infomesas-thead">
                   <div className="infomesas-th">Alumno</div>
                   <div className="infomesas-th">DNI</div>
-                  <div className="infomesas-th">Curso / División</div>
+                  {/* ✅ Cambiado "Curso / División" → "Curso" */}
+                  <div className="infomesas-th">Curso</div>
                   <div className="infomesas-th">N° Mesa</div>
                 </div>
                 <div className="infomesas-tbody">
@@ -354,7 +355,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
           {/* ====== TAB: Docentes (apilado 100% width + scroll propio) ====== */}
           {active === "docentes" && !loading && !error && (
             <section className="infomesas-tabpanel is-active">
-              <div className="infomesas-docentes-scroll" /* CSS le da max-height + overflow */>
+              <div className="infomesas-docentes-scroll">
                 <div className="infomesas-grid infomesas-grid--stack">
                   {docentesUnicos.length === 0 ? (
                     <div className="infomesas-row-empty">Sin docentes asignados.</div>
@@ -405,7 +406,8 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
                           <div className="infomesas-thead">
                             <div className="infomesas-th">Alumno</div>
                             <div className="infomesas-th">DNI</div>
-                            <div className="infomesas-th">Curso / División</div>
+                            {/* ✅ Cambiado "Curso / División" → "Curso" */}
+                            <div className="infomesas-th">Curso</div>
                             <div className="infomesas-th">N° Mesa</div>
                           </div>
                           <div className="infomesas-tbody">

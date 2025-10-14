@@ -9,7 +9,6 @@
 
 declare(strict_types=1);
 
-// ⚠️ no emitir warnings/notices al JSON
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
 
@@ -28,7 +27,6 @@ function respond_json(bool $ok, $payload = null, int $status = 200): void {
   exit;
 }
 
-// Convertir PHP warnings/notices en excepción controlada
 set_error_handler(function($severity, $message, $file, $line) {
   throw new ErrorException($message, 0, $severity, $file, $line);
 });
@@ -81,9 +79,6 @@ try {
   $ph = implode(',', array_fill(0, count($nums), '?'));
 
   // ---------- Cabecera por mesa ----------
-  // - materia/área vía catedras -> materias
-  // - docente desde mesas.id_docente (único por mesa; por seguridad, se agrupan distintos)
-  // - turno descriptivo desde turnos
   $sqlCab = "
     SELECT
       m.numero_mesa,
@@ -94,10 +89,10 @@ try {
       MIN(mat.materia)                           AS materia,
       GROUP_CONCAT(DISTINCT d.docente SEPARATOR '||') AS docentes_concat
     FROM mesas m
-      LEFT JOIN turnos    t   ON t.id_turno    = m.id_turno
-      LEFT JOIN catedras  c   ON c.id_catedra  = m.id_catedra
+      LEFT JOIN turnos    t   ON t.id_turno     = m.id_turno
+      LEFT JOIN catedras  c   ON c.id_catedra   = m.id_catedra
       LEFT JOIN materias  mat ON mat.id_materia = c.id_materia
-      LEFT JOIN docentes  d   ON d.id_docente  = m.id_docente
+      LEFT JOIN docentes  d   ON d.id_docente   = m.id_docente
     WHERE m.numero_mesa IN ($ph)
     GROUP BY m.numero_mesa
   ";
@@ -106,7 +101,6 @@ try {
 
   $cab = [];
   while ($r = $stCab->fetch(PDO::FETCH_ASSOC)) {
-    // docentes únicos preservando orden aproximado del GROUP_CONCAT
     $docs = [];
     if (!empty($r['docentes_concat'])) {
       $seen = [];
@@ -124,7 +118,7 @@ try {
       'turno'       => (string)($r['turno'] ?? ''),
       'id_materia'  => isset($r['id_materia']) ? (int)$r['id_materia'] : null,
       'materia'     => (string)($r['materia'] ?? ''),
-      'docentes'    => $docs,  // arreglo de nombres
+      'docentes'    => $docs,
       'alumnos'     => [],
     ];
   }
@@ -134,16 +128,19 @@ try {
   }
 
   // ---------- Alumnos por mesa ----------
-  // alumno + dni desde previas; curso/división desde previas.materia_id_curso / materia_id_division
+  // Traemos el NOMBRE REAL de la división (tabla division.nombre_division)
+  // y combinamos en el servidor "curso° división"
   $sqlAlu = "
     SELECT
       m.numero_mesa,
       p.alumno,
       p.dni,
-      p.materia_id_curso    AS id_curso,
-      p.materia_id_division AS id_division
+      p.materia_id_curso                 AS id_curso,
+      p.materia_id_division              AS id_division,
+      dmat.nombre_division               AS division_nombre
     FROM mesas m
-      INNER JOIN previas p ON p.id_previa = m.id_previa
+      INNER JOIN previas  p     ON p.id_previa      = m.id_previa
+      LEFT  JOIN division dmat  ON dmat.id_division = p.materia_id_division
     WHERE m.numero_mesa IN ($ph)
     ORDER BY m.numero_mesa ASC, p.alumno ASC
   ";
@@ -154,17 +151,20 @@ try {
     $nm = (int)$r['numero_mesa'];
     if (!isset($cab[$nm])) continue;
 
-    $curso = isset($r['id_curso']) ? (string)$r['id_curso'] : '';
-    $div   = isset($r['id_division']) ? (string)$r['id_division'] : '';
-    // Formato: "3° A" si ambos existen; si falta alguno, mostrar el que haya
+    // id_curso suele ser un número (1..6). division_nombre es, por ej., 'A', 'B', etc.
+    $cursoId   = isset($r['id_curso']) ? trim((string)$r['id_curso']) : '';
+    $divNombre = isset($r['division_nombre']) ? trim((string)$r['division_nombre']) : '';
+
+    // Armar "5° A", respetando faltantes
     $cursoDiv = '';
-    if ($curso !== '' && $div !== '')       $cursoDiv = $curso . "° " . $div;
-    elseif ($curso !== '' && $div === '')   $cursoDiv = $curso . "°";
-    elseif ($curso === '' && $div !== '')   $cursoDiv = $div;
+    if ($cursoId !== '' && $divNombre !== '')       $cursoDiv = $cursoId . "° " . $divNombre;
+    elseif ($cursoId !== '' && $divNombre === '')   $cursoDiv = $cursoId . "°";
+    elseif ($cursoId === '' && $divNombre !== '')   $cursoDiv = $divNombre;
 
     $cab[$nm]['alumnos'][] = [
       'alumno' => (string)($r['alumno'] ?? ''),
       'dni'    => (string)($r['dni'] ?? ''),
+      // El front espera 'curso' combinado; internamente lo mapea a 'curso_div'
       'curso'  => $cursoDiv,
     ];
   }

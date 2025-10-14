@@ -44,7 +44,8 @@ const normalizar = (str = "") =>
     .trim();
 
 const MAX_CASCADE_ITEMS = 15;
-const GRID_COLS = "0.5fr 1.6fr 0.8fr 0.8fr 1fr 0.8fr"; // 6 columnas
+// 🔄 Ahora son 5 columnas: ID | Materia | Curso(=curso+div) | Docente | Acciones
+const GRID_COLS = "0.5fr 1.6fr 0.9fr 1fr 0.8fr";
 
 /* Debounce simple */
 function useDebouncedValue(value, delay = 200) {
@@ -98,8 +99,12 @@ const Row = React.memo(({ index, style, data }) => {
       <div className="glob-column glob-column-nombre" title={cat.materia}>
         {cat.materia}
       </div>
-      <div className="glob-column">{cat.nombre_curso}</div>
-      <div className="glob-column">{cat.nombre_division}</div>
+
+      {/* ✅ Curso unificado: nombre_curso + nombre_division (ej: 1A) */}
+      <div className="glob-column" title={`${cat.nombre_curso}${cat.nombre_division}`}>
+        {cat.cursoDiv}
+      </div>
+
       <div className="glob-column">{cat.docente || "-"}</div>
 
       <div className="glob-column glob-icons-column">
@@ -181,14 +186,21 @@ const Catedras = () => {
       const json = await res.json();
       if (!json.exito) throw new Error(json.mensaje || "Error al obtener cátedras");
 
-      const data = (json.catedras || []).map((c) => ({
-        ...c,
-        _id: String(c.id_catedra || "").trim(),
-        _materia: normalizar(c.materia),
-        _docente: normalizar(c.docente || ""),
-        _curso: normalizar(c.nombre_curso || ""),
-        _division: normalizar(c.nombre_division || ""),
-      }));
+      const data = (json.catedras || []).map((c) => {
+        const cur = (c.nombre_curso ?? "").toString().trim();
+        const div = (c.nombre_division ?? "").toString().trim();
+        const cursoDiv = `${cur} ${div}`; // ✅ "1A"
+        return {
+          ...c,
+          cursoDiv,
+          _id: String(c.id_catedra || "").trim(),
+          _materia: normalizar(c.materia),
+          _docente: normalizar(c.docente || ""),
+          _curso: normalizar(cur || ""),
+          _division: normalizar(div || ""),
+          _cursoDiv: normalizar(cursoDiv || ""),
+        };
+      });
 
       setCatedras(data);
     } catch (e) {
@@ -231,7 +243,8 @@ const Catedras = () => {
           c._materia.includes(nq) ||
           c._docente.includes(nq) ||
           c._curso.includes(nq) ||
-          c._division.includes(nq)
+          c._division.includes(nq) ||
+          c._cursoDiv.includes(nq) // ✅ también matchea "1a", etc.
       );
     }
 
@@ -283,7 +296,6 @@ const Catedras = () => {
 
   // ======= Exportar visible =======
   const exportarExcel = useCallback(() => {
-    // Igual que en Previas: exporta cuando hay algo visible
     const puede =
       (hayFiltros || filtroActivo === "todos") &&
       catedrasFiltradas.length > 0 &&
@@ -293,16 +305,15 @@ const Catedras = () => {
     const filas = catedrasFiltradas.map((c) => ({
       ID: c.id_catedra ?? "",
       Materia: c.materia ?? "",
-      Curso: c.nombre_curso ?? "",
-      División: c.nombre_division ?? "",
+      Curso: c.cursoDiv ?? "", // ✅ unificado
       Docente: c.docente ?? "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(filas, {
-      header: ["ID", "Materia", "Curso", "División", "Docente"],
+      header: ["ID", "Materia", "Curso", "Docente"],
     });
 
-    ws["!cols"] = [{ wch: 7 }, { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 28 }];
+    ws["!cols"] = [{ wch: 7 }, { wch: 28 }, { wch: 10 }, { wch: 28 }];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cátedras");
@@ -397,7 +408,7 @@ const Catedras = () => {
             <input
               id={listId}
               type="text"
-              placeholder="Buscar por ID, materia, docente, curso o división"
+              placeholder="Buscar por ID, materia, docente o curso (ej. 1A)"
               className="glob-search-input"
               value={qInput}
               onChange={onChangeBusqueda}
@@ -616,8 +627,8 @@ const Catedras = () => {
               <div className="glob-header" style={{ gridTemplateColumns: GRID_COLS }}>
                 <div className="glob-column-header">ID</div>
                 <div className="glob-column-header">Materia</div>
+                {/* ✅ Solo una columna de Curso (curso+div) */}
                 <div className="glob-column-header">Curso</div>
-                <div className="glob-column-header">División</div>
                 <div className="glob-column-header">Docente</div>
                 <div className="glob-column-header">Acciones</div>
               </div>
@@ -737,10 +748,9 @@ const Catedras = () => {
                       </div>
                       <div className="glob-card-body">
                         <div className="glob-card-row">
-                          <span className="glob-card-label">Curso/Div</span>
-                          <span className="glob-card-value">
-                            {c.nombre_curso} • {c.nombre_division}
-                          </span>
+                          <span className="glob-card-label">Curso</span>
+                          {/* ✅ curso unificado */}
+                          <span className="glob-card-value">{c.cursoDiv}</span>
                         </div>
                         <div className="glob-card-row">
                           <span className="glob-card-label">Docente</span>
@@ -765,6 +775,7 @@ const Catedras = () => {
             </div>
           )}
         </div>
+        {/* FIN lista */}
 
         {/* BOTONERA INFERIOR */}
         <div className="glob-down-container">

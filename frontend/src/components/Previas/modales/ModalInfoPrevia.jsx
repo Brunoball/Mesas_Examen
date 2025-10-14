@@ -144,16 +144,11 @@ const ModalInfoPrevia = ({ open, previa, onClose }) => {
                 <article className="mi-card">
                   <h3 className="mi-card__title">Cursado & Estado</h3>
 
+                  {/* ✅ Fila combinada: Curso (cursando) + División (cursando) */}
                   <div className="mi-row">
                     <span className="mi-label">Curso (cursando)</span>
                     <span className="mi-value">
-                      {texto(P.cursando_curso_nombre)}
-                    </span>
-                  </div>
-
-                  <div className="mi-row">
-                    <span className="mi-label">División (cursando)</span>
-                    <span className="mi-value">
+                      {texto(P.cursando_curso_nombre)}{" "}
                       {texto(P.cursando_division_nombre)}
                     </span>
                   </div>

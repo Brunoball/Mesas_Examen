@@ -1031,7 +1031,7 @@ const Previas = () => {
                 <div className="glob-column-header">DNI</div>
                 <div className="glob-column-header">Materia</div>
                 <div className="glob-column-header">Condición</div>
-                <div className="glob-column-header">Cur y Div</div>
+                <div className="glob-column-header">Curso</div>
                 <div className="glob-column-header">Inscripción</div>
                 <div className="glob-column-header">Acciones</div>
               </div>
