@@ -1,5 +1,5 @@
 // src/components/ConfigFormulario/ConfigForm.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import BASE_URL from "../../config/config";
 import "../Global/roots.css";
@@ -46,7 +46,7 @@ const ConfigForm = () => {
   const pushToast = useCallback((t) => {
     setToast({
       id: crypto.randomUUID(),
-      tipo: t.tipo,            // 'exito' | 'error' | 'advertencia' | 'info' | 'cargando'
+      tipo: t.tipo, // 'exito' | 'error' | 'advertencia' | 'info' | 'cargando'
       mensaje: t.mensaje,
       duracion: t.duracion ?? 3000,
     });
@@ -54,19 +54,28 @@ const ConfigForm = () => {
   const clearToast = useCallback(() => setToast(null), []);
 
   // Helpers de notificación centralizados
-  const notifyError = useCallback((mensaje, duracion = 4000) => {
-    setError(mensaje);
-    pushToast({ tipo: "error", mensaje, duracion });
-  }, [pushToast]);
+  const notifyError = useCallback(
+    (mensaje, duracion = 4000) => {
+      setError(mensaje);
+      pushToast({ tipo: "error", mensaje, duracion });
+    },
+    [pushToast]
+  );
 
-  const notifyWarn = useCallback((mensaje, duracion = 3000) => {
-    pushToast({ tipo: "advertencia", mensaje, duracion });
-  }, [pushToast]);
+  const notifyWarn = useCallback(
+    (mensaje, duracion = 3000) => {
+      pushToast({ tipo: "advertencia", mensaje, duracion });
+    },
+    [pushToast]
+  );
 
-  const notifySuccess = useCallback((mensaje, duracion = 3000) => {
-    setOkMsg(mensaje);
-    pushToast({ tipo: "exito", mensaje, duracion });
-  }, [pushToast]);
+  const notifySuccess = useCallback(
+    (mensaje, duracion = 3000) => {
+      setOkMsg(mensaje);
+      pushToast({ tipo: "exito", mensaje, duracion });
+    },
+    [pushToast]
+  );
 
   // Estado del formulario (sin "activo")
   const [form, setForm] = useState({
@@ -77,56 +86,83 @@ const ConfigForm = () => {
     mensaje_cerrado: "La inscripción está cerrada. Consultá Secretaría.",
   });
 
-  const fetchConfig = useCallback(async (silent = true) => {
-    setCargando(true);
-    setError("");
-    setOkMsg("");
+  // Refs para abrir el selector nativo en todo el input
+  const inicioRef = useRef(null);
+  const finRef = useRef(null);
+
+  // Abrir picker con gesto del usuario (mousedown / Enter / Space)
+  const openNativePicker = (el) => {
+    if (!el) return;
     try {
-      const resp = await fetch(`${BASE_URL}/api.php?action=form_obtener_config_inscripcion`);
-      if (!resp.ok) {
-        throw new Error(`Fallo HTTP ${resp.status} al obtener configuración`);
-      }
-      const json = await resp.json();
-
-      if (!json.exito) {
-        const msg = json.mensaje || "No se pudo obtener la configuración.";
-        notifyError(msg);
-        setCargando(false);
-        return;
-      }
-
-      if (!json.hay_config) {
-        setForm((f) => ({
-          ...f,
-          id_config: null,
-          nombre: "Mesas Examen",
-          insc_inicio_local: "",
-          insc_fin_local: "",
-          mensaje_cerrado: "La inscripción está cerrada. Consultá Secretaría.",
-        }));
+      if (typeof el.showPicker === "function") {
+        el.showPicker();
       } else {
-        setForm({
-          id_config: json.id_config ?? null,
-          nombre: json.titulo || "Mesas Examen",
-          insc_inicio_local: isoToLocalInput(json.inicio),
-          insc_fin_local: isoToLocalInput(json.fin),
-          mensaje_cerrado: json.mensaje_cerrado || "La inscripción está cerrada. Consultá Secretaría.",
-        });
+        el.focus(); // fallback Safari/Firefox
       }
-
-      if (!silent) {
-        notifySuccess("Configuración cargada.");
-      }
-    } catch (e) {
-      notifyError(
-        e instanceof Error
-          ? `Error al consultar la configuración: ${e.message}`
-          : "Error de red al consultar la configuración."
-      );
-    } finally {
-      setCargando(false);
+    } catch {
+      el.focus(); // si showPicker falla (NotAllowedError), al menos enfoca
     }
-  }, [BASE_URL, notifyError, notifySuccess]);
+  };
+
+  const handleKeyOpen = (e, el) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openNativePicker(el);
+    }
+  };
+
+  const fetchConfig = useCallback(
+    async (silent = true) => {
+      setCargando(true);
+      setError("");
+      setOkMsg("");
+      try {
+        const resp = await fetch(`${BASE_URL}/api.php?action=form_obtener_config_inscripcion`);
+        if (!resp.ok) {
+          throw new Error(`Fallo HTTP ${resp.status} al obtener configuración`);
+        }
+        const json = await resp.json();
+
+        if (!json.exito) {
+          const msg = json.mensaje || "No se pudo obtener la configuración.";
+          notifyError(msg);
+          setCargando(false);
+          return;
+        }
+
+        if (!json.hay_config) {
+          setForm((f) => ({
+            ...f,
+            id_config: null,
+            nombre: "Mesas Examen",
+            insc_inicio_local: "",
+            insc_fin_local: "",
+            mensaje_cerrado: "La inscripción está cerrada. Consultá Secretaría.",
+          }));
+        } else {
+          setForm({
+            id_config: json.id_config ?? null,
+            nombre: json.titulo || "Mesas Examen",
+            insc_inicio_local: isoToLocalInput(json.inicio),
+            insc_fin_local: isoToLocalInput(json.fin),
+            mensaje_cerrado:
+              json.mensaje_cerrado || "La inscripción está cerrada. Consultá Secretaría.",
+          });
+        }
+
+        if (!silent) notifySuccess("Configuración cargada.");
+      } catch (e) {
+        notifyError(
+          e instanceof Error
+            ? `Error al consultar la configuración: ${e.message}`
+            : "Error de red al consultar la configuración."
+        );
+      } finally {
+        setCargando(false);
+      }
+    },
+    [notifyError, notifySuccess]
+  );
 
   useEffect(() => {
     fetchConfig(true);
@@ -162,11 +198,9 @@ const ConfigForm = () => {
   };
 
   // Toast inmediato ante errores de validación al hacer blur en fechas (UX extra)
-  const onBlurCampoFecha = (e) => {
+  const onBlurCampoFecha = () => {
     const err = validar();
-    if (err) {
-      notifyWarn(err, 3500);
-    }
+    if (err) notifyWarn(err, 3500);
   };
 
   const onGuardar = async (e) => {
@@ -286,12 +320,20 @@ const ConfigForm = () => {
               <label className="field col-6">
                 <span className="label">Inicio</span>
                 <input
+                  ref={inicioRef}
                   type="datetime-local"
                   className="input input-click"
                   name="insc_inicio_local"
                   value={form.insc_inicio_local}
                   onChange={handleChange}
                   onBlur={onBlurCampoFecha}
+                  // gesto de usuario confiable
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    openNativePicker(inicioRef.current);
+                  }}
+                  // accesible por teclado
+                  onKeyDown={(e) => handleKeyOpen(e, inicioRef.current)}
                   required
                 />
               </label>
@@ -299,12 +341,18 @@ const ConfigForm = () => {
               <label className="field col-6">
                 <span className="label">Fin</span>
                 <input
+                  ref={finRef}
                   type="datetime-local"
                   className="input input-click"
                   name="insc_fin_local"
                   value={form.insc_fin_local}
                   onChange={handleChange}
                   onBlur={onBlurCampoFecha}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    openNativePicker(finRef.current);
+                  }}
+                  onKeyDown={(e) => handleKeyOpen(e, finRef.current)}
                   required
                 />
               </label>

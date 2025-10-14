@@ -346,3 +346,4 @@
 /* ocupar 100% del grid */
 .INFOPROF-card--full { grid-column: 1 / -1; }
 .INFOPROF-value{text-align: end;}
+.INFOPROF-td,.INFOPROF-th{text-align: center; scrollbar-gutter: stable;}

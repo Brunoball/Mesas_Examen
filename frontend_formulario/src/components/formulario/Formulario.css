@@ -1218,3 +1218,38 @@ html, body{ overflow-x: hidden; } /* seguridad global */
     display: none !important;
   }
 }
+
+/* --- Forzar que el botón Volver quede abajo del todo (desktop) --- */
+.auth-hero{
+  display: flex;              /* ya lo tenías, lo mantenemos */
+  flex-direction: column;
+}
+
+/* El contenedor que envuelve el contenido debe ocupar todo el alto */
+.hero-scroll{
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;             /* ocupa el alto disponible del aside */
+  min-height: 0;              /* permite que los hijos hagan layout correcto */
+}
+
+/* El bloque interior también se estira a todo el alto */
+.hero-inner{
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* El contenedor del botón se empuja al fondo */
+.actions-left{
+  margin-top: auto;           /* empuja el bloque hacia abajo */
+  padding-top: 10px;          /* pequeño respiro visual */
+  /* opcional: borde superior tenue para separarlo del contenido */
+
+}
+
+/* Solo aplica en desktop (en mobile ya usás la nav fija) */
+@media (max-width: 860px){
+  .actions-left{ display: none !important; }
+}
