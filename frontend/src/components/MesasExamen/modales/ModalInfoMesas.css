@@ -421,3 +421,4 @@
   border-radius: 8px;
   border: 2px solid #f5f7fb;
 }
+.infomesas-td, .infomesas-thead{text-align: center; overflow: auto; scrollbar-gutter: stable;}

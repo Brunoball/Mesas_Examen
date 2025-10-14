@@ -285,7 +285,7 @@ const ModalInfoMesas = ({ open, mesa, onClose }) => {
           {/* ====== TAB: Resumen ====== */}
           {active === "resumen" && !loading && !error && (
             <section className="infomesas-tabpanel is-active">
-              <div className="infomesas-grid infomesas-grid--2cols">
+              <div className="infomesas-grid infomesas-grid--stack">
                 <article className="infomesas-card">
                   <h3 className="infomesas-card__title">Datos generales</h3>
                   <div className="infomesas-row">

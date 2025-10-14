@@ -21,8 +21,6 @@ import ModalMoverMesa from "./modales/ModalMoverMesa";
 
 import "../Previas/AgregarPrevia.css";
 import "./EditarMesa.css";
-
-// ⬅️ importo el CSS del modal rojo para reutilizar la estética
 import "./modales/ModalEliminarMesas.css";
 
 // Calendario inline (asegurate de tenerlo en src/components/Global/InlineCalendar.jsx)
@@ -45,6 +43,21 @@ const norm = (s) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+
+/* Skeleton simple */
+const Skeleton = ({ style, className = "" }) => (
+  <div
+    className={`mesa-skel ${className}`}
+    style={{
+      background:
+        "linear-gradient(90deg, #f2f2f2 25%, #e8e8e8 37%, #f2f2f2 63%)",
+      backgroundSize: "400% 100%",
+      animation: "mesaShimmer 1.2s infinite",
+      borderRadius: 8,
+      ...style,
+    }}
+  />
+);
 
 const EditarMesa = () => {
   const { id: numeroMesaParam } = useParams();
@@ -75,7 +88,7 @@ const EditarMesa = () => {
   const [openMover, setOpenMover] = useState(false);
   const [numeroParaMover, setNumeroParaMover] = useState(null);
 
-  // ⬇️ ESTADO del modal integrado "Quitar número"
+  // Estado modal integrado "Quitar número"
   const [openQuitar, setOpenQuitar] = useState(false);
   const [numeroQuitar, setNumeroQuitar] = useState(null);
   const [loadingQuitar, setLoadingQuitar] = useState(false);
@@ -91,7 +104,8 @@ const EditarMesa = () => {
     const onKey = (e) => {
       if (!openQuitar) return;
       if (e.key === "Escape" && !loadingQuitar) setOpenQuitar(false);
-      if ((e.key === "Enter" || e.key === "NumpadEnter") && !loadingQuitar) confirmarQuitarNumeroDelGrupo();
+      if ((e.key === "Enter" || e.key === "NumpadEnter") && !loadingQuitar)
+        confirmarQuitarNumeroDelGrupo();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -102,7 +116,9 @@ const EditarMesa = () => {
       throw new Error("Número de mesa inválido.");
     }
 
-    const resListas = await fetch(`${BASE_URL}/api.php?action=obtener_listas`, { cache: "no-store" });
+    const resListas = await fetch(`${BASE_URL}/api.php?action=obtener_listas`, {
+      cache: "no-store",
+    });
     const jListas = await resListas.json().catch(() => ({}));
     const ts = (jListas?.listas?.turnos || [])
       .map((t) => ({
@@ -113,9 +129,12 @@ const EditarMesa = () => {
       .filter((t) => t.id_turno && t.turno);
     setTurnos(ts);
 
-    const rGr = await fetch(`${BASE_URL}/api.php?action=mesas_listar_grupos`, { cache: "no-store" });
+    const rGr = await fetch(`${BASE_URL}/api.php?action=mesas_listar_grupos`, {
+      cache: "no-store",
+    });
     const jGr = await rGr.json().catch(() => ({}));
-    if (!rGr.ok || !jGr?.exito) throw new Error(jGr?.mensaje || "No se pudieron obtener los grupos.");
+    if (!rGr.ok || !jGr?.exito)
+      throw new Error(jGr?.mensaje || "No se pudieron obtener los grupos.");
     const grupos = Array.isArray(jGr.data) ? jGr.data : [];
     const filaGrupo = grupos.find((g) =>
       [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
@@ -146,25 +165,30 @@ const EditarMesa = () => {
         ].filter((n) => n > 0)
       : [numeroMesa];
 
-    const respDetGrupo = await fetch(`${BASE_URL}/api.php?action=mesas_detalle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numeros_mesa: nums }),
-    });
+    const respDetGrupo = await fetch(
+      `${BASE_URL}/api.php?action=mesas_detalle`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numeros_mesa: nums }),
+      }
+    );
     const jDetGrupo = await respDetGrupo.json().catch(() => ({}));
     if (!respDetGrupo.ok || !jDetGrupo?.exito) {
       throw new Error(jDetGrupo?.mensaje || `HTTP ${respDetGrupo.status}`);
     }
 
-    const det = (Array.isArray(jDetGrupo.data) ? jDetGrupo.data : []).map((m) => ({
-      numero_mesa: Number(m.numero_mesa || 0),
-      materia: m.materia ?? "",
-      fecha: m.fecha ?? "",
-      id_turno: m.id_turno ?? null,
-      turno: m.turno ?? "",
-      docentes: Array.isArray(m.docentes) ? m.docentes.filter(Boolean) : [],
-      alumnos: Array.isArray(m.alumnos) ? m.alumnos : [],
-    }));
+    const det = (Array.isArray(jDetGrupo.data) ? jDetGrupo.data : []).map(
+      (m) => ({
+        numero_mesa: Number(m.numero_mesa || 0),
+        materia: m.materia ?? "",
+        fecha: m.fecha ?? "",
+        id_turno: m.id_turno ?? null,
+        turno: m.turno ?? "",
+        docentes: Array.isArray(m.docentes) ? m.docentes.filter(Boolean) : [],
+        alumnos: Array.isArray(m.alumnos) ? m.alumnos : [],
+      })
+    );
 
     const actual = det.find((x) => x.numero_mesa === numeroMesa);
     if (!actual) throw new Error("No se encontró detalle de la mesa.");
@@ -198,10 +222,12 @@ const EditarMesa = () => {
         if (alive) setCargando(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [cargarTodo, notify]);
 
-  const materiaTitle = useMemo(() => (mesa?.materia || ""), [mesa]);
+  const materiaTitle = useMemo(() => mesa?.materia || "", [mesa]);
 
   const onSave = async () => {
     try {
@@ -220,7 +246,8 @@ const EditarMesa = () => {
         }),
       });
       const json = await resp.json().catch(() => ({}));
-      if (!resp.ok || !json?.exito) throw new Error(json?.mensaje || `HTTP ${resp.status}`);
+      if (!resp.ok || !json?.exito)
+        throw new Error(json?.mensaje || `HTTP ${resp.status}`);
       notify({ tipo: "exito", mensaje: "Mesa actualizada correctamente." });
       await cargarTodo();
     } catch (e) {
@@ -230,82 +257,42 @@ const EditarMesa = () => {
     }
   };
 
-  // ⬇️ Abrir el modal de confirmación (integrado)
+  // Abrir modal de confirmación (integrado)
   const pedirQuitarNumero = (n) => {
     setNumeroQuitar(n);
     setOpenQuitar(true);
   };
 
-  // ⬇️ Acción real al confirmar en el modal (integrado)
+  // Acción real al confirmar en el modal (integrado)
   const confirmarQuitarNumeroDelGrupo = async () => {
     const n = Number(numeroQuitar);
     if (!n) return;
     try {
       setLoadingQuitar(true);
-      const resp = await fetch(`${BASE_URL}/api.php?action=mesa_grupo_quitar_numero`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numero_mesa: n }),
-      });
+      const resp = await fetch(
+        `${BASE_URL}/api.php?action=mesa_grupo_quitar_numero`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numero_mesa: n }),
+        }
+      );
       const json = await resp.json().catch(() => ({}));
-      if (!resp.ok || !json?.exito) throw new Error(json?.mensaje || `HTTP ${resp.status}`);
+      if (!resp.ok || !json?.exito)
+        throw new Error(json?.mensaje || `HTTP ${resp.status}`);
       notify({ tipo: "exito", mensaje: `Número ${n} quitado del grupo.` });
       await cargarTodo();
       setOpenQuitar(false);
       setNumeroQuitar(null);
     } catch (e) {
-      notify({ tipo: "error", mensaje: e.message || "No se pudo quitar el número." });
+      notify({
+        tipo: "error",
+        mensaje: e.message || "No se pudo quitar el número.",
+      });
     } finally {
       setLoadingQuitar(false);
     }
   };
-
-  if (cargando) {
-    return (
-      <div className="prev-add-container">
-        <div className="prev-add-box" >
-          <div className="prev-add-header">
-            <div className="prev-add-icon-title">
-              <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" />
-              <div>
-                <h1>Editar Mesa</h1>
-                <p>Cargando…</p>
-              </div>
-            </div>
-            <button type="button" className="prev-add-back-btn" onClick={() => navigate(-1)} title="Volver">
-              <FaArrowLeft style={{ marginRight: 8 }} /> Volver
-            </button>
-          </div>
-          <div className="prev-add-form-wrapper" id="form-wrapper">
-            <p className="mesa-muted">Cargando mesa…</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  if (!mesa) {
-    return (
-      <div className="prev-add-container">
-        <div className="prev-add-box">
-          <div className="prev-add-header">
-            <div className="prev-add-icon-title">
-              <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" />
-              <div>
-                <h1>Editar Mesa</h1>
-                <p>No se encontró la mesa solicitada</p>
-              </div>
-            </div>
-            <button type="button" className="prev-add-back-btn" onClick={() => navigate(-1)} title="Volver">
-              <FaArrowLeft style={{ marginRight: 8 }} /> Volver
-            </button>
-          </div>
-          <div className="prev-add-form-wrapper">
-            <p className="mesa-muted">No se encontró la mesa solicitada.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -323,10 +310,17 @@ const EditarMesa = () => {
           {/* ===== Header ===== */}
           <div className="prev-add-header">
             <div className="prev-add-icon-title">
-              <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" aria-hidden="true" />
+              <FontAwesomeIcon
+                icon={faPenToSquare}
+                className="prev-add-icon"
+                aria-hidden="true"
+              />
               <div>
-                <h1>Editar Mesa Nº {mesa.numero_mesa}{idGrupo ? ` — Grupo ${idGrupo}` : ""}</h1>
-                <p>{materiaTitle}</p>
+                <h1>
+                  Editar Mesa Nº {mesa?.numero_mesa ?? numeroMesa}
+                  {idGrupo ? ` — Grupo ${idGrupo}` : ""}
+                </h1>
+                <p>{materiaTitle || (cargando ? "Cargando…" : "—")}</p>
               </div>
             </div>
             <button
@@ -349,36 +343,60 @@ const EditarMesa = () => {
                 <div className="prev-section" id="prev-section-program">
                   <div className="prog-head">
                     <h3 className="prev-section-title">Programación</h3>
-                    <div className="float-field">
-                      <label className="float-label" htmlFor="turno-select">Turno</label>
-                      <select
-                        id="turno-select"
-                        className="prev-input"
-                        value={idTurno}
-                        onChange={(e) => setIdTurno(e.target.value)}
-                      >
-                        <option value="">Seleccionar…</option>
-                        {turnos.map((t) => (
-                          <option key={t.id_turno} value={t.id_turno}>
-                            {t.turno}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="prev-input-highlight" />
-                    </div>
+                    {cargando ? (
+                      <Skeleton
+                        style={{
+                          height: 40,
+                          width: 220,
+                          borderRadius: 12,
+                        }}
+                      />
+                    ) : (
+                      <div className="float-field">
+                        <label className="float-label" htmlFor="turno-select">
+                          Turno
+                        </label>
+                        <select
+                          id="turno-select"
+                          className="prev-input"
+                          value={idTurno}
+                          onChange={(e) => setIdTurno(e.target.value)}
+                        >
+                          <option value="">Seleccionar…</option>
+                          {turnos.map((t) => (
+                            <option key={t.id_turno} value={t.id_turno}>
+                              {t.turno}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="prev-input-highlight" />
+                      </div>
+                    )}
                   </div>
 
                   <div className="prog-block calendar-block">
-                    <label className="prev-label" style={{ display: "block", marginBottom: 6 }}>
-                      <FaCalendarAlt style={{ marginRight: 6 }} />
-                      Fecha
+                    <label
+                      className="prev-label"
+                    >
                     </label>
-                    <InlineCalendar
-                      value={fecha}
-                      onChange={(v) => setFecha(v)}
-                      locale="es-AR"
-                      weekStartsOn={1}
-                    />
+
+                    {cargando ? (
+                      <Skeleton
+                        style={{
+                          // Altura equivalente a ~2 tarjetas (podés ajustar con CSS)
+                          height: 316,
+                          borderRadius: 12,
+                        }}
+                      />
+                    ) : (
+                      <InlineCalendar
+                        className="cal-inline"
+                        value={fecha}
+                        onChange={(v) => setFecha(v)}
+                        locale="es-AR"
+                        weekStartsOn={1}
+                      />
+                    )}
                   </div>
                 </div>
               </aside>
@@ -386,58 +404,126 @@ const EditarMesa = () => {
               {/* DERECHA: Slots del grupo */}
               <section className="col-materia">
                 <div className="prev-section">
-                  <h3 className="prev-section-title">Slots del grupo (hasta 4)</h3>
+                  <h3 className="prev-section-title">
+                    Slots del grupo (hasta 4)
+                  </h3>
 
                   <div className="mesa-cards">
-                    {(() => {
-                      const ocupados = [...detalleGrupo].sort((a, b) => a.numero_mesa - b.numero_mesa);
-                      const arr = [];
-                      for (let i = 0; i < 4; i++) arr.push(ocupados[i] ?? null);
-                      return arr.map((slot, idx) => {
-                        if (slot) {
-                          const docentes = Array.isArray(slot.docentes) ? slot.docentes : [];
-                          return (
-                            <article key={`slot-ok-${slot.numero_mesa}`} className="mesa-card">
-                              <div className="mesa-card-head">
-                                <span className="mesa-badge">N° {slot.numero_mesa}</span>
-                                <div className="mesa-card-actions">
-                                  <button
-                                    className="mesa-chip info"
-                                    title="Mover este número a otro grupo"
-                                    onClick={() => { setNumeroParaMover(slot.numero_mesa); setOpenMover(true); }}
-                                  >
-                                    <FaExchangeAlt />
-                                  </button>
-                                  <button
-                                    className="mesa-chip danger"
-                                    title="Quitar del grupo (no borra la mesa)"
-                                    onClick={() => pedirQuitarNumero(slot.numero_mesa)}
-                                    disabled={!idGrupo}
-                                  >
-                                    <FaTrash />
-                                  </button>
-                                </div>
-                              </div>
-                              <h4 className="mesa-card-title">{slot.materia || "Sin materia"}</h4>
-                              <p className="mesa-card-sub">
-                                {docentes.length ? `Docentes: ${docentes.join(" | ")}` : "Docentes: —"}
-                              </p>
-                            </article>
+                    {cargando
+                      ? Array.from({ length: 4 }).map((_, i) => (
+                          <div key={`sk-${i}`} className="mesa-card">
+                            <Skeleton
+                              style={{
+                                height: 18,
+                                width: 90,
+                                borderRadius: 999,
+                              }}
+                            />
+                            <Skeleton
+                              style={{
+                                height: 16,
+                                width: "80%",
+                                borderRadius: 6,
+                                marginTop: 8,
+                              }}
+                            />
+                            <Skeleton
+                              style={{
+                                height: 14,
+                                width: "60%",
+                                borderRadius: 6,
+                                marginTop: 6,
+                              }}
+                            />
+                            <div
+                              style={{
+                                marginTop: "auto",
+                                display: "flex",
+                                gap: 8,
+                              }}
+                            >
+                              <Skeleton
+                                style={{
+                                  height: 36,
+                                  width: 36,
+                                  borderRadius: 999,
+                                }}
+                              />
+                              <Skeleton
+                                style={{
+                                  height: 36,
+                                  width: 36,
+                                  borderRadius: 999,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))
+                      : (() => {
+                          const ocupados = [...detalleGrupo].sort(
+                            (a, b) => a.numero_mesa - b.numero_mesa
                           );
-                        }
-                        return (
-                          <button
-                            key={`slot-free-${idx}`}
-                            className="mesa-card add"
-                            onClick={() => setOpenAgregar(true)}
-                            disabled={numerosGrupo.length >= 4}
-                            title="Agregar número al grupo"
-                          >
-                            <FaPlus /> Agregar número
-                          </button>
-                        );
-                      });
-                    })()}
+                          const arr = [];
+                          for (let i = 0; i < 4; i++) arr.push(ocupados[i] ?? null);
+                          return arr.map((slot, idx) => {
+                            if (slot) {
+                              const docentes = Array.isArray(slot.docentes)
+                                ? slot.docentes
+                                : [];
+                              return (
+                                <article
+                                  key={`slot-ok-${slot.numero_mesa}`}
+                                  className="mesa-card"
+                                >
+                                  <div className="mesa-card-head">
+                                    <span className="mesa-badge">
+                                      N° {slot.numero_mesa}
+                                    </span>
+                                    <div className="mesa-card-actions">
+                                      <button
+                                        className="mesa-chip info"
+                                        title="Mover este número a otro grupo"
+                                        onClick={() => {
+                                          setNumeroParaMover(slot.numero_mesa);
+                                          setOpenMover(true);
+                                        }}
+                                      >
+                                        <FaExchangeAlt />
+                                      </button>
+                                      <button
+                                        className="mesa-chip danger"
+                                        title="Quitar del grupo (no borra la mesa)"
+                                        onClick={() => pedirQuitarNumero(slot.numero_mesa)}
+                                        disabled={!idGrupo}
+                                      >
+                                        <FaTrash />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <h4 className="mesa-card-title">
+                                    {slot.materia || "Sin materia"}
+                                  </h4>
+                                  <p className="mesa-card-sub">
+                                    {docentes.length
+                                      ? `Docentes: ${docentes.join(" | ")}`
+                                      : "Docentes: —"}
+                                  </p>
+                                </article>
+                              );
+                            }
+                            return (
+                              <button
+                                key={`slot-free-${idx}`}
+                                className="mesa-card add"
+                                onClick={() => setOpenAgregar(true)}
+                                disabled={numerosGrupo.length >= 4}
+                                title="Agregar número al grupo"
+                              >
+                                <FaPlus /> Agregar número
+                              </button>
+                            );
+                          });
+                        })()}
                   </div>
                 </div>
               </section>
@@ -450,6 +536,7 @@ const EditarMesa = () => {
                 className="prev-add-button prev-add-button--back"
                 onClick={() => setOpenDelete(true)}
                 title="Eliminar mesa (alumno)"
+                disabled={cargando}
               >
                 <FaTrash style={{ marginRight: 8 }} />
                 Eliminar
@@ -458,7 +545,7 @@ const EditarMesa = () => {
               <button
                 type="button"
                 className="prev-add-button"
-                disabled={guardando}
+                disabled={guardando || cargando}
                 onClick={onSave}
                 title="Guardar"
               >
@@ -479,7 +566,12 @@ const EditarMesa = () => {
                 notify({ tipo: "exito", mensaje: "Mesa eliminada." });
                 setTimeout(() => navigate("/mesas-examen"), 400);
               }}
-              onError={(mensaje) => notify({ tipo: "error", mensaje: mensaje || "No se pudo eliminar la mesa." })}
+              onError={(mensaje) =>
+                notify({
+                  tipo: "error",
+                  mensaje: mensaje || "No se pudo eliminar la mesa.",
+                })
+              }
             />
           )}
 
@@ -517,7 +609,7 @@ const EditarMesa = () => {
             />
           )}
 
-          {/* ⬇️ MODAL INTEGRADO: “Quitar número del grupo” */}
+          {/* MODAL integrado: “Quitar número del grupo” */}
           {openQuitar && (
             <div
               className="logout-modal-overlay"
@@ -534,7 +626,10 @@ const EditarMesa = () => {
                   <FaTrash />
                 </div>
 
-                <h3 id="confirm-quitar-title" className="logout-modal-title logout-modal-title--danger">
+                <h3
+                  id="confirm-quitar-title"
+                  className="logout-modal-title logout-modal-title--danger"
+                >
                   Confirmar acción
                 </h3>
 
@@ -574,6 +669,14 @@ const EditarMesa = () => {
           )}
         </div>
       </div>
+
+      {/* keyframes para el shimmer del skeleton (scoped inline) */}
+      <style>
+        {`@keyframes mesaShimmer{
+            0% { background-position: 100% 0; }
+            100% { background-position: 0 0; }
+          }`}
+      </style>
     </>
   );
 };
