@@ -425,7 +425,7 @@ const MesasExamen = () => {
     [vista, notify]
   );
 
-  // Fila virtualizada (SIN botón de PDF en la tabla)
+  // Fila virtualizada (SIN columna de ID)
   const Row = React.memo(({ index, style, data }) => {
     const {
       rows,
@@ -439,8 +439,6 @@ const MesasExamen = () => {
     const g = rows[index];
     const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
-
-    const labelId = vista === "grupos" ? g.id_grupo : g.id;
 
     const mesasStr =
       [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
@@ -461,7 +459,7 @@ const MesasExamen = () => {
           willAnimate ? "glob-cascade" : ""
         }`}
       >
-        <div className="glob-column glob-column-dni">{labelId}</div>
+        {/* (Eliminada la columna de ID) */}
         <div className="glob-column glob-column-nombre" title={g.materia}>
           {g.materia}
         </div>
@@ -535,7 +533,7 @@ const MesasExamen = () => {
               type="text"
               placeholder={
                 vista === "grupos"
-                  ? "Buscar por materia, turno, fecha, ID grupo o número de mesa"
+                  ? "Buscar por materia, turno, fecha o número de mesa"
                   : "Buscar por materia, turno, fecha o número de mesa"
               }
               className="glob-search-input"
@@ -683,7 +681,7 @@ const MesasExamen = () => {
                   <FaUsers className="glob-icono-profesor" />
                 </div>
 
-                {/* TABS AL LADO DEL CONTADOR */}
+                {/* TABS */}
                 <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Cambiar vista">
                   <button
                     className={`glob-tab ${vista === "grupos" ? "glob-tab--active" : ""}`}
@@ -773,12 +771,10 @@ const MesasExamen = () => {
             </div>
           </div>
 
-          {/* TABLA */}
+            {/* TABLA */}
           <div className="glob-box-table">
             <div className="glob-header glob-header-mesas">
-              <div className="glob-column-header">
-                {vista === "grupos" ? "ID Grupo" : "ID"}
-              </div>
+              {/* (Eliminado el header de ID) */}
               <div className="glob-column-header">Materia</div>
               <div className="glob-column-header">Mesas</div>
               <div className="glob-column-header">Fecha</div>
@@ -906,14 +902,7 @@ const MesasExamen = () => {
                       <h3 className="glob-card-title">{g.materia || "—"}</h3>
                     </div>
                     <div className="glob-card-body">
-                      <div className="glob-card-row">
-                        <span className="glob-card-label">
-                          {vista === "grupos" ? "ID Grupo" : "ID"}
-                        </span>
-                        <span className="glob-card-value">
-                          {vista === "grupos" ? g.id_grupo : g.id}
-                        </span>
-                      </div>
+                      {/* (Eliminada la fila de ID) */}
                       <div className="glob-card-row">
                         <span className="glob-card-label">Mesas</span>
                         <span className="glob-card-value">{mesasStr}</span>

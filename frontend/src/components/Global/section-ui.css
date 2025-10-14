@@ -433,7 +433,7 @@ input:-webkit-autofill { background-color: transparent !important; }
 /* Header como grid */
 .glob-header {
   display: grid;
-  grid-template-columns: 1.5fr 0.5fr 1.2fr 1fr 0.7fr 0.7fr 0.8fr;
+  grid-template-columns: 1.5fr  0.7fr 0.7fr 0.6fr 1.2fr 0.7fr;
   background: var(--pro-primary);
   position: sticky; top: 0; z-index: 10; overflow: hidden; scrollbar-gutter: stable;
 }
@@ -462,7 +462,7 @@ input:-webkit-autofill { background-color: transparent !important; }
 /* Filas como grid */
 .glob-row {
   display: grid;
-  grid-template-columns: 1.5fr 0.5fr 1.2fr 1fr 0.7fr 0.7fr 0.8fr;
+  grid-template-columns: 1.5fr  0.7fr 0.7fr 0.6fr 1.2fr 0.7fr;
   align-items: center;
   padding: 0;
   position: relative;

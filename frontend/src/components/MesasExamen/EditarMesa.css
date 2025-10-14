@@ -698,3 +698,12 @@ justify-content: space-between;
     max-height: calc((var(--slot-card-minh) * 2) + var(--slot-gap));
   }
 }
+
+
+.prog-head, .prev-section-title{
+  min-height: 38px;
+}
+
+.prev-section-title::after{
+  bottom: 6px;
+}
