@@ -147,7 +147,7 @@ const ConfirmActionModal = ({
         <h3
           id="confirm-modal-title"
           className={`logout-modal-title ${
-            isWarn ? 'logout-modal-title--warn' : 'logout-modal-title--danger'
+            isWarn ? 'logout-modal-title--danger' : 'logout-modal-title--danger'
           }`}
         >
           {titulo}
@@ -184,7 +184,7 @@ const ConfirmActionModal = ({
             id='inscribir'
             type="button"
             className={`logout-btn inscribir ${
-              isWarn ? 'logout-btn--solid-warn' : 'logout-btn--solid-danger'
+              isWarn ? 'logout-btn--solid-danger' : 'logout-btn--solid-danger'
             }`}
             onClick={onConfirm}
             disabled={loading}
@@ -379,6 +379,14 @@ const Previas = () => {
     () => cargando && (hayFiltros || filtroActivo === 'todos'),
     [cargando, hayFiltros, filtroActivo]
   );
+
+  // ⬇️ NUEVO: determinar si hay datos mostrándose en la tabla (para deshabilitar Importar)
+  const tablaConDatos = useMemo(() => {
+    if (mostrarLoader) return false;
+    // Si no se pidió "Mostrar todos" y no hay filtros, la UI aún no muestra tabla
+    if (!hayFiltros && filtroActivo !== 'todos') return false;
+    return previasFiltradas.length > 0;
+  }, [mostrarLoader, hayFiltros, filtroActivo, previasFiltradas.length]);
 
   /* ================================
      Animación en cascada
@@ -653,7 +661,7 @@ const Previas = () => {
       const res = await fetch(`${BASE_URL}/api.php?action=previa_inscribir`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_previa: modalIns.item.id_previa }),
+        body: JSON.stringify({ id_previa: modalIns.item.id_previa } ),
       });
       const json = await res.json();
       if (!json?.exito) throw new Error(json?.mensaje || 'No se pudo inscribir');
@@ -1338,7 +1346,8 @@ const Previas = () => {
               className="glob-profesor-button glob-hover-effect"
               onClick={() => setModalImport(true)}
               aria-label="Importar Excel"
-              title="Importar Excel"
+              title={tablaConDatos ? 'Deshabilitado porque la tabla ya tiene datos' : 'Importar Excel'}
+              disabled={tablaConDatos}
             >
               <FaUpload className="glob-profesor-icon-button" />
               <p>Importar Excel</p>

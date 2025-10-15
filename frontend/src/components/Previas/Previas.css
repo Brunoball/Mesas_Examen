@@ -475,3 +475,8 @@ input:-webkit-autofill { background-color: transparent !important; }
 #confirm-icon{color:var(--ini-success)  ;
 
 }
+#Importar-Excel:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+}
