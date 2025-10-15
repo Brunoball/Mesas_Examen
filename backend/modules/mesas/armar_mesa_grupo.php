@@ -2,15 +2,7 @@
 // backend/modules/mesas/armar_mesa_grupo.php
 // -----------------------------------------------------------------------------
 // Versión: "correlatividad estricta por DNI+área" + split selectivo por DNI
-// - Si una mesa de curso MAYOR queda antes que otra de curso MENOR del mismo
-//   alumno (mismo DNI) y misma área, primero INTENTA separar sólo a ese alumno
-//   del numero_mesa problemático SI ese numero_mesa tiene “muchos alumnos”
-//   (umbral configurable: 3 o más). Se le asigna un numero_mesa nuevo con el
-//   mismo docente, se limpian fecha/turno y se deja re-agendar/agrupado luego.
-// - Si no aplica split (o falla), se usa el diferimiento que ya existía: quitar
-//   fecha/turno del numero_mesa mayor (o del grupo) para reubicar después.
-// - Mantiene: no duplicar DNIs en el mismo slot, prioridad=1 se agenda temprano,
-//   indisponibilidades de docentes y agrupación 2/3/4 por área.
+// (Ajustado para NUNCA dejar/crear grupos de tamaño 1: singles -> mesas_no_agrupadas)
 // -----------------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -164,7 +156,7 @@ function expandirATresMasUnoSinSlot(array $grupo3, array &$rest, array $dnisMap)
 /**
  * Separa las filas del alumno ($dni) que están dentro del numero_mesa $nmOrigen
  * y les asigna un numero_mesa NUEVO (MAX+1), preservando id_docente por fila,
- * y limpiando fecha_mesa/id_turno para re-agendar.
+ * y limpiando fecha/turno para re-agendar.
  * Devuelve el numero_mesa nuevo si hubo split, o null si no hizo nada.
  */
 function splitAlumnoEnNumeroMesa(PDO $pdo, int $nmOrigen, string $dni): ?int {
@@ -184,7 +176,6 @@ function splitAlumnoEnNumeroMesa(PDO $pdo, int $nmOrigen, string $dni): ?int {
   $nmNuevo = (int)($rowMax[0] ?? 0) + 1;
 
   // Mover filas del alumno: mantener id_docente / id_catedra / prioridad; limpiar fecha/turno
-  // Usamos UPDATE con JOIN a previas por DNI
   $stUpd = $pdo->prepare("
     UPDATE mesas m
     INNER JOIN previas p ON p.id_previa = m.id_previa
@@ -196,7 +187,6 @@ function splitAlumnoEnNumeroMesa(PDO $pdo, int $nmOrigen, string $dni): ?int {
   ");
   $stUpd->execute([':nmNuevo'=>$nmNuevo, ':nmOrigen'=>$nmOrigen, ':dni'=>$dni]);
 
-  // Validar que realmente se movió algo
   $moved = $stUpd->rowCount();
   if ($moved <= 0) return null;
 
@@ -548,11 +538,11 @@ try {
   $singlesNoAgrupadas=[];
 
   // =============================== FASE A ===============================
-  // Completar slots fijos (después de posibles splits/diferimientos); expandir 3->4.
+  // Completar slots fijos; expandir 3->4. (Singles fijos -> no_agrupadas)
   $buckets=[];
   foreach($rowsFechadas as $r){
     $f=$r['fecha_mesa']; $t=(int)$r['id_turno']; $a=(int)$r['id_area']; $nm=(int)$r['numero_mesa'];
-    if (!empty($deferidos[$nm])) continue; // ya diferido
+    if (!empty($deferidos[$nm])) continue;
     $key="$f|$t|$a";
     if(!isset($buckets[$key])) $buckets[$key]=['f'=>$f,'t'=>$t,'a'=>$a,'nums'=>[]];
     $buckets[$key]['nums'][]=$nm;
@@ -606,7 +596,7 @@ try {
 
       $tamGrupo = count($g);
       if ($tamGrupo===1) {
-        // single fijo -> mesas_no_agrupadas
+        // single fijo -> mesas_no_agrupadas (NO crear grupo)
         $nm = $g[0];
         if($estaAgrupada($nm,$f,$t)) continue;
         if ($dryRun) {
@@ -745,7 +735,7 @@ try {
       $rest = array_values(array_filter($nums, fn($x)=>!isset($usados[$x])));
 
       foreach ($gruposBase as $g) {
-        // single -> no_agrupadas
+        // single -> no_agrupadas (NO crear mesas_grupos)
         if (count($g)===1) {
           $s = $eligeSlot($g);
           $nm = $g[0];
@@ -842,6 +832,30 @@ try {
     }
   }
 
+  // --- SANIDAD: mover cualquier grupo de tamaño 1 a no_agrupadas y borrar el grupo ---
+  if (!$dryRun) {
+    // insert singles into mesas_no_agrupadas
+    $pdo->exec("
+      INSERT IGNORE INTO mesas_no_agrupadas (numero_mesa, fecha_mesa, id_turno)
+      SELECT
+        CASE
+          WHEN numero_mesa_1>0 THEN numero_mesa_1
+          WHEN numero_mesa_2>0 THEN numero_mesa_2
+          WHEN numero_mesa_3>0 THEN numero_mesa_3
+          ELSE numero_mesa_4
+        END AS numero_mesa,
+        fecha_mesa,
+        id_turno
+      FROM mesas_grupos
+      WHERE (numero_mesa_1>0)+(numero_mesa_2>0)+(numero_mesa_3>0)+(numero_mesa_4>0)=1
+    ");
+    // delete those single groups
+    $pdo->exec("
+      DELETE FROM mesas_grupos
+      WHERE (numero_mesa_1>0)+(numero_mesa_2>0)+(numero_mesa_3>0)+(numero_mesa_4>0)=1
+    ");
+  }
+
   // Limpieza global
   if(!$dryRun){ $pdo->exec($purgaGlobalSQL); }
   if(!$dryRun) $pdo->commit();
@@ -869,7 +883,7 @@ try {
       'deferidos'             => array_keys($deferidos),
       'splits'                => $splitHechos
     ],
-    'nota'=>'Se aplicó un split selectivo por DNI cuando el numero_mesa mayor tenía muchos alumnos (≥ '.UMBRAL_SPLIT_MUCHOS_ALUMNOS.'). Solo se movieron las filas de ese DNI a un numero_mesa nuevo, limpiando fecha/turno para reubicar sin romper el resto. Si no aplicaba split, se difería como antes.'
+    'nota'=>'Nunca se generan grupos de tamaño 1: cualquier single queda en mesas_no_agrupadas. Se agrega una sanidad final que migra y limpia grupos unitarios preexistentes.'
   ]);
 
 } catch (Throwable $e) {

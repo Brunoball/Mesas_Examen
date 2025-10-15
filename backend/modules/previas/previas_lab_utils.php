@@ -5,41 +5,60 @@ declare(strict_types=1);
 ini_set('display_errors','0');
 error_reporting(E_ALL);
 
-// desde /modules/previas → /config
 require_once __DIR__ . '/../../config/db.php';
 
 function json_response(bool $ok, $payload = null, int $status = 200): void {
   http_response_code($status);
   header('Content-Type: application/json; charset=utf-8');
   echo json_encode(
-    $ok
-      ? ['exito'=>true, 'data'=>$payload]
-      : ['exito'=>false, 'mensaje'=> (is_string($payload)?$payload:'Error')]
+    $ok ? ['exito'=>true, 'data'=>$payload]
+       : ['exito'=>false, 'mensaje'=> (is_string($payload)?$payload:'Error')]
   );
   exit;
 }
 
-/** Crea tabla de pruebas clonando estructura de `previas` si no existe */
 function ensure_previas_lab(PDO $pdo): void {
-  $pdo->exec("CREATE TABLE IF NOT EXISTS previas_lab LIKE previas");
+  $pdo->query('SELECT 1 FROM previas LIMIT 0');
+  $pdo->query('SELECT 1 FROM mesas LIMIT 0');
+  $pdo->query('SELECT 1 FROM mesas_grupos LIMIT 0');
 }
 
-/** TRUNCATE pruebas */
-function truncate_previas_lab(PDO $pdo): void {
-  $pdo->exec("TRUNCATE TABLE previas_lab");
+function wipe_all_previas_mesas(PDO $pdo): array {
+  $totalPrevias      = (int)$pdo->query("SELECT COUNT(*) FROM previas")->fetchColumn();
+  $totalMesas        = (int)$pdo->query("SELECT COUNT(*) FROM mesas")->fetchColumn();
+  $totalMesasGrupos  = (int)$pdo->query("SELECT COUNT(*) FROM mesas_grupos")->fetchColumn();
+
+  $deletedMesas = 0; $deletedGrupos = 0; $deletedPrevias = 0;
+
+  try {
+    $pdo->beginTransaction();
+    $res = $pdo->exec("DELETE FROM mesas");         $deletedMesas   = ($res === false) ? 0 : (int)$res;
+    $res = $pdo->exec("DELETE FROM mesas_grupos");  $deletedGrupos  = ($res === false) ? 0 : (int)$res;
+    $res = $pdo->exec("DELETE FROM previas");       $deletedPrevias = ($res === false) ? 0 : (int)$res;
+    $pdo->commit();
+
+    try { $pdo->exec("ALTER TABLE mesas AUTO_INCREMENT = 1"); } catch (\Throwable $__) {}
+    try { $pdo->exec("ALTER TABLE mesas_grupos AUTO_INCREMENT = 1"); } catch (\Throwable $__) {}
+    try { $pdo->exec("ALTER TABLE previas AUTO_INCREMENT = 1"); } catch (\Throwable $__) {}
+
+    return [
+      'previas_antes'         => $totalPrevias,
+      'mesas_antes'           => $totalMesas,
+      'mesas_grupos_antes'    => $totalMesasGrupos,
+      'mesas_borradas'        => $deletedMesas,
+      'mesas_grupos_borrados' => $deletedGrupos,
+      'previas_borradas'      => $deletedPrevias,
+      'mensaje'               => 'Limpieza completa: mesas → mesas_grupos → previas. AUTO_INCREMENT reseteado.'
+    ];
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    throw $e;
+  }
 }
 
 /**
- * Inserta/actualiza en bloque dentro de una transacción (UPSERT).
- * Espera SOLO estos campos por fila (sin fecha_carga):
- * dni, alumno, cursando_id_curso, cursando_id_division,
- * id_materia, materia_id_curso, materia_id_division,
- * id_condicion, inscripcion, anio
- * La fecha_carga se setea como CURDATE() desde la DB (insert y update).
- *
- * IMPORTANTE:
- *  - Rechaza filas con id_materia <= 0 (obligatorio para no colisionar unique (dni,id_materia,anio)).
- *  - Inserta en el mismo orden que llegan en $rows.
+ * UPSERT por lote en `previas`.
+ * Si hay colisión de UNIQUE (1062), la reporta con una “clave natural” para depurar.
  */
 function bulk_insert_previas_lab(PDO $pdo, array $rows): array {
   if (empty($rows)) return ['insertados'=>0, 'actualizados'=>0, 'sin_cambios'=>0, 'errores'=>[]];
@@ -51,79 +70,49 @@ function bulk_insert_previas_lab(PDO $pdo, array $rows): array {
     'id_condicion','inscripcion','anio'
   ];
 
-  $validados = [];
-  $errores = [];
+  $sql = "INSERT INTO previas
+    (dni, alumno, cursando_id_curso, cursando_id_division, id_materia, materia_id_curso, materia_id_division, id_condicion, inscripcion, anio, fecha_carga)
+    VALUES
+    (:dni, :alumno, :cursando_id_curso, :cursando_id_division, :id_materia, :materia_id_curso, :materia_id_division, :id_condicion, :inscripcion, :anio, CURDATE())
+    ON DUPLICATE KEY UPDATE
+      alumno = VALUES(alumno),
+      cursando_id_curso = VALUES(cursando_id_curso),
+      cursando_id_division = VALUES(cursando_id_division),
+      materia_id_curso = VALUES(materia_id_curso),
+      materia_id_division = VALUES(materia_id_division),
+      id_condicion = VALUES(id_condicion),
+      inscripcion = VALUES(inscripcion),
+      anio = VALUES(anio),
+      fecha_carga = CURDATE()";
+
+  $st = $pdo->prepare($sql);
+
+  $insertados = 0; $actualizados = 0; $sinCambios = 0; $errores = [];
+
+  $toInt = static function($v): int {
+    if (is_int($v)) return $v;
+    if ($v === null || $v === '') return 0;
+    $n = preg_replace('/[^\d\-]/', '', (string)$v);
+    if ($n === '' || $n === '-' || $n === '+') return 0;
+    return (int)$n;
+  };
 
   foreach ($rows as $i => $r) {
     $f = [];
-    foreach ($cols as $c) {
-      if (!array_key_exists($c, $r)) {
-        $errores[] = "Fila ".($i+1).": falta columna `$c`";
-        continue 2;
-      }
-      $f[$c] = $r[$c];
-    }
+    foreach ($cols as $c) { $f[$c] = $r[$c] ?? ''; }
 
-    // Normalizar tipos:
-    $f['dni']                   = (string)($f['dni'] ?? '');
-    $f['alumno']                = (string)($f['alumno'] ?? '');
-    $f['cursando_id_curso']     = (int)$f['cursando_id_curso'];
-    $f['cursando_id_division']  = (int)$f['cursando_id_division'];
-    // ⚠️ OBLIGATORIO y > 0
-    $f['id_materia']            = (int)$f['id_materia'];
-    $f['materia_id_curso']      = (int)$f['materia_id_curso'];
-    $f['materia_id_division']   = (int)$f['materia_id_division'];
-    $f['id_condicion']          = (int)$f['id_condicion'];
-    $f['inscripcion']           = isset($f['inscripcion']) && $f['inscripcion'] !== '' ? (int)$f['inscripcion'] : 0;
-    $f['anio']                  = (int)$f['anio'];
+    $f['cursando_id_curso']    = $toInt($f['cursando_id_curso']);
+    $f['cursando_id_division'] = $toInt($f['cursando_id_division']);
+    $f['id_materia']           = $toInt($f['id_materia']);
+    $f['materia_id_curso']     = $toInt($f['materia_id_curso']);
+    $f['materia_id_division']  = $toInt($f['materia_id_division']);
+    $f['id_condicion']         = $toInt($f['id_condicion']);
+    $f['inscripcion']          = $toInt($f['inscripcion']);
+    $f['anio']                 = $toInt($f['anio']);
+    $f['dni']                  = (string)($f['dni'] ?? '');
+    $f['alumno']               = (string)($f['alumno'] ?? '');
 
-    // Reglas mínimas:
-    if ($f['dni']==='' || $f['alumno']==='') {
-      $errores[] = "Fila ".($i+1).": dni y alumno son obligatorios";
-      continue;
-    }
-    if ($f['id_materia'] <= 0) {
-      $errores[] = "Fila ".($i+1).": id_materia es obligatorio y debe ser > 0";
-      continue;
-    }
-    if ($f['anio'] < 2000 || $f['anio'] > 2100) {
-      $errores[] = "Fila ".($i+1).": anio inválido";
-      continue;
-    }
-    $validados[] = $f;
-  }
-
-  if (empty($validados)) return ['insertados'=>0, 'actualizados'=>0, 'sin_cambios'=>0, 'errores'=>$errores];
-
-  $pdo->beginTransaction();
-  try {
-    /**
-     * ON DUPLICATE KEY UPDATE:
-     * - No se cambia la clave única (p.ej. UNIQUE(dni,id_materia,anio) si existe).
-     * - Actualiza el resto y fecha_carga = CURDATE().
-     * - Inserta en el mismo orden de $validados.
-     */
-    $sql = "INSERT INTO previas_lab
-      (dni, alumno, cursando_id_curso, cursando_id_division, id_materia, materia_id_curso, materia_id_division, id_condicion, inscripcion, anio, fecha_carga)
-      VALUES
-      (:dni, :alumno, :cursando_id_curso, :cursando_id_division, :id_materia, :materia_id_curso, :materia_id_division, :id_condicion, :inscripcion, :anio, CURDATE())
-      ON DUPLICATE KEY UPDATE
-        alumno = VALUES(alumno),
-        cursando_id_curso = VALUES(cursando_id_curso),
-        cursando_id_division = VALUES(cursando_id_division),
-        materia_id_curso = VALUES(materia_id_curso),
-        materia_id_division = VALUES(materia_id_division),
-        id_condicion = VALUES(id_condicion),
-        inscripcion = VALUES(inscripcion),
-        fecha_carga = CURDATE()";
-
-    $st = $pdo->prepare($sql);
-
-    $insertados = 0;
-    $actualizados = 0;
-    $sinCambios = 0;
-
-    foreach ($validados as $f) {
+    try {
       $st->execute([
         ':dni'                  => $f['dni'],
         ':alumno'               => $f['alumno'],
@@ -138,25 +127,29 @@ function bulk_insert_previas_lab(PDO $pdo, array $rows): array {
       ]);
 
       $rc = (int)$st->rowCount();
-      if ($rc === 1)      $insertados++;
-      else if ($rc === 2) $actualizados++;
-      else                $sinCambios++;
+      if     ($rc === 1) $insertados++;
+      elseif ($rc === 2) $actualizados++;
+      else               $sinCambios++;
+    } catch (\PDOException $e) {
+      // 1062 = Duplicate entry for key '...'
+      if ((int)$e->errorInfo[1] === 1062) {
+        $errores[] =
+          "Colisión UNIQUE (posible pisado/UPD) en fila ".($i+1).
+          " — clave natural: dni={$f['dni']}, id_materia={$f['id_materia']}, anio={$f['anio']}, ".
+          "curs_div={$f['cursando_id_division']}, mat_div={$f['materia_id_division']}";
+      } else {
+        $errores[] = "Fila ".($i+1).": ".$e->getMessage();
+      }
+      // seguimos con la siguiente fila
+    } catch (Throwable $e) {
+      $errores[] = "Fila ".($i+1).": ".$e->getMessage();
     }
-
-    $pdo->commit();
-    return [
-      'insertados'   => $insertados,
-      'actualizados' => $actualizados,
-      'sin_cambios'  => $sinCambios,
-      'errores'      => $errores
-    ];
-  } catch (Throwable $e) {
-    $pdo->rollBack();
-    return [
-      'insertados'=>0,
-      'actualizados'=>0,
-      'sin_cambios'=>0,
-      'errores'=>array_merge($errores, ["DB: ".$e->getMessage()])
-    ];
   }
+
+  return [
+    'insertados'   => $insertados,
+    'actualizados' => $actualizados,
+    'sin_cambios'  => $sinCambios,
+    'errores'      => $errores,
+  ];
 }

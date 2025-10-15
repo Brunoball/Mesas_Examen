@@ -45,7 +45,7 @@ const ModalInfoProfesor = ({ mostrar, open, idProfesor, profesor, onClose }) => 
     return texto(raw);
   }, [prof, texto]);
 
-  // Ciclo de vida (siempre antes de cualquier return)
+  // Ciclo de vida
   useEffect(() => {
     setActive(TABS[0].id);
     setError(null);
@@ -191,22 +191,11 @@ const ModalInfoProfesor = ({ mostrar, open, idProfesor, profesor, onClose }) => 
             </section>
           )}
 
-          {/* TAB: Disponibilidad */}
+          {/* TAB: Disponibilidad (SIN "Turnos (Sí)") */}
           {active === "disponibilidad" && !loading && !error && (
             <section className="INFOPROF-tabpanel is-active">
               <div className="INFOPROF-grid INFOPROF-grid--2cols">
-                <article className="INFOPROF-card">
-                  <h3 className="INFOPROF-card__title">Turnos (Sí)</h3>
-                  <div className="INFOPROF-row">
-                    <span className="INFOPROF-label">Turno permitido</span>
-                    <span className="INFOPROF-value">
-                      {texto(P.turno_si_nombre)}
-                      {P.id_turno_si ? <small className="INFOPROF-muted"> &nbsp;(ID {P.id_turno_si})</small> : null}
-                    </span>
-                  </div>
-                  <div className="INFOPROF-row"><span className="INFOPROF-label">Fecha</span><span className="INFOPROF-value">{fmtFechaISO(P.fecha_si)}</span></div>
-                </article>
-
+                {/* Solo Turnos (No) */}
                 <article className="INFOPROF-card">
                   <h3 className="INFOPROF-card__title">Turnos (No)</h3>
                   <div className="INFOPROF-row">
@@ -219,6 +208,7 @@ const ModalInfoProfesor = ({ mostrar, open, idProfesor, profesor, onClose }) => 
                   <div className="INFOPROF-row"><span className="INFOPROF-label">Fecha</span><span className="INFOPROF-value">{fmtFechaISO(P.fecha_no)}</span></div>
                 </article>
 
+                {/* Metadatos a lo ancho */}
                 <article className="INFOPROF-card" style={{ gridColumn: "1 / -1" }}>
                   <h3 className="INFOPROF-card__title">Metadatos</h3>
                   <div className="INFOPROF-row"><span className="INFOPROF-label">Fecha de carga</span><span className="INFOPROF-value">{fmtFechaISO(P.fecha_carga)}</span></div>
@@ -227,37 +217,39 @@ const ModalInfoProfesor = ({ mostrar, open, idProfesor, profesor, onClose }) => 
             </section>
           )}
 
-          {/* TAB: Cátedras */}
+          {/* TAB: Cátedras (Curso + División unidos SIN guion) */}
           {active === "catedras" && !loading && !error && (
             <section className="INFOPROF-tabpanel is-active">
               <article className="INFOPROF-card INFOPROF-card--full">
-                <h3 className="INFOPROF-card__title">Cátedras (Curso – División — Materia)</h3>
+                <h3 className="INFOPROF-card__title">Cátedras (Curso — Materia)</h3>
                 <div className="INFOPROF-table">
-                  <div className="INFOPROF-thead" style={{ gridTemplateColumns: "1fr 0.6fr 1.4fr" }}>
+                  <div className="INFOPROF-thead" style={{ gridTemplateColumns: "1fr 1.4fr" }}>
                     <div className="INFOPROF-th">Curso</div>
-                    <div className="INFOPROF-th">División</div>
                     <div className="INFOPROF-th">Materia</div>
                   </div>
                   <div className="INFOPROF-tbody" style={{ maxHeight: "48vh" }}>
                     {catedras.length === 0 ? (
                       <div className="INFOPROF-row-empty">Sin cátedras registradas.</div>
                     ) : (
-                      catedras.map((c, idx) => (
-                        <div
-                          className="INFOPROF-tr"
-                          key={idx}
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 0.6fr 1.4fr",
-                            gap: 12,
-                            alignItems: "center",
-                          }}
-                        >
-                          <div className="INFOPROF-td">{texto(c.curso)}</div>
-                          <div className="INFOPROF-td">{texto(c.division)}</div>
-                          <div className="INFOPROF-td">{texto(c.materia)}</div>
-                        </div>
-                      ))
+                      catedras.map((c, idx) => {
+                        const parts = [c.curso, c.division].map((v) => texto(v)).filter((v) => v !== "-");
+                        const cursoDiv = parts.length ? parts.join(" ") : "-"; // ← sin guion, solo espacio
+                        return (
+                          <div
+                            className="INFOPROF-tr"
+                            key={idx}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1.4fr",
+                              gap: 12,
+                              alignItems: "center",
+                            }}
+                          >
+                            <div className="INFOPROF-td">{cursoDiv}</div>
+                            <div className="INFOPROF-td">{texto(c.materia)}</div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

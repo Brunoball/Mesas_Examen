@@ -2,24 +2,7 @@
 // backend/modules/mesas/reoptimizar_mesas.php
 // -----------------------------------------------------------------------------
 // Reoptimiza mesas NO AGRUPADAS para maximizar parejas/ternas/cuaternas,
-// pudiendo CAMBIAR fecha/turno de los no agrupados para encajarlos en grupos
-// existentes o crear grupos nuevos, SIN choques de DNI, respetando disponibilidad
-// de docentes y evitando que el mismo alumno rinda dos materias en el mismo
-// día y turno. Itera hasta converger o alcanzar max_iter.
-// -----------------------------------------------------------------------------
-//
-// Entrada (POST JSON):
-//   {
-//     "dry_run": 0|1,                // opcional (default 0)
-//     "max_iter": 1..20,             // opcional (default 5)
-//     "fecha_inicio": "YYYY-MM-DD",  // opcional: si no viene, se deduce
-//     "fecha_fin":    "YYYY-MM-DD",  // opcional: si no viene, se deduce
-//     "solo_area":    <int|null>     // opcional: optimizar solo esa área
-//   }
-//
-// Salida:
-//   { exito:true, data:{ resumen, detalle, nota } }
-//
+// (Ajustado para NUNCA crear grupos de tamaño 1: singles -> mesas_no_agrupadas)
 // -----------------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -402,7 +385,30 @@ try {
       $slotIdx = $eligeSlot($mejorGrupo, $area);
       if ($slotIdx>=0) {
         $f=$slots[$slotIdx]['fecha']; $t=$slots[$slotIdx]['turno'];
-        // aplicar cambios
+
+        // *** si el "mejor grupo" tiene tamaño 1 -> single => NO crear grupo, solo no_agrupadas ***
+        if (count($mejorGrupo) === 1) {
+          if (!$dryRun) {
+            foreach($mejorGrupo as $nmX) {
+              $stUpdMesaSlot->execute([$f,$t,$nmX]);
+              // limpiar registro anterior de no_agrupadas (si lo tenía) y registrar en el nuevo slot
+              $stDelLeftExact->execute([':n'=>$nmX,':f'=>$row['fecha_mesa'],':t'=>$row['id_turno']]);
+              $stInsLeft->execute([':n'=>$nmX,':f'=>$f,':t'=>$t]);
+            }
+          }
+          // actualizar estructuras en memoria
+          foreach($mejorGrupo as $nmX){
+            foreach(($dnisPorNumero[$nmX]??[]) as $dni){
+              $horarioAlumno[$dni][$f.'|'.$t]=true;
+            }
+          }
+          $slotCarga[$slotIdx] += 1;
+          $detalleMov[]=['numero_mesa'=>$mejorGrupo[0],'to_fecha'=>$f,'to_turno'=>$t,'area'=>$area,'motivo'=>'single_no_agrupada'];
+          $cambiosIter++; $cambiosTotales++;
+          continue; // NO creamos mesas_grupos
+        }
+
+        // aplicar cambios para 2/3/4
         if (!$dryRun) {
           foreach($mejorGrupo as $nmX) {
             $stUpdMesaSlot->execute([$f,$t,$nmX]);
@@ -411,7 +417,7 @@ try {
             // por dudas, insertar su estado actual como no_agrupada y luego se purga si queda en grupo
             $stInsLeft->execute([':n'=>$nmX,':f'=>$f,':t'=>$t]);
           }
-          // crear grupo
+          // crear grupo (solo si hay 2+ mesas)
           [$a1,$b1,$c1,$d1] = pad4($mejorGrupo);
           $stDupGroupExact->execute([':f'=>$f,':t'=>$t,':a'=>$a1,':b'=>$b1,':c'=>$c1,':d'=>$d1]);
           if (!$stDupGroupExact->fetch()) {
@@ -441,6 +447,26 @@ try {
   }
 
   if (!$dryRun) {
+    // --- SANIDAD: mover cualquier grupo de tamaño 1 a no_agrupadas y borrar el grupo ---
+    $pdo->exec("
+      INSERT IGNORE INTO mesas_no_agrupadas (numero_mesa, fecha_mesa, id_turno)
+      SELECT
+        CASE
+          WHEN numero_mesa_1>0 THEN numero_mesa_1
+          WHEN numero_mesa_2>0 THEN numero_mesa_2
+          WHEN numero_mesa_3>0 THEN numero_mesa_3
+          ELSE numero_mesa_4
+        END AS numero_mesa,
+        fecha_mesa,
+        id_turno
+      FROM mesas_grupos
+      WHERE (numero_mesa_1>0)+(numero_mesa_2>0)+(numero_mesa_3>0)+(numero_mesa_4>0)=1
+    ");
+    $pdo->exec("
+      DELETE FROM mesas_grupos
+      WHERE (numero_mesa_1>0)+(numero_mesa_2>0)+(numero_mesa_3>0)+(numero_mesa_4>0)=1
+    ");
+
     // Purga: si alguna mesa quedó en un grupo y también figura en no_agrupadas, limpiar no_agrupadas
     $pdo->exec("
       DELETE l
@@ -463,8 +489,7 @@ try {
       'grupos_nuevos_creados'       => $detalleAgr,
       'fallidos'                    => $detalleFail,
     ],
-    'nota'=>'Reoptimización completada. Se evitó asignar a un alumno dos mesas en el mismo día/turno, '
-          .'se respetó la indisponibilidad de docentes y se prefirieron slots con menor carga.'
+    'nota'=>'Nunca se crean grupos de tamaño 1: cualquier single queda en mesas_no_agrupadas. Además se migra y limpia cualquier grupo unitario preexistente.'
   ]);
 
 } catch (Throwable $e) {

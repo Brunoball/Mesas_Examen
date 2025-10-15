@@ -58,7 +58,7 @@ const formatearFechaISO = (v) => {
   return `${m[3]}/${m[2]}/${m[1]}`;
 };
 
-// ⬅️ NUEVO: respeta la condición que manda el backend
+// respeta la condición que manda el backend
 const esTerMatPorCond = (p) =>
   ((p?.condicion_nombre || '') + '').toUpperCase().includes('TER.MAT');
 
@@ -84,7 +84,7 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-/* ========= Modal de confirmación (Eliminar / Desinscribir / Limpiar) ========= */
+/* ========= Modal de confirmación ========= */
 const ConfirmActionModal = ({
   open,
   mode,         // 'eliminar' | 'desinscribir' | 'limpiar'
@@ -120,7 +120,7 @@ const ConfirmActionModal = ({
     mode === 'desinscribir'
       ? '¿Confirmás pasar este alumno a NO inscripto?'
       : mode === 'limpiar'
-      ? 'Esta acción vaciará por completo la tabla de PRUEBAS (previas_lab). No afecta la tabla real.'
+      ? 'Esta acción vaciará por completo la tabla de PREVIAS.'
       : 'Esta acción eliminará el registro de forma definitiva.';
 
   return (
@@ -240,7 +240,7 @@ const Previas = () => {
     error: '',
   });
 
-  // Modal INSCRIBIR (estética success)
+  // Modal INSCRIBIR
   const [modalIns, setModalIns] = useState({
     open: false,
     item: null,
@@ -254,7 +254,7 @@ const Previas = () => {
     item: null,
   });
 
-  // ⬇️ modal de importación (tabla de PRUEBAS)
+  // Modal de importación
   const [modalImport, setModalImport] = useState(false);
 
   // Listas básicas (desde backend)
@@ -305,7 +305,7 @@ const Previas = () => {
     return previas;
   }, [tab, previas]);
 
-  // IDs que son la 3ª materia (o más) por alumno (clave: DNI)
+  // IDs tercera o más
   const idsTerceraOMas = useMemo(() => {
     try {
       const ordenadas = [...previas].sort((a, b) => {
@@ -345,15 +345,15 @@ const Previas = () => {
 
     if (cursoSeleccionado && cursoSeleccionado !== '') {
       const curNorm = normalizar(cursoSeleccionado);
-      resultados = resultados.filter((p) =>
-        normalizar(p?.cursando_curso_nombre ?? '') === curNorm
+      resultados = resultados.filter(
+        (p) => normalizar(p?.cursando_curso_nombre ?? '') === curNorm
       );
     }
 
     if (divisionSeleccionada && divisionSeleccionada !== '') {
       const divNorm = normalizar(divisionSeleccionada);
-      resultados = resultados.filter((p) =>
-        normalizar(p?.cursando_division_nombre ?? '') === divNorm
+      resultados = resultados.filter(
+        (p) => normalizar(p?.cursando_division_nombre ?? '') === divNorm
       );
     }
 
@@ -370,9 +370,10 @@ const Previas = () => {
     filtroActivo
   ]);
 
-  const puedeExportar = useMemo(() => {
-    return (hayFiltros || filtroActivo === 'todos') && previasFiltradas.length > 0 && !cargando;
-  }, [hayFiltros, filtroActivo, previasFiltradas.length, cargando]);
+  const puedeExportar = useMemo(
+    () => (hayFiltros || filtroActivo === 'todos') && previasFiltradas.length > 0 && !cargando,
+    [hayFiltros, filtroActivo, previasFiltradas.length, cargando]
+  );
 
   const mostrarLoader = useMemo(
     () => cargando && (hayFiltros || filtroActivo === 'todos'),
@@ -408,49 +409,35 @@ const Previas = () => {
   }, []);
 
   /* ================================
-     Efectos
+     Carga de datos (centralizada)
   ================================= */
-  useEffect(() => {
-    const handleClickOutsideFiltros = (event) => {
-      if (filtrosRef.current && !filtrosRef.current.contains(event.target)) {
-        setMostrarFiltros(false);
+  const cargarPrevias = useCallback(async () => {
+    try {
+      setCargando(true);
+      const res = await fetch(`${BASE_URL}/api.php?action=previas`);
+      const data = await res.json();
+
+      if (data?.exito) {
+        const procesados = (data.previas || []).map((p) => ({
+          ...p,
+          _alumno: normalizar(p?.alumno ?? ''),
+          _dni: String(p?.dni ?? '').toLowerCase(),
+          _materia: normalizar(p?.materia_nombre ?? ''),
+          materia_curso_division: `${p.materia_curso_nombre || ''} ${p.materia_division_nombre || ''}`.trim()
+        }));
+        setPrevias(procesados);
+      } else {
+        mostrarToast(`Error al obtener previas: ${data?.mensaje || 'desconocido'}`, 'error');
       }
-    };
-    document.addEventListener('mousedown', handleClickOutsideFiltros);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutsideFiltros);
-    };
-  }, []);
-
-  // Cargar PREVIAS
-  useEffect(() => {
-    const cargarPrevias = async () => {
-      try {
-        setCargando(true);
-        const res = await fetch(`${BASE_URL}/api.php?action=previas`);
-        const data = await res.json();
-
-        if (data?.exito) {
-          const procesados = (data.previas || []).map((p) => ({
-            ...p,
-            _alumno: normalizar(p?.alumno ?? ''),
-            _dni: String(p?.dni ?? '').toLowerCase(),
-            _materia: normalizar(p?.materia_nombre ?? ''),
-            materia_curso_division: `${p.materia_curso_nombre || ''} ${p.materia_division_nombre || ''}`.trim()
-          }));
-          setPrevias(procesados);
-        } else {
-          mostrarToast(`Error al obtener previas: ${data?.mensaje || 'desconocido'}`, 'error');
-        }
-      } catch {
-        mostrarToast('Error de red al obtener previas', 'error');
-      } finally {
-        setCargando(false);
-      }
-    };
-
-    cargarPrevias();
+    } catch {
+      mostrarToast('Error de red al obtener previas', 'error');
+    } finally {
+      setCargando(false);
+    }
   }, [mostrarToast]);
+
+  // Montaje: cargar
+  useEffect(() => { cargarPrevias(); }, [cargarPrevias]);
 
   // Cargar listas básicas (cursos y divisiones) para filtros
   useEffect(() => {
@@ -594,7 +581,7 @@ const Previas = () => {
     setModal({ open: true, mode, item: p, loading: false, error: '' });
   }, [tab]);
 
-  // Abrir modal LIMPIAR PRUEBAS
+  // Abrir modal LIMPIAR
   const abrirModalLimpiar = useCallback(() => {
     setModal({ open: true, mode: 'limpiar', item: null, loading: false, error: '' });
   }, []);
@@ -605,12 +592,16 @@ const Previas = () => {
     try {
       setModal((m) => ({ ...m, loading: true, error: '' }));
 
-      // Limpiar tabla de PRUEBAS
+      // Limpiar (tabla real, backend mapea)
       if (modal.mode === 'limpiar') {
         const res = await fetch(`${BASE_URL}/api.php?action=previas_lab_truncate`, { method: 'POST' });
         const js = await res.json();
-        if (!js?.exito) throw new Error(js?.mensaje || 'No se pudo limpiar previas_lab');
-        mostrarToast('Tabla de PRUEBAS vaciada correctamente', 'exito');
+        if (!js?.exito) throw new Error(js?.mensaje || 'No se pudo limpiar previas');
+        mostrarToast('Tabla vaciada correctamente', 'exito');
+
+        // 🔄 Recargar lista
+        await cargarPrevias();
+
         setModal({ open: false, mode: null, item: null, loading: false, error: '' });
         return;
       }
@@ -628,17 +619,12 @@ const Previas = () => {
 
       if (!json?.exito) throw new Error(json?.mensaje || 'Operación no realizada');
 
+      // Podríamos mutar en memoria, pero preferimos sincronizar con backend:
+      await cargarPrevias();
+
       if (modal.mode === 'eliminar') {
-        setPrevias((arr) => arr.filter(x => Number(x.id_previa) !== Number(modal.item.id_previa)));
         mostrarToast('Registro eliminado correctamente', 'exito');
       } else if (modal.mode === 'desinscribir') {
-        setPrevias((arr) =>
-          arr.map(x =>
-            Number(x.id_previa) === Number(modal.item.id_previa)
-              ? { ...x, inscripcion: 0 }
-              : x
-          )
-        );
         mostrarToast('Se marcó como NO inscripto', 'exito');
       }
 
@@ -646,7 +632,7 @@ const Previas = () => {
     } catch (e) {
       setModal((m) => ({ ...m, loading: false, error: e.message || 'Error desconocido' }));
     }
-  }, [modal, mostrarToast]);
+  }, [modal, mostrarToast, cargarPrevias]);
 
   const cancelarModal = useCallback(() => {
     if (modal.loading) return;
@@ -672,21 +658,15 @@ const Previas = () => {
       const json = await res.json();
       if (!json?.exito) throw new Error(json?.mensaje || 'No se pudo inscribir');
 
-      // Actualiza la fila en memoria
-      setPrevias((arr) =>
-        arr.map(x =>
-          Number(x.id_previa) === Number(modalIns.item.id_previa)
-            ? { ...x, inscripcion: 1 }
-            : x
-        )
-      );
+      // 🔄 Recargar lista desde backend
+      await cargarPrevias();
 
       setModalIns({ open: false, item: null, loading: false, error: '' });
       mostrarToast('Alumno inscripto correctamente', 'exito');
     } catch (e) {
       setModalIns((m) => ({ ...m, loading: false, error: e.message || 'Error desconocido' }));
     }
-  }, [modalIns.item, mostrarToast]);
+  }, [modalIns.item, mostrarToast, cargarPrevias]);
 
   const cancelarInscripcion = useCallback(() => {
     if (modalIns.loading) return;
@@ -768,7 +748,7 @@ const Previas = () => {
 
     const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
     const esTerceraOMas = idsTerceraOMas.has(Number(p?.id_previa));
-    const bloquearInscribir = esTerceraOMas || esTerMatPorCond(p); // ⬅️ clave
+    const bloquearInscribir = esTerceraOMas || esTerMatPorCond(p);
 
     return (
       <div
@@ -816,7 +796,7 @@ const Previas = () => {
 
             {estado === 'PENDIENTE' && !bloquearInscribir && (
               <button
-              id='is_affirm'
+                id='is_affirm'
                 className="glob-iconchip is-affirm"
                 title="Inscribir manualmente"
                 onClick={() => abrirModalInscribir(p)}
@@ -857,7 +837,7 @@ const Previas = () => {
           />
         )}
 
-        {/* Modal Confirmación (eliminar / desinscribir / limpiar) */}
+        {/* Modal Confirmación */}
         <ConfirmActionModal
           open={modal.open}
           mode={modal.mode}
@@ -868,7 +848,7 @@ const Previas = () => {
           onConfirm={confirmarAccion}
         />
 
-        {/* Modal Inscribir (variante success) */}
+        {/* Modal Inscribir */}
         <InscribirModal
           open={modalIns.open}
           item={modalIns.item}
@@ -885,8 +865,13 @@ const Previas = () => {
           onClose={cerrarModalInfo}
         />
 
-        {/* Modal Importar Excel (tabla de PRUEBAS) */}
-        <ImportarPreviasModal open={modalImport} onClose={() => setModalImport(false)} />
+        {/* Modal Importar Excel */}
+        <ImportarPreviasModal
+          open={modalImport}
+          onClose={() => setModalImport(false)}
+          onSuccess={cargarPrevias}
+        />
+
 
         {/* Header superior */}
         <div className="glob-front-row-pro">
@@ -930,7 +915,7 @@ const Previas = () => {
 
             {mostrarFiltros && (
               <div className="glob-filtros-menu" role="menu">
-                {/* CURSO (cursando) */}
+                {/* CURSO */}
                 <div className="glob-filtros-group">
                   <button
                     type="button"
@@ -962,7 +947,7 @@ const Previas = () => {
                   </div>
                 </div>
 
-                {/* DIVISIÓN (cursando) */}
+                {/* DIVISIÓN */}
                 <div className="glob-filtros-group">
                   <button
                     type="button"
@@ -1027,7 +1012,7 @@ const Previas = () => {
                   <FaUsers className="glob-icono-profesor" />
                 </div>
 
-                {/* ==== TABS con estética de Mesas ==== */}
+                {/* TABS */}
                 <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Filtro por estado de inscripción">
                   <button
                     role="tab"
@@ -1214,7 +1199,7 @@ const Previas = () => {
                   const preMask = preCascada && index < MAX_CASCADE_ITEMS;
                   const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
                   const esTerceraOMas = idsTerceraOMas.has(Number(p?.id_previa));
-                  const bloquearInscribir = esTerceraOMas || esTerMatPorCond(p); // ⬅️ clave mobile
+                  const bloquearInscribir = esTerceraOMas || esTerMatPorCond(p);
                   return (
                     <div
                       key={p.id_previa || `card-${index}`}
@@ -1347,26 +1332,26 @@ const Previas = () => {
               <p>Exportar a Excel</p>
             </button>
 
-            {/* PRUEBAS: importar/limpiar previas_lab */}
+            {/* Importar/limpiar (usa endpoints *_lab pero operan sobre tabla real) */}
             <button
               id="Importar-Excel"
               className="glob-profesor-button glob-hover-effect"
               onClick={() => setModalImport(true)}
-              aria-label="Importar Excel (PRUEBAS)"
-              title="Importar Excel a previas_lab (PRUEBAS)"
+              aria-label="Importar Excel"
+              title="Importar Excel"
             >
               <FaUpload className="glob-profesor-icon-button" />
-              <p>Importar Excel (PRUEBAS)</p>
+              <p>Importar Excel</p>
             </button>
 
             <button
               className="glob-profesor-button glob-hover-effect"
               onClick={abrirModalLimpiar}
-              aria-label="Limpiar tabla de PRUEBAS"
-              title="Vaciar completamente previas_lab"
+              aria-label="Limpiar tabla"
+              title="Vaciar completamente previas"
             >
               <FaBroom className="glob-profesor-icon-button" />
-              <p>Limpiar PRUEBAS</p>
+              <p>Limpiar tabla</p>
             </button>
           </div>
         </div>

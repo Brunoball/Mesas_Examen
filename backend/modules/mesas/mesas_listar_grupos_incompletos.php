@@ -39,7 +39,7 @@ try {
       mg.id_mesa_grupos AS id_grupo,
       mg.numero_mesa_1, mg.numero_mesa_2, mg.numero_mesa_3, mg.numero_mesa_4,
       mg.fecha_mesa, mg.id_turno
-    FROM mesas_examen.mesas_grupos mg
+    FROM mesas_grupos mg
     WHERE
       ( (mg.numero_mesa_1 = 0) OR (mg.numero_mesa_2 = 0) OR (mg.numero_mesa_3 = 0) OR (mg.numero_mesa_4 = 0) )
   ";

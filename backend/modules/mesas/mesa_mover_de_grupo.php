@@ -48,7 +48,7 @@ try {
   $sqlOrigen = "
     SELECT id_mesa_grupos AS id_grupo,
            numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4
-    FROM mesas_examen.mesas_grupos
+    FROM mesas_grupos
     WHERE :nm IN (numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4)
     FOR UPDATE
   ";
@@ -60,7 +60,7 @@ try {
   $sqlDest = "
     SELECT id_mesa_grupos AS id_grupo, numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4,
            fecha_mesa, id_turno
-    FROM mesas_examen.mesas_grupos
+    FROM mesas_grupos
     WHERE id_mesa_grupos = :g
     FOR UPDATE
   ";
@@ -90,20 +90,19 @@ try {
       if ((int)$origen[$c] === $numero_mesa) { $colAZero = $c; break; }
     }
     if ($colAZero) {
-      $pdo->prepare("UPDATE mesas_examen.mesas_grupos SET $colAZero = 0 WHERE id_mesa_grupos = :g")
+      $pdo->prepare("UPDATE mesas_grupos SET $colAZero = 0 WHERE id_mesa_grupos = :g")
           ->execute([':g' => (int)$origen['id_grupo']]);
     }
   }
 
   // 2.b) Insertar en slot libre del destino
   $colDestino = ['numero_mesa_1','numero_mesa_2','numero_mesa_3','numero_mesa_4'][$idxLibre];
-  $stUpd = $pdo->prepare("UPDATE mesas_examen.mesas_grupos SET $colDestino = :nm WHERE id_mesa_grupos = :g");
+  $stUpd = $pdo->prepare("UPDATE mesas_grupos SET $colDestino = :nm WHERE id_mesa_grupos = :g");
   $stUpd->execute([':nm' => $numero_mesa, ':g' => $id_grupo_destino]);
 
   // 3) Sincronizar fecha/id_turno de la mesa en tabla "mesas"
-  //    (si querés conservar su propia fecha/turno, comentá esta parte)
   $stSync = $pdo->prepare("
-    UPDATE mesas_examen.mesas
+    UPDATE mesas
     SET fecha_mesa = :f, id_turno = :t
     WHERE numero_mesa = :nm
   ");

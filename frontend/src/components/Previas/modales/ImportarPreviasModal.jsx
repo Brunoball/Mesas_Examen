@@ -4,8 +4,9 @@ import * as XLSX from 'xlsx';
 import './ImportarPreviasModal.css';
 import { FaTimes, FaUpload, FaFolderOpen } from 'react-icons/fa';
 import BASE_URL from '../../../config/config';
+import Toast from '../../Global/Toast';
 
-// Campos REALES que se envían al backend (sin fecha_carga: la pone la DB)
+// Columnas que espera el backend (fecha_carga la agrega la DB)
 const DB_COLS = [
   'dni','alumno',
   'cursando_id_curso','cursando_id_division',
@@ -13,7 +14,7 @@ const DB_COLS = [
   'id_condicion','inscripcion','anio'
 ];
 
-// Mapeo EXACTO/FLEXIBLE -> SOLO tomamos el ID de materia.
+// Aliases para mapear encabezados Excel → claves DB
 const EXCEL_TO_DB = {
   dni: ['dni', 'DNI'],
   alumno: ['APELLIDO Y NOMBRE', 'apellido y nombre', 'alumno', 'nombre alumno'],
@@ -27,37 +28,22 @@ const EXCEL_TO_DB = {
   materia_id_curso: ['AÑO MATERIA', 'ANIO MATERIA', 'anio materia', 'año materia (id)'],
   materia_id_division: ['DIVISIÓN MATERIA', 'DIVISION MATERIA', 'division materia', 'división materia (id)'],
   id_condicion: ['CONDICIÓN', 'CONDICION', 'id condicion', 'id_condicion'],
-  anio: ['AÑO', 'ANIO', 'anio']
+  anio: ['AÑO', 'ANIO', 'anio'],
+  inscripcion: ['INSCRIPCION', 'inscripcion', 'INSCRIPCIÓN', 'inscripción']
 };
 
-// Normalizador
+// Normaliza solo encabezados (NO los valores)
 const norm = (s = '') =>
   s.toString().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .trim();
 
-const isEmptyXlsxRow = (row) => {
-  const vals = Object.values(row || {});
-  if (vals.length === 0) return true;
-  return vals.every(v => String(v ?? '').trim() === '');
-};
+// “Fila en blanco” = todos los valores vacíos al recortar espacios
+const isBlankRow = (arr = []) => arr.every(v => String(v ?? '').trim() === '');
 
-const pickByAliases = (row, aliases) => {
-  const entries = Object.entries(row || {});
-  const normEntries = entries.map(([k, v]) => [k, norm(k), v]);
+const CLOSE_DELAY_MS = 600;
 
-  for (const alias of aliases) {
-    const a = norm(alias);
-    const exact = normEntries.find(([, nk]) => nk === a);
-    if (exact) return exact[2];
-    const starts = normEntries.find(([, nk]) => nk.startsWith(a));
-    if (starts) return starts[2];
-  }
-  return undefined;
-};
-
-export default function ImportarPreviasModal({ open, onClose }) {
-  const dropRef = useRef(null);
+export default function ImportarPreviasModal({ open, onClose, onSuccess }) {
   const fileInputRef = useRef(null);
 
   const [fileName, setFileName] = useState('');
@@ -66,113 +52,95 @@ export default function ImportarPreviasModal({ open, onClose }) {
   const [errores, setErrores] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Abre el diálogo del sistema para seleccionar archivo
+  // TOASTS
+  const [toasts, setToasts] = useState([]);
+  const pushToast = useCallback((tipo, mensaje, duracion = 4000) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setToasts(prev => [...prev, { id, tipo, mensaje, duracion }]);
+  }, []);
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   const openPicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  // Construir mapa encabezado→índice según aliases
+  const buildHeaderMap = (headerRow) => {
+    const map = {};
+    const lower = headerRow.map(h => norm(h ?? ''));
+    for (const [dbCol, aliases] of Object.entries(EXCEL_TO_DB)) {
+      let idxFound = -1;
+      for (const alias of aliases) {
+        const i = lower.indexOf(norm(alias));
+        if (i !== -1) { idxFound = i; break; }
+      }
+      map[dbCol] = idxFound; // -1 si no existe
+    }
+    return map;
+  };
 
   const onDropFile = useCallback(async (file) => {
     if (!file) return;
     setFileName(file.name);
     setErrores([]);
 
-    const data = await file.arrayBuffer();
-    const wb = XLSX.read(data, { type: 'array' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
 
-    const json = XLSX.utils.sheet_to_json(ws, {
-      defval: '',
-      raw: false,
-      blankrows: false,
-    });
+      // Leer como matriz completa (incluye filas vacías)
+      const matrix = XLSX.utils.sheet_to_json(ws, {
+        header: 1,
+        defval: '',
+        blankrows: true,
+        raw: true
+      });
 
-    const normalized = [];
-    const errs = [];
-
-    json.forEach((r, idx) => {
-      if (isEmptyXlsxRow(r)) return;
-      const out = {};
-
-      const requiredFromExcel = [
-        'dni','alumno','cursando_id_curso','cursando_id_division',
-        'id_materia','materia_id_curso','materia_id_division','id_condicion','anio'
-      ];
-
-      for (const col of requiredFromExcel) {
-        const aliases = EXCEL_TO_DB[col] || [col];
-        const rawVal = pickByAliases(r, aliases);
-        if (rawVal === undefined) {
-          errs.push(`Fila ${idx + 2}: falta el encabezado/valor para "${col}" (p.ej.: "${aliases[0]}")`);
-          return;
-        }
-        out[col] = (rawVal ?? '').toString().trim();
-      }
-
-      out.inscripcion = 0;
-
-      const toInt = (val) => {
-        const n = parseInt(String(val).replace(/[^\d\-]/g, '').trim(), 10);
-        return Number.isFinite(n) ? n : NaN;
-      };
-
-      out.cursando_id_curso    = toInt(out.cursando_id_curso);
-      out.cursando_id_division = toInt(out.cursando_id_division);
-      out.id_materia           = toInt(out.id_materia);
-      out.materia_id_curso     = toInt(out.materia_id_curso);
-      out.materia_id_division  = toInt(out.materia_id_division);
-      out.id_condicion         = toInt(out.id_condicion);
-      out.anio                 = toInt(out.anio);
-
-      if (!out.dni || !out.alumno) {
-        errs.push(`Fila ${idx + 2}: "dni" y "alumno" son obligatorios`);
-        return;
-      }
-      if (!Number.isFinite(out.id_materia) || out.id_materia <= 0) {
-        errs.push(`Fila ${idx + 2}: "IDMATERIA" (ID numérico) es obligatorio y debe ser entero > 0`);
+      if (!Array.isArray(matrix) || matrix.length < 2) {
+        pushToast('advertencia', 'El archivo parece vacío.', 3500);
+        setRows([]); setPreview([]);
         return;
       }
 
-      const numericChecks = [
-        ['cursando_id_curso','CURSANDO AÑO (ID)'],
-        ['cursando_id_division','CURSANDO DIVISIÓN (ID)'],
-        ['materia_id_curso','AÑO MATERIA (ID)'],
-        ['materia_id_division','DIVISIÓN MATERIA (ID)'],
-        ['id_condicion','CONDICIÓN (ID)'],
-        ['anio','AÑO (de la previa)'],
-      ];
-      for (const [key, label] of numericChecks) {
-        if (!Number.isFinite(out[key])) {
-          errs.push(`Fila ${idx + 2}: "${label}" debe ser entero`);
-          return;
+      // Fila 0 = cabecera (se descarta SIEMPRE)
+      const header = (matrix[0] || []).map(v => (v ?? '').toString());
+      const headerMap = buildHeaderMap(header);
+
+      // Cuerpo: solo descartamos filas completamente en blanco
+      const body = matrix.slice(1).filter(r => !isBlankRow(r));
+
+      // Mapeo literal a las columnas de DB; no validamos ni convertimos
+      const outRows = body.map((arr) => {
+        const o = {};
+        for (const dbCol of DB_COLS) {
+          const colIdx = headerMap[dbCol];
+          o[dbCol] = (colIdx !== undefined && colIdx >= 0) ? (arr[colIdx] ?? '') : '';
         }
-      }
+        return o;
+      });
 
-      normalized.push(out);
-    });
+      setRows(outRows);
+      setPreview(outRows.slice(0, 10));
 
-    setRows(normalized);
-    setPreview(normalized.slice(0, 10));
-    setErrores(errs);
-  }, []);
+      const esperadas = Math.max(matrix.length - 1, 0);
+      pushToast('exito', `Archivo cargado: ${outRows.length}/${esperadas} filas (solo se descartó cabecera y filas en blanco).`, 4500);
+    } catch {
+      pushToast('error', 'No se pudo leer el archivo Excel.', 4000);
+      setRows([]); setPreview([]);
+    }
+  }, [pushToast]);
 
   const onInputChange = useCallback((e) => {
     const f = e.target.files?.[0];
     if (f) onDropFile(f);
   }, [onDropFile]);
 
-  const onDropHandler = useCallback((e) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files?.[0];
-    if (f) onDropFile(f);
-  }, [onDropFile]);
-
-  const onDragOver = useCallback((e) => {
-    e.preventDefault();
-  }, []);
-
   const puedeEnviar = useMemo(
-    () => rows.length > 0 && errores.length === 0 && !submitting,
-    [rows, errores, submitting]
+    () => rows.length > 0 && !submitting,
+    [rows, submitting]
   );
 
   const enviar = useCallback(async () => {
@@ -181,22 +149,26 @@ export default function ImportarPreviasModal({ open, onClose }) {
       setSubmitting(true);
       await fetch(`${BASE_URL}/api.php?action=previas_lab_ensure`, { method: 'POST' });
 
-      const CHUNK = 500;
-      let insertados = 0;
+      const CHUNK = 1000;
+      let insertados = 0, actualizados = 0, sinCambios = 0;
       let allErrs = [];
 
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
+
         const res = await fetch(`${BASE_URL}/api.php?action=previas_lab_import`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ create_if_needed: false, rows: slice }),
+          body: JSON.stringify({ rows: slice }),
         });
+
         const js = await res.json();
         if (!js?.exito) {
           allErrs.push(js?.mensaje || `Bloque ${i}-${i + CHUNK}: error`);
         } else {
-          insertados += js.data?.insertados || 0;
+          insertados   += js.data?.insertados   || 0;
+          actualizados += js.data?.actualizados || 0;
+          sinCambios   += js.data?.sin_cambios  || 0;
           if (Array.isArray(js.data?.errores) && js.data.errores.length) {
             allErrs = allErrs.concat(js.data.errores);
           }
@@ -204,15 +176,27 @@ export default function ImportarPreviasModal({ open, onClose }) {
       }
 
       setErrores(allErrs);
-      alert(`Importación finalizada. Insertados: ${insertados}. Errores: ${allErrs.length}`);
-      onClose?.();
-    } catch (e) {
-      console.error(e);
-      alert('Error enviando datos al servidor');
+
+      if ((insertados + actualizados + sinCambios) > 0 && allErrs.length === 0) {
+        pushToast('exito', `Importación OK. Ins: ${insertados}, Upd: ${actualizados}, =: ${sinCambios}.`, 4500);
+        // 🔁 Refrescar la tabla del padre inmediatamente
+        try { await onSuccess?.(); } catch {}
+        // Limpiar estado local para evitar re-envíos accidentales
+        setRows([]); setPreview([]); setFileName('');
+        setTimeout(() => { onClose?.(); }, CLOSE_DELAY_MS);
+      } else if ((insertados + actualizados + sinCambios) > 0) {
+        pushToast('advertencia', `Importación con avisos. Ins: ${insertados}, Upd: ${actualizados}, =: ${sinCambios}. Errores: ${allErrs.length}.`, 5000);
+        // Aunque haya avisos, refrescar ayuda a ver los cambios
+        try { await onSuccess?.(); } catch {}
+      } else {
+        pushToast('error', `No se pudo insertar/actualizar. Errores: ${allErrs.length}.`, 5000);
+      }
+    } catch {
+      pushToast('error', 'Error enviando datos al servidor.', 5000);
     } finally {
       setSubmitting(false);
     }
-  }, [rows, puedeEnviar, onClose]);
+  }, [rows, puedeEnviar, pushToast, onClose, onSuccess]);
 
   if (!open) return null;
 
@@ -225,6 +209,19 @@ export default function ImportarPreviasModal({ open, onClose }) {
       aria-labelledby="ipm-title"
     >
       <div className="ipm-container" onMouseDown={(e) => e.stopPropagation()}>
+        {/* TOASTS */}
+        <div className="toast-stack">
+          {toasts.map(t => (
+            <Toast
+              key={t.id}
+              tipo={t.tipo}
+              mensaje={t.mensaje}
+              duracion={t.duracion}
+              onClose={() => removeToast(t.id)}
+            />
+          ))}
+        </div>
+
         {/* Header */}
         <div className="ipm-header">
           <div className="ipm-icon-circle" aria-hidden="true">
@@ -239,39 +236,37 @@ export default function ImportarPreviasModal({ open, onClose }) {
           </button>
         </div>
 
-        {/* COLUMNA IZQ: Requisitos (título afuera + caja) */}
+        {/* Izquierda: info */}
         <div className="ipm-specs-col">
-          <h4 className="ipm-specs-title">Encabezados requeridos</h4>
+          <h4 className="ipm-specs-title">Encabezados esperados (solo mapeo)</h4>
           <div className="ipm-specs">
             <ul>
               <li><b>DNI</b></li>
               <li><b>APELLIDO Y NOMBRE</b></li>
               <li><b>CURSANDO AÑO</b> (ID)</li>
               <li><b>CURSANDO DIVISIÓN</b> (ID)</li>
-              <li><b>IDMATERIA / ID MATERIA / ID_MATERIA / COD MATERIA</b></li>
+              <li><b>IDMATERIA / ID MATERIA / COD MATERIA</b></li>
               <li><b>AÑO MATERIA</b> (ID)</li>
               <li><b>DIVISIÓN MATERIA</b> (ID)</li>
               <li><b>CONDICIÓN</b> (ID)</li>
               <li><b>AÑO</b> (de la previa)</li>
+              <li><b>INSCRIPCION</b> (opcional)</li>
             </ul>
           </div>
         </div>
 
-        {/* COLUMNA DER: Dropzone */}
+        {/* Dropzone */}
         <div
-          ref={dropRef}
           className="ipm-drop"
-          onDrop={onDropHandler}
-          onDragOver={onDragOver}
           onClick={openPicker}
+          role="button"
+          tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               openPicker();
             }
           }}
-          role="button"
-          tabIndex={0}
           aria-label="Arrastrá y soltá tu archivo aquí o hacé clic para seleccionarlo"
         >
           <div className="ipm-drop-ico">
@@ -293,16 +288,16 @@ export default function ImportarPreviasModal({ open, onClose }) {
           />
         </div>
 
-        {/* NOTA FUERA DE LA CAJA (100% width, bajo las dos columnas) */}
+        {/* Nota */}
         <p className="ipm-note-wide">
-          <b>Inscripción</b> se fija en <code>0</code> para todos y la <b>fecha de carga</b> la agrega el sistema.
-          La columna <code>MATERIA</code> (texto) se ignora; solo se lee <code>IDMATERIA</code>.
+          Se importa <b>todo</b> desde la fila 2 (cabecera descartada) y solo se eliminan <b>filas completamente en blanco</b>.
+          No hay validaciones ni conversiones en el front.
         </p>
 
-        {/* ERRORES (fila completa) */}
+        {/* Errores backend */}
         {errores.length > 0 && (
           <div className="ipm-errors" role="alert">
-            <b>Errores detectados ({errores.length}):</b>
+            <b>Avisos/errores del backend ({errores.length}):</b>
             <div className="ipm-errors-box">
               {errores.slice(0, 50).map((e, i) => <div key={i}>• {e}</div>)}
               {errores.length > 50 && <div>… (hay más)</div>}
@@ -310,7 +305,7 @@ export default function ImportarPreviasModal({ open, onClose }) {
           </div>
         )}
 
-        {/* PREVIEW */}
+        {/* Preview */}
         {preview.length > 0 && (
           <div className="ipm-preview">
             <b>Vista previa (primeras {preview.length} filas):</b>
@@ -327,11 +322,11 @@ export default function ImportarPreviasModal({ open, onClose }) {
           </div>
         )}
 
-        {/* ACCIONES */}
+        {/* Acciones */}
         <div className="ipm-actions">
           <button className="ipm-btn ipm-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
           <button className="ipm-btn ipm-primary" onClick={enviar} disabled={!puedeEnviar}>
-            {submitting ? 'Importando…' : 'Importar a previas_lab'}
+            {submitting ? 'Importando…' : 'Importar a previas'}
           </button>
         </div>
       </div>
