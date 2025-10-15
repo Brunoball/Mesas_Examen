@@ -109,6 +109,10 @@ const MesasExamen = () => {
   const [fechaSel, setFechaSel] = useState("");
   const [turnoSel, setTurnoSel] = useState("");
 
+  // ===== NUEVO: comportamiento igual a Previas =====
+  const [mostrarTodos, setMostrarTodos] = useState(false); // ← como "filtroActivo === 'todos'"
+  const hayFiltros = !!(q || fechaSel || turnoSel);
+
   // Estado de acordeones (cerrados por defecto)
   const [openFecha, setOpenFecha] = useState(false);
   const [openTurno, setOpenTurno] = useState(false);
@@ -309,7 +313,20 @@ const MesasExamen = () => {
     return res;
   }, [datasetBase, qDebounced, fechaSel, turnoSel]);
 
-  // Animación en cascada
+  const triggerCascada = useCallback(() => {
+    setPreCascada(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setAnimacionActiva(true);
+        setPreCascada(false);
+        const ms = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
+        const t = setTimeout(() => setAnimacionActiva(false), ms);
+        return () => clearTimeout(t);
+      });
+    });
+  }, []);
+
+  // Animación en cascada ante cambios de filtros
   useEffect(() => {
     setPreCascada(true);
     const raf1 = requestAnimationFrame(() => {
@@ -339,7 +356,6 @@ const MesasExamen = () => {
   /* =======================================================
    *  Exportar Excel — DETALLADO (mismo endpoint que el PDF)
    * ======================================================= */
-  // Reemplazá COMPLETA esta función en MesasExamen.jsx
   const exportarExcel = useCallback(async () => {
     try {
       if (!filasFiltradas.length) return;
@@ -416,7 +432,7 @@ const MesasExamen = () => {
         return fallback; // si no reconoce el turno, usa lo que vino del backend
       };
 
-      // 3) Filas planas (Docente × Alumno) con FALLBACKS de fecha/turno y hora por turno
+      // 3) Filas planas (Docente × Alumno)
       const filas = [];
 
       for (const m of detalle) {
@@ -424,13 +440,11 @@ const MesasExamen = () => {
 
         // Fallbacks desde la grilla:
         const fb = mapaNumero.get(numeroMesa) || { id_grupo: "", fecha: "", turno: "" };
-        const fechaISO = m.fecha || fb.fecha || "";    // <<<<<< fallback de fecha
-        const turno    = m.turno || fb.turno || "";    // <<<<<< fallback de turno
+        const fechaISO = m.fecha || fb.fecha || "";
+        const turno    = m.turno || fb.turno || "";
         const idGrupo  = fb.id_grupo ?? "";
 
-        // Hora calculada por turno (si no reconoce, queda la del backend o vacío)
         const horaCalculada = horaPorTurno(turno, m.hora ?? "");
-
         const materia = m.materia ?? "";
 
         const docentes = Array.isArray(m.docentes) && m.docentes.length ? m.docentes : ["—"];
@@ -445,20 +459,20 @@ const MesasExamen = () => {
               "N° Mesa": numeroMesa ?? "",
               Fecha: fechaISO ? formatearFechaISO(fechaISO) : "",
               Turno: turno || "",
-              Hora: horaCalculada, // <<<<<< aquí va la hora por turno
+              Hora: horaCalculada,
               "Espacio Curricular": materia || "",
               Docente: d || "—",
               Estudiante: a?.alumno || "—",
               DNI: a?.dni || "—",
               Curso: limpiarCurso(a?.curso || "—"),
-              _sortFechaISO: fechaISO || "9999-12-31", // vacíos al final
+              _sortFechaISO: fechaISO || "9999-12-31",
               _sortTurnoRank: turnoRank(turno),
             });
           }
         }
       }
 
-      // 4) Orden amigable (los sin fecha quedan al final)
+      // 4) Orden amigable
       filas.sort((A, B) => {
         if (A._sortFechaISO !== B._sortFechaISO) return A._sortFechaISO < B._sortFechaISO ? -1 : 1;
         if (A._sortTurnoRank !== B._sortTurnoRank) return A._sortTurnoRank - B._sortTurnoRank;
@@ -487,16 +501,8 @@ const MesasExamen = () => {
       ];
       const ws = XLSX.utils.json_to_sheet(filasFinales, { header: headers });
       ws["!cols"] = [
-        { wch: 10 }, // ID Grupo
-        { wch: 9 },  // N° Mesa
-        { wch: 12 }, // Fecha
-        { wch: 10 }, // Turno
-        { wch: 9 },  // Hora
-        { wch: 28 }, // Espacio
-        { wch: 26 }, // Docente
-        { wch: 28 }, // Estudiante
-        { wch: 12 }, // DNI
-        { wch: 14 }, // Curso
+        { wch: 10 }, { wch: 9 }, { wch: 12 }, { wch: 10 }, { wch: 9 },
+        { wch: 28 }, { wch: 26 }, { wch: 28 }, { wch: 12 }, { wch: 14 },
       ];
 
       const wb = XLSX.utils.book_new();
@@ -532,8 +538,6 @@ const MesasExamen = () => {
     }
   }, [filasFiltradas, notify, vista]);
 
-
-
   // ===== Exportar PDF SOLO del registro (fila actual) =====
   const exportarPDFDeRegistro = useCallback(
     (g) => {
@@ -542,15 +546,14 @@ const MesasExamen = () => {
       const logoPath = `${window.location.origin}/img/Escudo.png`;
 
       if (vista === "grupos" && g.id_grupo != null) {
-        // Una sola hoja por la fila (agrupación de sus números)
         const agrupaciones = [[
           g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4,
         ].filter((n) => n != null).map(Number)];
 
         generarPDFMesas({
-          mesasFiltradas: [],      // no hace falta en este caso
-          agrupaciones,            // fuerza una página por esta fila
-          id_grupo: g.id_grupo,    // el backend resuelve los números del grupo
+          mesasFiltradas: [],
+          agrupaciones,
+          id_grupo: g.id_grupo,
           baseUrl: BASE_URL,
           notify,
           logoPath,
@@ -558,7 +561,6 @@ const MesasExamen = () => {
         return;
       }
 
-      // No agrupada: una sola agrupación con su número
       const nums = [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
         .filter((n) => n != null).map(Number);
       const agrupaciones = [nums.length ? nums : []];
@@ -608,7 +610,6 @@ const MesasExamen = () => {
           willAnimate ? "glob-cascade" : ""
         }`}
       >
-        {/* (Eliminada la columna de ID) */}
         <div className="glob-column glob-column-nombre" title={g.materia}>
           {g.materia}
         </div>
@@ -687,7 +688,10 @@ const MesasExamen = () => {
               }
               className="glob-search-input"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                setQ(e.target.value);
+                if (e.target.value) setMostrarTodos(false); // si busca, desactiva "mostrar todos"
+              }}
               disabled={cargandoVista}
             />
             {q ? (
@@ -713,7 +717,6 @@ const MesasExamen = () => {
                 setMostrarFiltros((prev) => {
                   const next = !prev;
                   if (next) {
-                    // al abrir el panel, los acordeones arrancan cerrados
                     setOpenFecha(false);
                     setOpenTurno(false);
                   }
@@ -754,6 +757,7 @@ const MesasExamen = () => {
                           onClick={() => {
                             setFechaSel(fechaSel === f ? "" : f);
                             setMostrarFiltros(false);
+                            setMostrarTodos(false);
                           }}
                           title={`Filtrar por ${formatearFechaISO(f)}`}
                         >
@@ -787,6 +791,7 @@ const MesasExamen = () => {
                           onClick={() => {
                             setTurnoSel(turnoSel === t ? "" : t);
                             setMostrarFiltros(false);
+                            setMostrarTodos(false);
                           }}
                           title={`Filtrar por ${t}`}
                         >
@@ -797,7 +802,7 @@ const MesasExamen = () => {
                   </div>
                 </div>
 
-                {/* Mostrar todos */}
+                {/* Mostrar todos (igual que Previas) */}
                 <div
                   className="glob-filtros-menu-item glob-mostrar-todas"
                   onClick={() => {
@@ -805,6 +810,8 @@ const MesasExamen = () => {
                     setFechaSel("");
                     setTurnoSel("");
                     setMostrarFiltros(false);
+                    setMostrarTodos(true);    // ← clave
+                    triggerCascada();
                   }}
                   role="menuitem"
                 >
@@ -824,9 +831,11 @@ const MesasExamen = () => {
                 <div className="glob-contador-container">
                   <span className="glob-profesores-desktop">
                     {vista === "grupos" ? "Grupos: " : "No agrupadas: "}
-                    {filasFiltradas.length}
+                    {(hayFiltros || mostrarTodos) ? filasFiltradas.length : 0}
                   </span>
-                  <span className="glob-profesores-mobile">{filasFiltradas.length}</span>
+                  <span className="glob-profesores-mobile">
+                    {(hayFiltros || mostrarTodos) ? filasFiltradas.length : 0}
+                  </span>
                   <FaUsers className="glob-icono-profesor" />
                 </div>
 
@@ -834,7 +843,7 @@ const MesasExamen = () => {
                 <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Cambiar vista">
                   <button
                     className={`glob-tab ${vista === "grupos" ? "glob-tab--active" : ""}`}
-                    onClick={() => setVista("grupos")}
+                    onClick={() => { setVista("grupos"); setMostrarTodos(false); }}
                     title="Ver grupos armados"
                     aria-pressed={vista === "grupos"}
                     role="tab"
@@ -844,7 +853,7 @@ const MesasExamen = () => {
                   </button>
                   <button
                     className={`glob-tab ${vista === "no-agrupadas" ? "glob-tab--active" : ""}`}
-                    onClick={() => setVista("no-agrupadas")}
+                    onClick={() => { setVista("no-agrupadas"); setMostrarTodos(false); }}
                     title="Ver mesas no agrupadas"
                     aria-pressed={vista === "no-agrupadas"}
                     role="tab"
@@ -910,6 +919,7 @@ const MesasExamen = () => {
                       setQ("");
                       setFechaSel("");
                       setTurnoSel("");
+                      // mantenemos mostrarTodos como esté (igual que Previas con "Limpiar")
                     }}
                     title="Quitar todos los filtros"
                   >
@@ -920,10 +930,9 @@ const MesasExamen = () => {
             </div>
           </div>
 
-            {/* TABLA */}
+          {/* TABLA */}
           <div className="glob-box-table">
             <div className="glob-header glob-header-mesas">
-              {/* (Eliminado el header de ID) */}
               <div className="glob-column-header">Materia</div>
               <div className="glob-column-header">Mesas</div>
               <div className="glob-column-header">Fecha</div>
@@ -933,7 +942,21 @@ const MesasExamen = () => {
             </div>
 
             <div className="glob-body">
-              {cargandoVista ? (
+              {/* ===== NUEVO estado inicial como Previas ===== */}
+              {!hayFiltros && !mostrarTodos ? (
+                <div className="glob-no-data-message">
+                  <div className="glob-message-content">
+                    <FaFilter className="glob-empty-icon" aria-hidden="true" />
+                    <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
+                    <button
+                      className="glob-btn-show-all"
+                      onClick={() => { setMostrarTodos(true); triggerCascada(); }}
+                    >
+                      Mostrar todas
+                    </button>
+                  </div>
+                </div>
+              ) : cargandoVista ? (
                 <div className="glob-loading-spinner-container">
                   <div className="glob-loading-spinner" />
                 </div>
@@ -1002,7 +1025,20 @@ const MesasExamen = () => {
                 : ""
             }`}
           >
-            {cargandoVista ? (
+            {(!hayFiltros && !mostrarTodos) ? (
+              <div className="glob-no-data-message glob-no-data-mobile">
+                <div className="glob-message-content">
+                  <FaFilter className="glob-empty-icon" aria-hidden="true" />
+                  <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
+                  <button
+                    className="glob-btn-show-all"
+                    onClick={() => { setMostrarTodos(true); triggerCascada(); }}
+                  >
+                    Mostrar todas
+                  </button>
+                </div>
+              </div>
+            ) : cargandoVista ? (
               <div className="glob-no-data-message glob-no-data-mobile">
                 <div className="glob-message-content">
                   <p>Cargando {vista === "grupos" ? "grupos" : "no agrupadas"}…</p>
@@ -1051,7 +1087,6 @@ const MesasExamen = () => {
                       <h3 className="glob-card-title">{g.materia || "—"}</h3>
                     </div>
                     <div className="glob-card-body">
-                      {/* (Eliminada la fila de ID) */}
                       <div className="glob-card-row">
                         <span className="glob-card-label">Mesas</span>
                         <span className="glob-card-value">{mesasStr}</span>
@@ -1091,7 +1126,6 @@ const MesasExamen = () => {
                         <FaInfoCircle />
                       </button>
 
-                      {/* Exportar PDF de este registro (móvil) */}
                       <button
                         className="glob-action-btn glob-iconchip"
                         title="Exportar este registro a PDF"
@@ -1192,21 +1226,19 @@ const MesasExamen = () => {
               onClick={() => {
                 if (!filasFiltradas.length) return;
 
-                // Agrupación por FILA (mesa de examen en sí)
                 const agrupaciones = filasFiltradas.map((g) =>
                   [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
                     .filter((n) => n != null)
                     .map(Number)
                 );
 
-                // Unión de todos los números para pedir el detalle en una sola llamada
                 const setNums = new Set();
                 for (const arr of agrupaciones) for (const n of arr) setNums.add(n);
                 const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
 
                 generarPDFMesas({
                   mesasFiltradas: numerosOrdenados.map((n) => ({ numero_mesa: n })),
-                  agrupaciones, // fuerza una página por cada fila/mesa
+                  agrupaciones,
                   baseUrl: BASE_URL,
                   notify,
                   logoPath: `${window.location.origin}/img/Escudo.png`,
