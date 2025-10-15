@@ -26,7 +26,7 @@ const InscribirModal = ({ open, item, loading, error, onConfirm, onCancel }) => 
         className="logout-modal-container logout-modal--success"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="logout-modal__icon is-success" aria-hidden="true">
+        <div id='confirm-icon' className="logout-modal__icon is-success" aria-hidden="true">
           <FaCheckCircle />
         </div>
 
@@ -64,6 +64,7 @@ const InscribirModal = ({ open, item, loading, error, onConfirm, onCancel }) => 
           </button>
 
           <button
+          id='inscribirr'
             type="button"
             className="logout-btn logout-btn--solid-success"
             onClick={onConfirm}

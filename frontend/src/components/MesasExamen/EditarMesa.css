@@ -707,3 +707,14 @@ justify-content: space-between;
 .prev-section-title::after{
   bottom: 6px;
 }
+#prev-add-boxs{transform: scale(.9);}
+
+/* Asegurá esto en tu CSS global del modal */
+.logout-modal-overlay{
+  position: fixed;
+  inset: 0;            /* top/right/bottom/left: 0 */
+  background: rgba(15, 23, 42, .55); /* oscurecimiento */
+  z-index: 10000;      /* por encima de todo */
+  display: grid;
+  place-items: center;
+}

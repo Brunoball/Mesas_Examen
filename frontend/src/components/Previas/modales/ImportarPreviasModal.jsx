@@ -2,7 +2,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import './ImportarPreviasModal.css';
-import { FaTimes, FaUpload } from 'react-icons/fa';
+import { FaTimes, FaUpload, FaFolderOpen } from 'react-icons/fa';
 import BASE_URL from '../../../config/config';
 
 // Campos REALES que se envían al backend (sin fecha_carga: la pone la DB)
@@ -14,42 +14,34 @@ const DB_COLS = [
 ];
 
 // Mapeo EXACTO/FLEXIBLE -> SOLO tomamos el ID de materia.
-// ⚠️ NO incluimos "MATERIA" a secas para evitar leer el nombre de la materia.
 const EXCEL_TO_DB = {
   dni: ['dni', 'DNI'],
   alumno: ['APELLIDO Y NOMBRE', 'apellido y nombre', 'alumno', 'nombre alumno'],
   cursando_id_curso: ['CURSANDO AÑO', 'CURSANDO ANIO', 'cursando año', 'cursando anio', 'cursando año (id)'],
   cursando_id_division: ['CURSANDO DIVISIÓN', 'CURSANDO DIVISION', 'cursando division', 'cursando división (id)'],
-
-  // ✅ ACEPTAMOS SOLO VARIANTES DE ID DE MATERIA:
-  // (descartamos "MATERIA" de texto para no confundir)
   id_materia: [
     'IDMATERIA', 'ID MATERIA', 'ID_MATERIA',
     'COD MATERIA', 'CODMATERIA', 'COD_MATERIA',
     'id_materia', 'idmateria'
   ],
-
   materia_id_curso: ['AÑO MATERIA', 'ANIO MATERIA', 'anio materia', 'año materia (id)'],
   materia_id_division: ['DIVISIÓN MATERIA', 'DIVISION MATERIA', 'division materia', 'división materia (id)'],
   id_condicion: ['CONDICIÓN', 'CONDICION', 'id condicion', 'id_condicion'],
   anio: ['AÑO', 'ANIO', 'anio']
 };
 
-// Normalizador: minúsculas y sin tildes
+// Normalizador
 const norm = (s = '') =>
   s.toString().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .trim();
 
-// ¿Fila del XLSX vacía?
 const isEmptyXlsxRow = (row) => {
   const vals = Object.values(row || {});
   if (vals.length === 0) return true;
   return vals.every(v => String(v ?? '').trim() === '');
 };
 
-// Busca por cualquiera de los alias: igualdad exacta o que el encabezado comience con el alias.
-// (Como NO incluimos "materia" a secas en id_materia, no habrá falsos positivos por el nombre.)
 const pickByAliases = (row, aliases) => {
   const entries = Object.entries(row || {});
   const normEntries = entries.map(([k, v]) => [k, norm(k), v]);
@@ -66,11 +58,18 @@ const pickByAliases = (row, aliases) => {
 
 export default function ImportarPreviasModal({ open, onClose }) {
   const dropRef = useRef(null);
+  const fileInputRef = useRef(null);
+
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState([]);
   const [preview, setPreview] = useState([]);
   const [errores, setErrores] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Abre el diálogo del sistema para seleccionar archivo
+  const openPicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
   const onDropFile = useCallback(async (file) => {
     if (!file) return;
@@ -92,10 +91,8 @@ export default function ImportarPreviasModal({ open, onClose }) {
 
     json.forEach((r, idx) => {
       if (isEmptyXlsxRow(r)) return;
-
       const out = {};
 
-      // Mapear SOLO los campos que vienen del Excel (inscripcion se setea luego a 0)
       const requiredFromExcel = [
         'dni','alumno','cursando_id_curso','cursando_id_division',
         'id_materia','materia_id_curso','materia_id_division','id_condicion','anio'
@@ -106,15 +103,13 @@ export default function ImportarPreviasModal({ open, onClose }) {
         const rawVal = pickByAliases(r, aliases);
         if (rawVal === undefined) {
           errs.push(`Fila ${idx + 2}: falta el encabezado/valor para "${col}" (p.ej.: "${aliases[0]}")`);
-          return; // descarta la fila
+          return;
         }
         out[col] = (rawVal ?? '').toString().trim();
       }
 
-      // Setear inscripcion a 0 (requerido)
       out.inscripcion = 0;
 
-      // Parseos seguros (sin “forzar” a 0 silencioso)
       const toInt = (val) => {
         const n = parseInt(String(val).replace(/[^\d\-]/g, '').trim(), 10);
         return Number.isFinite(n) ? n : NaN;
@@ -122,13 +117,12 @@ export default function ImportarPreviasModal({ open, onClose }) {
 
       out.cursando_id_curso    = toInt(out.cursando_id_curso);
       out.cursando_id_division = toInt(out.cursando_id_division);
-      out.id_materia           = toInt(out.id_materia);       // ← SOLO desde IDMATERIA / ID MATERIA / etc.
+      out.id_materia           = toInt(out.id_materia);
       out.materia_id_curso     = toInt(out.materia_id_curso);
       out.materia_id_division  = toInt(out.materia_id_division);
       out.id_condicion         = toInt(out.id_condicion);
       out.anio                 = toInt(out.anio);
 
-      // Validaciones estrictas
       if (!out.dni || !out.alumno) {
         errs.push(`Fila ${idx + 2}: "dni" y "alumno" son obligatorios`);
         return;
@@ -185,14 +179,12 @@ export default function ImportarPreviasModal({ open, onClose }) {
     if (!puedeEnviar) return;
     try {
       setSubmitting(true);
-      // asegurar tabla lab
       await fetch(`${BASE_URL}/api.php?action=previas_lab_ensure`, { method: 'POST' });
 
       const CHUNK = 500;
       let insertados = 0;
       let allErrs = [];
 
-      // Inserta en el MISMO ORDEN que vienen del Excel
       for (let i = 0; i < rows.length; i += CHUNK) {
         const slice = rows.slice(i, i + CHUNK);
         const res = await fetch(`${BASE_URL}/api.php?action=previas_lab_import`, {
@@ -225,53 +217,89 @@ export default function ImportarPreviasModal({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <div className="ipm-overlay" onMouseDown={onClose} role="dialog" aria-modal="true" aria-labelledby="ipm-title">
+    <div
+      className="ipm-overlay"
+      onMouseDown={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ipm-title"
+    >
       <div className="ipm-container" onMouseDown={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="ipm-header">
-          <h3 id="ipm-title">Importar previas (tabla de PRUEBAS: <code>previas_lab</code>)</h3>
-          <button className="ipm-close" onClick={onClose} aria-label="Cerrar"><FaTimes /></button>
+          <div className="ipm-icon-circle" aria-hidden="true">
+            <FaFolderOpen />
+          </div>
+          <div className="ipm-header-texts">
+            <h3 id="ipm-title">Subí tus archivos</h3>
+            <p className="ipm-sub">Arrastrá y soltá un Excel o hacé clic para seleccionarlo.</p>
+          </div>
+          <button className="ipm-close" onClick={onClose} aria-label="Cerrar">
+            <FaTimes />
+          </button>
         </div>
 
+        {/* COLUMNA IZQ: Requisitos (título afuera + caja) */}
+        <div className="ipm-specs-col">
+          <h4 className="ipm-specs-title">Encabezados requeridos</h4>
+          <div className="ipm-specs">
+            <ul>
+              <li><b>DNI</b></li>
+              <li><b>APELLIDO Y NOMBRE</b></li>
+              <li><b>CURSANDO AÑO</b> (ID)</li>
+              <li><b>CURSANDO DIVISIÓN</b> (ID)</li>
+              <li><b>IDMATERIA / ID MATERIA / ID_MATERIA / COD MATERIA</b></li>
+              <li><b>AÑO MATERIA</b> (ID)</li>
+              <li><b>DIVISIÓN MATERIA</b> (ID)</li>
+              <li><b>CONDICIÓN</b> (ID)</li>
+              <li><b>AÑO</b> (de la previa)</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* COLUMNA DER: Dropzone */}
         <div
           ref={dropRef}
           className="ipm-drop"
           onDrop={onDropHandler}
           onDragOver={onDragOver}
+          onClick={openPicker}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openPicker();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="Arrastrá y soltá tu archivo aquí o hacé clic para seleccionarlo"
         >
-          <FaUpload className="ipm-upload-ico" />
-          <p>Arrastrá tu archivo .xlsx aquí o</p>
-          <label className="ipm-file-btn">
-            Seleccionar archivo
-            <input type="file" accept=".xlsx,.xls" onChange={onInputChange} hidden />
-          </label>
-          {fileName && <div className="ipm-file-name">{fileName}</div>}
-        </div>
-
-        <div className="ipm-specs">
-          <h4>Usá estos encabezados en el Excel:</h4>
-          <ul>
-            <li><b>DNI</b></li>
-            <li><b>APELLIDO Y NOMBRE</b></li>
-            <li><b>CURSANDO AÑO</b> (ID)</li>
-            <li><b>CURSANDO DIVISIÓN</b> (ID)</li>
-
-            {/* ⚠️ Específicamente ID de materia */}
-            <li><b>IDMATERIA</b> / <b>ID MATERIA</b> / <b>ID_MATERIA</b> / <b>COD MATERIA</b></li>
-
-            <li><b>AÑO MATERIA</b> (ID)</li>
-            <li><b>DIVISIÓN MATERIA</b> (ID)</li>
-            <li><b>CONDICIÓN</b> (ID)</li>
-            <li><b>AÑO</b> (de la previa)</li>
-          </ul>
-          <p style={{marginTop:8}}>
-            <b>Inscripción</b> se carga <code>0</code> para todos.<br/>
-            <b>Fecha de carga</b> la pone el sistema automáticamente.<br/>
-            <span style={{display:'inline-block', marginTop:6}}>
-              <b>Importante:</b> la columna <code>MATERIA</code> (texto) se ignora; solo se lee el <code>IDMATERIA</code>.
-            </span>
+          <div className="ipm-drop-ico">
+            <FaUpload />
+          </div>
+          <p className="ipm-drop-title">Arrastrá y soltá tu archivo aquí</p>
+          <p className="ipm-file-btn">
+            o <span className="ipm-file-link">hacé clic para buscar</span>
           </p>
+          <p className="ipm-types">.XLSX · .XLS</p>
+          {fileName && <div className="ipm-file-name">{fileName}</div>}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={onInputChange}
+            hidden
+          />
         </div>
 
+        {/* NOTA FUERA DE LA CAJA (100% width, bajo las dos columnas) */}
+        <p className="ipm-note-wide">
+          <b>Inscripción</b> se fija en <code>0</code> para todos y la <b>fecha de carga</b> la agrega el sistema.
+          La columna <code>MATERIA</code> (texto) se ignora; solo se lee <code>IDMATERIA</code>.
+        </p>
+
+        {/* ERRORES (fila completa) */}
         {errores.length > 0 && (
           <div className="ipm-errors" role="alert">
             <b>Errores detectados ({errores.length}):</b>
@@ -282,22 +310,24 @@ export default function ImportarPreviasModal({ open, onClose }) {
           </div>
         )}
 
+        {/* PREVIEW */}
         {preview.length > 0 && (
           <div className="ipm-preview">
             <b>Vista previa (primeras {preview.length} filas):</b>
-            <div className="ipm-table">
-              <div className="ipm-tr ipm-head">
-                {DB_COLS.map(c => <div key={c} className="ipm-td">{c}</div>)}
+            <div className="ipm-table" role="table">
+              <div className="ipm-tr ipm-head" role="row">
+                {DB_COLS.map(c => <div key={c} className="ipm-td" role="columnheader">{c}</div>)}
               </div>
               {preview.map((r, idx) => (
-                <div key={idx} className="ipm-tr">
-                  {DB_COLS.map(c => <div key={c} className="ipm-td">{String(r[c] ?? '')}</div>)}
+                <div key={idx} className="ipm-tr" role="row">
+                  {DB_COLS.map(c => <div key={c} className="ipm-td" role="cell">{String(r[c] ?? '')}</div>)}
                 </div>
               ))}
             </div>
           </div>
         )}
 
+        {/* ACCIONES */}
         <div className="ipm-actions">
           <button className="ipm-btn ipm-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
           <button className="ipm-btn ipm-primary" onClick={enviar} disabled={!puedeEnviar}>

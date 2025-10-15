@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { FaTimes, FaCalendarAlt, FaCheck } from "react-icons/fa";
 import BASE_URL from "../../../config/config";
 import "./ModalCrearMesas.css";
@@ -15,9 +15,16 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
   const [fechaFin, setFechaFin] = useState("");
   const [enviando, setEnviando] = useState(false);
 
-  const closeIfOverlay = useCallback((e) => {
-    if (e.target.classList.contains("mi-modal__overlay")) onClose?.();
-  }, [onClose]);
+  // 🔧 Refs para abrir el datepicker programáticamente
+  const refDesde = useRef(null);
+  const refHasta = useRef(null);
+
+  const closeIfOverlay = useCallback(
+    (e) => {
+      if (e.target.classList.contains("mi-modal__overlay")) onClose?.();
+    },
+    [onClose]
+  );
 
   if (!open) return null;
 
@@ -53,7 +60,8 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
         fecha_fin: fechaFin,
       });
       if (!respCrear.ok || !jsonCrear?.exito) {
-        const msg = jsonCrear?.mensaje || `No se pudieron crear las mesas [HTTP ${respCrear.status}]`;
+        const msg =
+          jsonCrear?.mensaje || `No se pudieron crear las mesas [HTTP ${respCrear.status}]`;
         onError?.(msg);
         return;
       }
@@ -66,7 +74,9 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
         fecha_fin: fechaFin,
       });
       if (!respGrupos.ok || !jsonGrupos?.exito) {
-        const msg = jsonGrupos?.mensaje || `Se crearon las mesas, pero falló el armado de grupos [HTTP ${respGrupos.status}]`;
+        const msg =
+          jsonGrupos?.mensaje ||
+          `Se crearon las mesas, pero falló el armado de grupos [HTTP ${respGrupos.status}]`;
         onError?.(msg); // seguimos con reoptimización igualmente
       }
 
@@ -78,7 +88,9 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
         dry_run: 0,
       });
       if (!respReopt.ok || !jsonReopt?.exito) {
-        const msg = jsonReopt?.mensaje || `Se crearon y agruparon las mesas, pero falló la reoptimización [HTTP ${respReopt.status}]`;
+        const msg =
+          jsonReopt?.mensaje ||
+          `Se crearon y agruparon las mesas, pero falló la reoptimización [HTTP ${respReopt.status}]`;
         onError?.(msg);
       }
 
@@ -103,6 +115,23 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
     return `${toDDMMYYYY(fi)} — ${toDDMMYYYY(ff)}`;
   };
 
+  // 🧠 Abrir datepicker (con fallback) y evitar perder foco al hacer mousedown
+  const openPicker = (ref) => {
+    const el = ref?.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === "function") {
+        el.showPicker();
+      } else {
+        el.focus();
+        el.click();
+      }
+    } catch {
+      el.focus();
+      el.click();
+    }
+  };
+
   return (
     <div className="mi-modal__overlay" onClick={closeIfOverlay}>
       <div
@@ -115,7 +144,9 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
         {/* Header rojo (idéntico look & feel) */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
-            <h2 id="titulo-crear-mesas" className="mi-modal__title">Crear mesas</h2>
+            <h2 id="titulo-crear-mesas" className="mi-modal__title">
+              Crear mesas
+            </h2>
             <p className="mi-modal__subtitle">
               {rangoLegible(fechaInicio, fechaFin) || "Rango de fechas"}
             </p>
@@ -133,26 +164,52 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
                 <h3 className="mi-card__title">Rango de fechas</h3>
 
                 <div className="mi-form-grid-2">
-                  <div className="mi-form-row">
-                    <label className="mi-label-strong">
+                  {/* DESDE */}
+                  <div
+                    className="mi-form-row"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Elegir fecha desde"
+                    onMouseDown={(e) => e.preventDefault()} // evita blur que cierra el picker
+                    onClick={() => openPicker(refDesde)}
+                    onKeyDown={(e) =>
+                      (e.key === "Enter" || e.key === " ") && openPicker(refDesde)
+                    }
+                  >
+                    <label className="mi-label-strong" htmlFor="fecha-desde">
                       <FaCalendarAlt style={{ marginRight: 6 }} /> Desde
                     </label>
                     <input
+                      id="fecha-desde"
                       type="date"
                       className="mi-input"
+                      ref={refDesde}
                       value={fechaInicio}
                       onChange={(e) => setFechaInicio(e.target.value)}
                       required
                     />
                   </div>
 
-                  <div className="mi-form-row">
-                    <label className="mi-label-strong">
+                  {/* HASTA */}
+                  <div
+                    className="mi-form-row"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Elegir fecha hasta"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => openPicker(refHasta)}
+                    onKeyDown={(e) =>
+                      (e.key === "Enter" || e.key === " ") && openPicker(refHasta)
+                    }
+                  >
+                    <label className="mi-label-strong" htmlFor="fecha-hasta">
                       <FaCalendarAlt style={{ marginRight: 6 }} /> Hasta
                     </label>
                     <input
+                      id="fecha-hasta"
                       type="date"
                       className="mi-input"
+                      ref={refHasta}
                       value={fechaFin}
                       onChange={(e) => setFechaFin(e.target.value)}
                       required
@@ -162,7 +219,8 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
                 </div>
 
                 <p className="mi-help">
-                  Se crearán mesas para todos los días dentro del rango. Verificá que no se superpongan con mesas ya existentes.
+                  Se crearán mesas para todos los días dentro del rango. Verificá que no se
+                  superpongan con mesas ya existentes.
                 </p>
               </article>
             </div>
@@ -170,7 +228,12 @@ const ModalCrearMesas = ({ open, onClose, onSuccess, onError, onLoadingChange })
 
           {/* Footer */}
           <div className="mi-modal__footer">
-            <button type="button" className="mi-btn mi-btn--ghost" onClick={onClose} disabled={enviando}>
+            <button
+              type="button"
+              className="mi-btn mi-btn--ghost"
+              onClick={onClose}
+              disabled={enviando}
+            >
               Cancelar
             </button>
             <button type="submit" className="mi-btn mi-btn--primary" disabled={enviando}>

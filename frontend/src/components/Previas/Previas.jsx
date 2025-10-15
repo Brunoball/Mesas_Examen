@@ -24,8 +24,8 @@ import {
   FaPlus,
   FaEdit,
   FaCheckCircle,
-  FaBroom,         // ⬅️ para “limpiar pruebas”
-  FaUpload,        // ⬅️ para “importar excel”
+  FaBroom,
+  FaUpload,
 } from 'react-icons/fa';
 
 import * as XLSX from 'xlsx';
@@ -33,8 +33,9 @@ import { saveAs } from 'file-saver';
 import Toast from '../Global/Toast';
 import InscribirModal from './modales/InscribirModal';
 import ModalInfoPrevia from './modales/ModalInfoPrevia';
-import ImportarPreviasModal from './modales/ImportarPreviasModal'; // ⬅️ nuevo modal
+import ImportarPreviasModal from './modales/ImportarPreviasModal';
 import '../Global/roots.css';
+import '../Global/section-ui.css';
 import './Previas.css';
 
 /* ================================
@@ -56,6 +57,10 @@ const formatearFechaISO = (v) => {
   if (!m) return v;
   return `${m[3]}/${m[2]}/${m[1]}`;
 };
+
+// ⬅️ NUEVO: respeta la condición que manda el backend
+const esTerMatPorCond = (p) =>
+  ((p?.condicion_nombre || '') + '').toUpperCase().includes('TER.MAT');
 
 function useIsMobile(breakpoint = 768) {
   const getMatch = () =>
@@ -79,10 +84,10 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-/* ========= Modal de confirmación (Eliminar / Desinscribir) ========= */
+/* ========= Modal de confirmación (Eliminar / Desinscribir / Limpiar) ========= */
 const ConfirmActionModal = ({
   open,
-  mode,         // 'eliminar' | 'desinscribir'
+  mode,         // 'eliminar' | 'desinscribir' | 'limpiar'
   item,
   loading,
   error,
@@ -102,10 +107,21 @@ const ConfirmActionModal = ({
   if (!open) return null;
 
   const isWarn = mode === 'desinscribir';
-  const titulo = isWarn ? 'Marcar como NO inscripto' : 'Confirmar eliminación';
-  const subtitulo = isWarn
-    ? '¿Confirmás pasar este alumno a NO inscripto?'
-    : 'Esta acción eliminará el registro de forma definitiva.';
+  const isDanger = mode === 'eliminar' || mode === 'limpiar';
+
+  const titulo =
+    mode === 'desinscribir'
+      ? 'Marcar como NO inscripto'
+      : mode === 'limpiar'
+      ? 'Vaciar tabla de PRUEBAS'
+      : 'Confirmar eliminación';
+
+  const subtitulo =
+    mode === 'desinscribir'
+      ? '¿Confirmás pasar este alumno a NO inscripto?'
+      : mode === 'limpiar'
+      ? 'Esta acción vaciará por completo la tabla de PRUEBAS (previas_lab). No afecta la tabla real.'
+      : 'Esta acción eliminará el registro de forma definitiva.';
 
   return (
     <div
@@ -116,20 +132,30 @@ const ConfirmActionModal = ({
       onMouseDown={onCancel}
     >
       <div
-        className={`logout-modal-container ${isWarn ? 'logout-modal--warn' : 'logout-modal--danger'}`}
+        className={`logout-modal-container ${
+          isWarn ? 'logout-modal--warn' : isDanger ? 'logout-modal--danger' : ''
+        }`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className={`logout-modal__icon ${isWarn ? 'is-warn' : 'is-danger'}`} aria-hidden="true">
+        <div
+          className={`  logout-modal__icon ${isWarn ? 'is-warn' : 'is-danger'}`}
+          aria-hidden="true"
+        >
           <FaTrash />
         </div>
 
-        <h3 id="confirm-modal-title" className={`logout-modal-title ${isWarn ? 'logout-modal-title--warn' : 'logout-modal-title--danger'}`}>
+        <h3
+          id="confirm-modal-title"
+          className={`logout-modal-title ${
+            isWarn ? 'logout-modal-title--warn' : 'logout-modal-title--danger'
+          }`}
+        >
           {titulo}
         </h3>
 
         <p className="logout-modal-text">{subtitulo}</p>
 
-        {item && (
+        {item && mode !== 'limpiar' && (
           <div className="prev-modal-item" style={{ marginTop: 12 }}>
             <strong>{item.alumno}</strong> — DNI {item.dni}
             <br />
@@ -155,12 +181,21 @@ const ConfirmActionModal = ({
           </button>
 
           <button
+            id='inscribir'
             type="button"
-            className={`logout-btn ${isWarn ? 'logout-btn--solid-warn' : 'logout-btn--solid-danger'}`}
+            className={`logout-btn inscribir ${
+              isWarn ? 'logout-btn--solid-warn' : 'logout-btn--solid-danger'
+            }`}
             onClick={onConfirm}
             disabled={loading}
           >
-            {loading ? 'Procesando...' : (isWarn ? 'Confirmar' : 'Eliminar')}
+            {loading
+              ? 'Procesando...'
+              : mode === 'desinscribir'
+              ? 'Confirmar'
+              : mode === 'limpiar'
+              ? 'Vaciar'
+              : 'Eliminar'}
           </button>
         </div>
       </div>
@@ -196,10 +231,10 @@ const Previas = () => {
     division: false,
   });
 
-  // Modal confirmación (eliminar / desinscribir)
+  // Modal confirmación (eliminar / desinscribir / limpiar)
   const [modal, setModal] = useState({
     open: false,
-    mode: null, // 'eliminar' | 'desinscribir'
+    mode: null, // 'eliminar' | 'desinscribir' | 'limpiar'
     item: null,
     loading: false,
     error: '',
@@ -219,7 +254,7 @@ const Previas = () => {
     item: null,
   });
 
-  // ⬇️ NUEVO: modal de importación (tabla de pruebas)
+  // ⬇️ modal de importación (tabla de PRUEBAS)
   const [modalImport, setModalImport] = useState(false);
 
   // Listas básicas (desde backend)
@@ -269,6 +304,30 @@ const Previas = () => {
     }
     return previas;
   }, [tab, previas]);
+
+  // IDs que son la 3ª materia (o más) por alumno (clave: DNI)
+  const idsTerceraOMas = useMemo(() => {
+    try {
+      const ordenadas = [...previas].sort((a, b) => {
+        const da = new Date(a?.fecha_carga || 0).getTime();
+        const db = new Date(b?.fecha_carga || 0).getTime();
+        return da - db;
+      });
+      const contadorPorDni = new Map();
+      const set = new Set();
+      for (const p of ordenadas) {
+        const dniKey = String(p?.dni ?? p?.alumno ?? '');
+        const nextCount = (contadorPorDni.get(dniKey) || 0) + 1;
+        contadorPorDni.set(dniKey, nextCount);
+        if (nextCount >= 3 && p?.id_previa != null) {
+          set.add(Number(p.id_previa));
+        }
+      }
+      return set;
+    } catch {
+      return new Set();
+    }
+  }, [previas]);
 
   // Filtrado + búsqueda
   const previasFiltradas = useMemo(() => {
@@ -535,11 +594,26 @@ const Previas = () => {
     setModal({ open: true, mode, item: p, loading: false, error: '' });
   }, [tab]);
 
-  // Confirmar acción (eliminar / desinscribir)
+  // Abrir modal LIMPIAR PRUEBAS
+  const abrirModalLimpiar = useCallback(() => {
+    setModal({ open: true, mode: 'limpiar', item: null, loading: false, error: '' });
+  }, []);
+
+  // Confirmar acción (eliminar / desinscribir / limpiar)
   const confirmarAccion = useCallback(async () => {
-    if (!modal.item || !modal.mode) return;
+    if (!modal.mode) return;
     try {
       setModal((m) => ({ ...m, loading: true, error: '' }));
+
+      // Limpiar tabla de PRUEBAS
+      if (modal.mode === 'limpiar') {
+        const res = await fetch(`${BASE_URL}/api.php?action=previas_lab_truncate`, { method: 'POST' });
+        const js = await res.json();
+        if (!js?.exito) throw new Error(js?.mensaje || 'No se pudo limpiar previas_lab');
+        mostrarToast('Tabla de PRUEBAS vaciada correctamente', 'exito');
+        setModal({ open: false, mode: null, item: null, loading: false, error: '' });
+        return;
+      }
 
       const action = modal.mode === 'desinscribir'
         ? 'previa_desinscribir'
@@ -548,7 +622,7 @@ const Previas = () => {
       const res = await fetch(`${BASE_URL}/api.php?action=${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_previa: modal.item.id_previa }),
+        body: JSON.stringify({ id_previa: modal.item?.id_previa }),
       });
       const json = await res.json();
 
@@ -557,7 +631,7 @@ const Previas = () => {
       if (modal.mode === 'eliminar') {
         setPrevias((arr) => arr.filter(x => Number(x.id_previa) !== Number(modal.item.id_previa)));
         mostrarToast('Registro eliminado correctamente', 'exito');
-      } else {
+      } else if (modal.mode === 'desinscribir') {
         setPrevias((arr) =>
           arr.map(x =>
             Number(x.id_previa) === Number(modal.item.id_previa)
@@ -677,26 +751,11 @@ const Previas = () => {
     saveAs(blob, `Previas_${sufijo}_${fechaStr}(${filas.length}).xlsx`);
   }, [hayFiltros, filtroActivo, previasFiltradas, cargando, tab]);
 
-  // ⬇️ Nuevo: tab change con cascada
+  // Tab change con cascada
   const handleTabChange = useCallback((nuevoTab) => {
     setTab(nuevoTab);
     triggerCascadaConPreMask();
   }, [triggerCascadaConPreMask]);
-
-  /* ================================
-     NUEVO: Acciones de PRUEBAS (previas_lab)
-  ================================= */
-  const limpiarTablaPruebas = useCallback(async () => {
-    if (!window.confirm('¿Vaciar completamente la tabla de PRUEBAS (previas_lab)? Esta acción no afecta la tabla real.')) return;
-    try {
-      const res = await fetch(`${BASE_URL}/api.php?action=previas_lab_truncate`, { method: 'POST' });
-      const js = await res.json();
-      if (!js?.exito) throw new Error(js?.mensaje || 'No se pudo limpiar previas_lab');
-      mostrarToast('Tabla de PRUEBAS vaciada correctamente', 'exito');
-    } catch (e) {
-      mostrarToast(e.message || 'Error al limpiar tabla de pruebas', 'error');
-    }
-  }, [mostrarToast]);
 
   /* ================================
      Fila virtualizada (desktop)
@@ -708,11 +767,14 @@ const Previas = () => {
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
 
     const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
+    const esTerceraOMas = idsTerceraOMas.has(Number(p?.id_previa));
+    const bloquearInscribir = esTerceraOMas || esTerMatPorCond(p); // ⬅️ clave
 
     return (
       <div
         style={{
           ...style,
+          gridTemplateColumns: ' 1.6fr 0.7fr 1fr 1fr 0.5fr 1fr 1fr',
           animationDelay: willAnimate ? `${index * 0.03}s` : '0s',
           opacity: preMask ? 0 : undefined,
           transform: preMask ? 'translateY(8px)' : undefined,
@@ -752,8 +814,9 @@ const Previas = () => {
               <FaEdit />
             </button>
 
-            {estado === 'PENDIENTE' && (
+            {estado === 'PENDIENTE' && !bloquearInscribir && (
               <button
+              id='is_affirm'
                 className="glob-iconchip is-affirm"
                 title="Inscribir manualmente"
                 onClick={() => abrirModalInscribir(p)}
@@ -794,7 +857,7 @@ const Previas = () => {
           />
         )}
 
-        {/* Modal Confirmación (eliminar / desinscribir) */}
+        {/* Modal Confirmación (eliminar / desinscribir / limpiar) */}
         <ConfirmActionModal
           open={modal.open}
           mode={modal.mode}
@@ -963,12 +1026,13 @@ const Previas = () => {
                   </span>
                   <FaUsers className="glob-icono-profesor" />
                 </div>
-                {/* Tabs inline al lado del contador */}
-                <div className="glob-tabs-inline" role="tablist" aria-label="Filtro por estado de inscripción">
+
+                {/* ==== TABS con estética de Mesas ==== */}
+                <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Filtro por estado de inscripción">
                   <button
                     role="tab"
                     aria-selected={tab === 'todos'}
-                    className={`glob-chip-filtro ${tab === 'todos' ? 'glob-active' : ''}`}
+                    className={`glob-tab ${tab === 'todos' ? 'glob-tab--active' : ''}`}
                     onClick={() => handleTabChange('todos')}
                     title="Ver todas las previas"
                   >
@@ -977,7 +1041,7 @@ const Previas = () => {
                   <button
                     role="tab"
                     aria-selected={tab === 'inscriptos'}
-                    className={`glob-chip-filtro ${tab === 'inscriptos' ? 'glob-active' : ''}`}
+                    className={`glob-tab ${tab === 'inscriptos' ? 'glob-tab--active' : ''}`}
                     onClick={() => handleTabChange('inscriptos')}
                     title="Ver solo inscriptos"
                   >
@@ -1051,7 +1115,7 @@ const Previas = () => {
           {/* TABLA (desktop) */}
           {!isMobile && (
             <div className="glob-box-table">
-              <div className="glob-header">
+              <div className="glob-header"  style={{ gridTemplateColumns: '1.6fr 0.7fr 1fr 1fr 0.5fr 1fr 1fr' }}>
                 <div className="glob-column-header">Alumno</div>
                 <div className="glob-column-header">DNI</div>
                 <div className="glob-column-header">Materia</div>
@@ -1149,6 +1213,8 @@ const Previas = () => {
                   const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
                   const preMask = preCascada && index < MAX_CASCADE_ITEMS;
                   const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
+                  const esTerceraOMas = idsTerceraOMas.has(Number(p?.id_previa));
+                  const bloquearInscribir = esTerceraOMas || esTerMatPorCond(p); // ⬅️ clave mobile
                   return (
                     <div
                       key={p.id_previa || `card-${index}`}
@@ -1209,7 +1275,7 @@ const Previas = () => {
                           <FaEdit />
                         </button>
 
-                        {estado === 'PENDIENTE' && (
+                        {estado === 'PENDIENTE' && !bloquearInscribir && (
                           <button
                             className="glob-action-btn glob-iconchip is-affirm"
                             title="Inscribir manualmente"
@@ -1259,16 +1325,6 @@ const Previas = () => {
           </button>
 
           <div className="glob-botones-container">
-            <button
-              className="glob-profesor-button glob-hover-effect"
-              onClick={exportarExcel}
-              disabled={!puedeExportar}
-              aria-label="Exportar"
-              title={puedeExportar ? 'Exportar a Excel' : 'No hay filas visibles para exportar'}
-            >
-              <FaFileExcel className="glob-profesor-icon-button" />
-              <p>Exportar a Excel</p>
-            </button>
 
             <button
               className="glob-profesor-button glob-hover-effect"
@@ -1280,8 +1336,20 @@ const Previas = () => {
               <p>Agregar Previa</p>
             </button>
 
-            {/* ⬇️ NUEVOS BOTONES (no tocan la tabla real, solo la de PRUEBAS) */}
             <button
+              className="glob-profesor-button glob-hover-effect"
+              onClick={exportarExcel}
+              disabled={!puedeExportar}
+              aria-label="Exportar"
+              title={puedeExportar ? 'Exportar a Excel' : 'No hay filas visibles para exportar'}
+            >
+              <FaFileExcel className="glob-profesor-icon-button" />
+              <p>Exportar a Excel</p>
+            </button>
+
+            {/* PRUEBAS: importar/limpiar previas_lab */}
+            <button
+              id="Importar-Excel"
               className="glob-profesor-button glob-hover-effect"
               onClick={() => setModalImport(true)}
               aria-label="Importar Excel (PRUEBAS)"
@@ -1293,7 +1361,7 @@ const Previas = () => {
 
             <button
               className="glob-profesor-button glob-hover-effect"
-              onClick={limpiarTablaPruebas}
+              onClick={abrirModalLimpiar}
               aria-label="Limpiar tabla de PRUEBAS"
               title="Vaciar completamente previas_lab"
             >

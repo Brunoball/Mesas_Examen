@@ -5,12 +5,12 @@ import {
   FaArrowLeft,
   FaSave,
   FaTrash,
-  FaCalendarAlt,
   FaExchangeAlt,
   FaPlus,
 } from "react-icons/fa";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPenToSquare } from "@fortawesome/free-solid-svg-icons";
+import { createPortal } from "react-dom"; // ⬅️ Portal inline
 
 import BASE_URL from "../../config/config";
 import "../Global/section-ui.css";
@@ -18,13 +18,16 @@ import Toast from "../Global/Toast";
 import ModalEliminarMesa from "./modales/ModalEliminarMesa";
 import ModalAgregarMesas from "./modales/ModalAgregarMesas";
 import ModalMoverMesa from "./modales/ModalMoverMesa";
-
 import "../Previas/AgregarPrevia.css";
 import "./EditarMesa.css";
 import "./modales/ModalEliminarMesas.css";
-
-// Calendario inline (asegurate de tenerlo en src/components/Global/InlineCalendar.jsx)
 import InlineCalendar from "../Global/InlineCalendar";
+
+/* ===== Portal inline ===== */
+function Portal({ children }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+}
 
 /* Utils */
 const fmtISO = (d) => {
@@ -88,18 +91,16 @@ const EditarMesa = () => {
   const [openMover, setOpenMover] = useState(false);
   const [numeroParaMover, setNumeroParaMover] = useState(null);
 
-  // Estado modal integrado "Quitar número"
+  // Modal integrado “Quitar número del grupo”
   const [openQuitar, setOpenQuitar] = useState(false);
   const [numeroQuitar, setNumeroQuitar] = useState(null);
   const [loadingQuitar, setLoadingQuitar] = useState(false);
   const cancelQuitarBtnRef = useRef(null);
 
-  // focus al abrir modal quitar
   useEffect(() => {
     if (openQuitar) setTimeout(() => cancelQuitarBtnRef.current?.focus(), 0);
   }, [openQuitar]);
 
-  // ESC/ENTER para el modal quitar
   useEffect(() => {
     const onKey = (e) => {
       if (!openQuitar) return;
@@ -257,13 +258,11 @@ const EditarMesa = () => {
     }
   };
 
-  // Abrir modal de confirmación (integrado)
   const pedirQuitarNumero = (n) => {
     setNumeroQuitar(n);
     setOpenQuitar(true);
   };
 
-  // Acción real al confirmar en el modal (integrado)
   const confirmarQuitarNumeroDelGrupo = async () => {
     const n = Number(numeroQuitar);
     if (!n) return;
@@ -306,15 +305,11 @@ const EditarMesa = () => {
       )}
 
       <div className="prev-add-container">
-        <div className="prev-add-box">
-          {/* ===== Header ===== */}
+        <div className="prev-add-box" id="prev-add-boxs">
+          {/* Header */}
           <div className="prev-add-header">
             <div className="prev-add-icon-title">
-              <FontAwesomeIcon
-                icon={faPenToSquare}
-                className="prev-add-icon"
-                aria-hidden="true"
-              />
+              <FontAwesomeIcon icon={faPenToSquare} className="prev-add-icon" />
               <div>
                 <h1>
                   Editar Mesa Nº {mesa?.numero_mesa ?? numeroMesa}
@@ -334,23 +329,16 @@ const EditarMesa = () => {
             </button>
           </div>
 
-          {/* ===== Contenido ===== */}
+          {/* Body */}
           <div className="prev-add-form-wrapper" id="form-wrapper">
-            {/* GRID 2 columnas: Programación (izq) | Slots (der) */}
             <div className="mesa-two-col">
-              {/* IZQUIERDA: Programación */}
+              {/* Programación */}
               <aside className="col-prog programacion-card">
                 <div className="prev-section" id="prev-section-program">
                   <div className="prog-head">
                     <h3 className="prev-section-title">Programación</h3>
                     {cargando ? (
-                      <Skeleton
-                        style={{
-                          height: 40,
-                          width: 220,
-                          borderRadius: 12,
-                        }}
-                      />
+                      <Skeleton style={{ height: 40, width: 220, borderRadius: 12 }} />
                     ) : (
                       <div className="float-field">
                         <label className="float-label" htmlFor="turno-select">
@@ -375,19 +363,8 @@ const EditarMesa = () => {
                   </div>
 
                   <div className="prog-block calendar-block">
-                    <label
-                      className="prev-label"
-                    >
-                    </label>
-
                     {cargando ? (
-                      <Skeleton
-                        style={{
-                          // Altura equivalente a ~2 tarjetas (podés ajustar con CSS)
-                          height: 316,
-                          borderRadius: 12,
-                        }}
-                      />
+                      <Skeleton style={{ height: 316, borderRadius: 12 }} />
                     ) : (
                       <InlineCalendar
                         className="cal-inline"
@@ -401,61 +378,21 @@ const EditarMesa = () => {
                 </div>
               </aside>
 
-              {/* DERECHA: Slots del grupo */}
+              {/* Slots del grupo */}
               <section className="col-materia">
                 <div className="prev-section">
-                  <h3 className="prev-section-title">
-                    Slots del grupo (hasta 4)
-                  </h3>
+                  <h3 className="prev-section-title">Slots del grupo (hasta 4)</h3>
 
                   <div className="mesa-cards">
                     {cargando
                       ? Array.from({ length: 4 }).map((_, i) => (
                           <div key={`sk-${i}`} className="mesa-card">
-                            <Skeleton
-                              style={{
-                                height: 18,
-                                width: 90,
-                                borderRadius: 999,
-                              }}
-                            />
-                            <Skeleton
-                              style={{
-                                height: 16,
-                                width: "80%",
-                                borderRadius: 6,
-                                marginTop: 8,
-                              }}
-                            />
-                            <Skeleton
-                              style={{
-                                height: 14,
-                                width: "60%",
-                                borderRadius: 6,
-                                marginTop: 6,
-                              }}
-                            />
-                            <div
-                              style={{
-                                marginTop: "auto",
-                                display: "flex",
-                                gap: 8,
-                              }}
-                            >
-                              <Skeleton
-                                style={{
-                                  height: 36,
-                                  width: 36,
-                                  borderRadius: 999,
-                                }}
-                              />
-                              <Skeleton
-                                style={{
-                                  height: 36,
-                                  width: 36,
-                                  borderRadius: 999,
-                                }}
-                              />
+                            <Skeleton style={{ height: 18, width: 90, borderRadius: 999 }} />
+                            <Skeleton style={{ height: 16, width: "80%", borderRadius: 6, marginTop: 8 }} />
+                            <Skeleton style={{ height: 14, width: "60%", borderRadius: 6, marginTop: 6 }} />
+                            <div style={{ marginTop: "auto", display: "flex", gap: 8 }}>
+                              <Skeleton style={{ height: 36, width: 36, borderRadius: 999 }} />
+                              <Skeleton style={{ height: 36, width: 36, borderRadius: 999 }} />
                             </div>
                           </div>
                         ))
@@ -471,14 +408,9 @@ const EditarMesa = () => {
                                 ? slot.docentes
                                 : [];
                               return (
-                                <article
-                                  key={`slot-ok-${slot.numero_mesa}`}
-                                  className="mesa-card"
-                                >
+                                <article key={`slot-ok-${slot.numero_mesa}`} className="mesa-card">
                                   <div className="mesa-card-head">
-                                    <span className="mesa-badge">
-                                      N° {slot.numero_mesa}
-                                    </span>
+                                    <span className="mesa-badge">N° {slot.numero_mesa}</span>
                                     <div className="mesa-card-actions">
                                       <button
                                         className="mesa-chip info"
@@ -555,128 +487,133 @@ const EditarMesa = () => {
             </div>
           </div>
 
-          {/* Modales existentes */}
+          {/* ===== Modales en Portal ===== */}
           {openDelete && (
-            <ModalEliminarMesa
-              open={openDelete}
-              mesa={{ numero_mesa: numeroMesa }}
-              onClose={() => setOpenDelete(false)}
-              onSuccess={() => {
-                setOpenDelete(false);
-                notify({ tipo: "exito", mensaje: "Mesa eliminada." });
-                setTimeout(() => navigate("/mesas-examen"), 400);
-              }}
-              onError={(mensaje) =>
-                notify({
-                  tipo: "error",
-                  mensaje: mensaje || "No se pudo eliminar la mesa.",
-                })
-              }
-            />
+            <Portal>
+              <ModalEliminarMesa
+                open={openDelete}
+                mesa={{ numero_mesa: numeroMesa }}
+                onClose={() => setOpenDelete(false)}
+                onSuccess={() => {
+                  setOpenDelete(false);
+                  notify({ tipo: "exito", mensaje: "Mesa eliminada." });
+                  setTimeout(() => navigate("/mesas-examen"), 400);
+                }}
+                onError={(mensaje) =>
+                  notify({
+                    tipo: "error",
+                    mensaje: mensaje || "No se pudo eliminar la mesa.",
+                  })
+                }
+              />
+            </Portal>
           )}
 
           {openAgregar && (
-            <ModalAgregarMesas
-              open={openAgregar}
-              onClose={() => setOpenAgregar(false)}
-              idGrupo={idGrupo}
-              numeroMesaActual={numeroMesa}
-              fechaObjetivo={fecha}
-              idTurnoObjetivo={idTurno ? Number(idTurno) : null}
-              onAdded={() => {
-                setOpenAgregar(false);
-                notify({ tipo: "exito", mensaje: "Número agregado al grupo." });
-                cargarTodo();
-              }}
-              onError={(mensaje) => notify({ tipo: "error", mensaje })}
-            />
+            <Portal>
+              <ModalAgregarMesas
+                open={openAgregar}
+                onClose={() => setOpenAgregar(false)}
+                idGrupo={idGrupo}
+                numeroMesaActual={numeroMesa}
+                fechaObjetivo={fecha}
+                idTurnoObjetivo={idTurno ? Number(idTurno) : null}
+                onAdded={() => {
+                  setOpenAgregar(false);
+                  notify({ tipo: "exito", mensaje: "Número agregado al grupo." });
+                  cargarTodo();
+                }}
+                onError={(mensaje) => notify({ tipo: "error", mensaje })}
+              />
+            </Portal>
           )}
 
           {openMover && (
-            <ModalMoverMesa
-              open={openMover}
-              onClose={() => setOpenMover(false)}
-              numeroMesaOrigen={numeroParaMover ?? numeroMesa}
-              fechaObjetivo={fecha}
-              idTurnoObjetivo={idTurno ? Number(idTurno) : null}
-              onMoved={() => {
-                setOpenMover(false);
-                setNumeroParaMover(null);
-                notify({ tipo: "exito", mensaje: "Número movido de grupo." });
-                cargarTodo();
-              }}
-              onError={(mensaje) => notify({ tipo: "error", mensaje })}
-            />
+            <Portal>
+              <ModalMoverMesa
+                open={openMover}
+                onClose={() => setOpenMover(false)}
+                numeroMesaOrigen={numeroParaMover ?? numeroMesa}
+                fechaObjetivo={fecha}
+                idTurnoObjetivo={idTurno ? Number(idTurno) : null}
+                onMoved={() => {
+                  setOpenMover(false);
+                  setNumeroParaMover(null);
+                  notify({ tipo: "exito", mensaje: "Número movido de grupo." });
+                  cargarTodo();
+                }}
+                onError={(mensaje) => notify({ tipo: "error", mensaje })}
+              />
+            </Portal>
           )}
 
-          {/* MODAL integrado: “Quitar número del grupo” */}
           {openQuitar && (
-            <div
-              className="logout-modal-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="confirm-quitar-title"
-              onMouseDown={() => (!loadingQuitar ? setOpenQuitar(false) : null)}
-            >
+            <Portal>
               <div
-                className="logout-modal-container logout-modal--danger"
-                onMouseDown={(e) => e.stopPropagation()}
+                className="logout-modal-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="confirm-quitar-title"
+                onMouseDown={() => (!loadingQuitar ? setOpenQuitar(false) : null)}
               >
-                <div className="logout-modal__icon is-danger" aria-hidden="true">
-                  <FaTrash />
-                </div>
-
-                <h3
-                  id="confirm-quitar-title"
-                  className="logout-modal-title logout-modal-title--danger"
+                <div
+                  className="logout-modal-container logout-modal--danger"
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
-                  Confirmar acción
-                </h3>
+                  <div className="logout-modal__icon is-danger" aria-hidden="true">
+                    <FaTrash />
+                  </div>
 
-                <p className="logout-modal-text">
-                  {`¿Quitar el número ${numeroQuitar} de este grupo? (no se borra la mesa)`}
-                </p>
-
-                <div className="prev-modal-item" style={{ marginTop: 10 }}>
-                  {(idGrupo ? `Grupo ${idGrupo}` : "Sin grupo") +
-                    (fecha ? ` • Fecha: ${fecha}` : "") +
-                    (idTurno ? ` • Turno ID: ${idTurno}` : "")}
-                </div>
-
-                <div className="logout-modal-buttons">
-                  <button
-                    type="button"
-                    className="logout-btn logout-btn--ghost"
-                    onClick={() => setOpenQuitar(false)}
-                    disabled={loadingQuitar}
-                    ref={cancelQuitarBtnRef}
+                  <h3
+                    id="confirm-quitar-title"
+                    className="logout-modal-title logout-modal-title--danger"
                   >
-                    Cancelar
-                  </button>
+                    Confirmar acción
+                  </h3>
 
-                  <button
-                    type="button"
-                    className="logout-btn logout-btn--solid-danger"
-                    onClick={confirmarQuitarNumeroDelGrupo}
-                    disabled={loadingQuitar}
-                    aria-disabled={loadingQuitar}
-                  >
-                    {loadingQuitar ? "Quitando…" : "Confirmar"}
-                  </button>
+                  <p className="logout-modal-text">
+                    {`¿Quitar el número ${numeroQuitar} de este grupo? (no se borra la mesa)`}
+                  </p>
+
+                  <div className="prev-modal-item" style={{ marginTop: 10 }}>
+                    {(idGrupo ? `Grupo ${idGrupo}` : "Sin grupo") +
+                      (fecha ? ` • Fecha: ${fecha}` : "") +
+                      (idTurno ? ` • Turno ID: ${idTurno}` : "")}
+                  </div>
+
+                  <div className="logout-modal-buttons">
+                    <button
+                      type="button"
+                      className="logout-btn logout-btn--ghost"
+                      onClick={() => setOpenQuitar(false)}
+                      disabled={loadingQuitar}
+                      ref={cancelQuitarBtnRef}
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="button"
+                      className="logout-btn logout-btn--solid-danger"
+                      onClick={confirmarQuitarNumeroDelGrupo}
+                      disabled={loadingQuitar}
+                      aria-disabled={loadingQuitar}
+                    >
+                      {loadingQuitar ? "Quitando…" : "Confirmar"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Portal>
           )}
         </div>
       </div>
 
-      {/* keyframes para el shimmer del skeleton (scoped inline) */}
-      <style>
-        {`@keyframes mesaShimmer{
-            0% { background-position: 100% 0; }
-            100% { background-position: 0 0; }
-          }`}
-      </style>
+      {/* keyframes skeleton */}
+      <style>{`@keyframes mesaShimmer{0%{background-position:100% 0}100%{background-position:0 0}}`}</style>
+
+      {/* Overlay fullscreen por si tu CSS no lo define */}
+      <style>{`.logout-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10000;display:grid;place-items:center}`}</style>
     </>
   );
 };

@@ -37,6 +37,7 @@
   background-color: var(--m-bg);
   border-radius: var(--m-radius);
   width: 90%;
+  min-width: 450px;
   max-width: 500px;
   padding: 28px;
   box-shadow: var(--m-shadow-xl);

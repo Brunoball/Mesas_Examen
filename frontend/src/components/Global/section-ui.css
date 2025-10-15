@@ -503,12 +503,13 @@ input:-webkit-autofill { background-color: transparent !important; }
   cursor: pointer;
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background-color .12s ease, color .12s ease;
 }
-.glob-iconchip svg {
+.glob-iconchip {
   width: 27px;
   height: 27px;
   padding: 6px;
   color: #C62828;
 }
+
 .is-affirm:hover{background-color:#C62828 ; color: white !important;}
 /* Variantes de color */
 .glob-iconchip.is-info  { --chip-bg:#feecf0; --chip-border:#f8cfd6; --chip-icon:#d32f2f; }
@@ -591,13 +592,14 @@ input:-webkit-autofill { background-color: transparent !important; }
 
 /* desktop colors */
 .glob-volver-atras { background: var(--primary-500) !important; }
-.glob-profesor-button:nth-child(1) { background: var(--pro-success); }
-.glob-profesor-button:nth-child(2) { background: var(--pro-warning); }
+.glob-profesor-button:nth-child(1) { background: #B71C1C; }
+.glob-profesor-button:nth-child(2) { background: var(--pro-success); }
+.glob-profesor-button:nth-child(3) { background: var(--glob-primary, #2d3436); }
+.glob-profesor-button:nth-child(4) { background: var(--grayprincipal-900); }
 .glob-btn-baja-nav { background: var(--pro-danger) !important; }
-
 .glob-profesor-icon-button { width: 16px; height: 16px; }
 .glob-hover-effect { transition: all 0.3s ease; }
-
+#excels-export{background-color: var(--pro-success) !important;}
 /* =========================================================
    MOBILE — tarjetas + navbar fija
    ========================================================= */

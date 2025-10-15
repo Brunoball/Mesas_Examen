@@ -791,6 +791,7 @@ const Catedras = () => {
 
           <div className="glob-botones-container">
             <button
+              id="excels-export"
               className="glob-profesor-button glob-hover-effect"
               onClick={exportarExcel}
               disabled={!puedeExportar}

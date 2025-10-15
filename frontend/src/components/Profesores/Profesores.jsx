@@ -791,30 +791,7 @@ const Profesores = () => {
               <div className="glob-filtros-menu" role="menu">
                 {/* MATERIA */}
                 <div className="glob-filtros-group">
-                  <button
-                    type="button"
-                    className={`glob-filtros-group-header ${openSecciones.materia ? 'is-open' : ''}`}
-                    onClick={() => setOpenSecciones((s) => ({ ...s, materia: !s.materia }))}
-                    aria-expanded={openSecciones.materia}
-                  >
-                    <span className="glob-filtros-group-title">Filtrar por materia</span>
-                    <FaChevronDown className="glob-accordion-caret" />
-                  </button>
 
-                  <div className={`glob-filtros-group-body ${openSecciones.materia ? 'is-open' : 'is-collapsed'}`}>
-                    <div className="glob-grid-filtros">
-                      {(materiasDisponibles.length ? materiasDisponibles : materiasUnicas).map((mat) => (
-                        <button
-                          key={`mat-${mat}`}
-                          className={`glob-chip-filtro ${filtros.materiaSeleccionada === mat ? 'glob-active' : ''}`}
-                          onClick={() => handleFiltrarPorMateria(mat)}
-                          title={`Filtrar por materia ${mat}`}
-                        >
-                          {mat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
                 {/* DEPARTAMENTO */}

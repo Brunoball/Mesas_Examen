@@ -1,28 +1,11 @@
 // src/components/MesasExamen/modales/ModalEliminarMesas.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { FaTimes, FaTrash, FaCalendarAlt, FaClock } from "react-icons/fa";
 import BASE_URL from "../../../config/config";
 // Reutilizamos la estética del modal rojo
 import "./ModalCrearMesas.css";
 
-/**
- * ModalEliminarMesas — Confirmación para eliminar mesas en lote.
- *
- * Principios SOLID aplicados:
- * - SRP: el componente solo renderiza UI y orquesta acciones; helpers puros aparte.
- * - OCP: endpoint/base pueden inyectarse por props sin modificar el componente.
- * - LSP/ISP: API mínima de props; no obliga a pasar "listas" si no hace falta.
- * - DIP: fetch depende de apiBase/endpointAction recibidos (con defaults).
- */
-
 /* ========================= Helpers puros ========================= */
-
-/**
- * Construye el body a enviar según filtros completados.
- * @param {string} fechaMesa  yyyy-mm-dd | ""
- * @param {string|number} idTurno  id o "" (vacío)
- * @returns {{}} cuerpo listo para JSON.stringify
- */
 const buildDeleteBody = (fechaMesa, idTurno) => {
   const body = {};
   if (fechaMesa) body.fecha_mesa = fechaMesa;
@@ -30,37 +13,26 @@ const buildDeleteBody = (fechaMesa, idTurno) => {
   return body;
 };
 
-/**
- * Ejecuta el POST de eliminación.
- * @param {string} apiBase
- * @param {string} endpointAction
- * @param {object} body
- * @returns {Promise<{ok:boolean, json:any, status:number}>}
- */
 const deleteMesas = async (apiBase, endpointAction, body) => {
   const resp = await fetch(`${apiBase}/api.php?action=${endpointAction}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
   const json = await resp.json().catch(() => ({}));
   return { ok: resp.ok && Boolean(json?.exito), json, status: resp.status };
 };
 
 /* ========================= Componente ========================= */
-
 const ModalEliminarMesas = ({
   open,
   onClose,
   onSuccess,
   onError,
   listas = {},
-  // Dependencias inyectables para OCP/DIP:
   apiBase = BASE_URL,
   endpointAction = "mesas_eliminar_todas",
 }) => {
-  // Normalizamos turnos una sola vez
   const turnos = useMemo(
     () =>
       (listas?.turnos ?? []).map((t) => ({
@@ -74,6 +46,26 @@ const ModalEliminarMesas = ({
   const [idTurno, setIdTurno] = useState("");
   const [enviando, setEnviando] = useState(false);
 
+  // 🔧 Ref para abrir el datepicker programáticamente
+  const refFecha = useRef(null);
+
+  // util para abrir el picker (con fallback)
+  const openPicker = (ref) => {
+    const el = ref?.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === "function") {
+        el.showPicker();
+      } else {
+        el.focus();
+        el.click();
+      }
+    } catch {
+      el.focus();
+      el.click();
+    }
+  };
+
   // Cerrar con ESC
   useEffect(() => {
     if (!open) return;
@@ -86,7 +78,6 @@ const ModalEliminarMesas = ({
   useEffect(() => {
     if (!open) return;
     setEnviando(false);
-    // No forzamos limpiar filtros: puede ser útil mantenerlos al reabrir.
   }, [open]);
 
   const handleOverlayClick = useCallback(
@@ -104,15 +95,10 @@ const ModalEliminarMesas = ({
       setEnviando(true);
       try {
         const body = buildDeleteBody(fechaMesa, idTurno);
-        const { ok, json, status } = await deleteMesas(
-          apiBase,
-          endpointAction,
-          body
-        );
+        const { ok, json, status } = await deleteMesas(apiBase, endpointAction, body);
 
         if (!ok) {
-          const msg =
-            json?.mensaje || `No se pudo eliminar [HTTP ${status}]`;
+          const msg = json?.mensaje || `No se pudo eliminar [HTTP ${status}]`;
           onError?.(msg);
           return;
         }
@@ -167,13 +153,23 @@ const ModalEliminarMesas = ({
                 <h3 className="mi-card__title">Filtros (opcionales)</h3>
 
                 <div className="mi-form-grid-2">
-                  {/* FECHA (nativo) + pista visual */}
-                  <div className="mi-form-row">
-                    <label className="mi-label-strong">
+                  {/* FECHA — Click en toda la fila abre el calendario */}
+                  <div
+                    className="mi-form-row"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Elegir fecha"
+                    onMouseDown={(e) => e.preventDefault()} // evita perder foco antes de abrir
+                    onClick={() => openPicker(refFecha)}
+                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openPicker(refFecha)}
+                  >
+                    <label className="mi-label-strong" htmlFor="eliminar-fecha">
                       <FaCalendarAlt style={{ marginRight: 6 }} />
                       Fecha <span className="mi-optional">(opcional)</span>
                     </label>
                     <input
+                      id="eliminar-fecha"
+                      ref={refFecha}
                       type="date"
                       className="mi-input"
                       value={fechaMesa}
@@ -185,13 +181,14 @@ const ModalEliminarMesas = ({
                     </div>
                   </div>
 
-                  {/* TURNO (select) + pista visual */}
+                  {/* TURNO (select) */}
                   <div className="mi-form-row">
-                    <label className="mi-label-strong">
+                    <label className="mi-label-strong" htmlFor="eliminar-turno">
                       <FaClock style={{ marginRight: 6 }} />
                       Turno <span className="mi-optional">(opcional)</span>
                     </label>
                     <select
+                      id="eliminar-turno"
                       className="mi-input"
                       value={idTurno}
                       onChange={(e) => setIdTurno(e.target.value)}
@@ -228,12 +225,7 @@ const ModalEliminarMesas = ({
             >
               Cancelar
             </button>
-            <button
-              type="submit"
-              className="mi-btn mi-btn--primary"
-              disabled={enviando}
-              title=""
-            >
+            <button type="submit" className="mi-btn mi-btn--primary" disabled={enviando}>
               <FaTrash style={{ marginRight: 6 }} />
               {enviando ? "Eliminando..." : "Eliminar mesas"}
             </button>
