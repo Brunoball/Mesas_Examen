@@ -109,10 +109,6 @@ const MesasExamen = () => {
   const [fechaSel, setFechaSel] = useState("");
   const [turnoSel, setTurnoSel] = useState("");
 
-  // ===== NUEVO: comportamiento igual a Previas =====
-  const [mostrarTodos, setMostrarTodos] = useState(false); // ← como "filtroActivo === 'todos'"
-  const hayFiltros = !!(q || fechaSel || turnoSel);
-
   // Estado de acordeones (cerrados por defecto)
   const [openFecha, setOpenFecha] = useState(false);
   const [openTurno, setOpenTurno] = useState(false);
@@ -588,7 +584,7 @@ const MesasExamen = () => {
       navigate,
     } = data;
     const g = rows[index];
-    const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
+       const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
 
     const mesasStr =
@@ -690,7 +686,6 @@ const MesasExamen = () => {
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);
-                if (e.target.value) setMostrarTodos(false); // si busca, desactiva "mostrar todos"
               }}
               disabled={cargandoVista}
             />
@@ -757,7 +752,6 @@ const MesasExamen = () => {
                           onClick={() => {
                             setFechaSel(fechaSel === f ? "" : f);
                             setMostrarFiltros(false);
-                            setMostrarTodos(false);
                           }}
                           title={`Filtrar por ${formatearFechaISO(f)}`}
                         >
@@ -791,7 +785,6 @@ const MesasExamen = () => {
                           onClick={() => {
                             setTurnoSel(turnoSel === t ? "" : t);
                             setMostrarFiltros(false);
-                            setMostrarTodos(false);
                           }}
                           title={`Filtrar por ${t}`}
                         >
@@ -802,21 +795,7 @@ const MesasExamen = () => {
                   </div>
                 </div>
 
-                {/* Mostrar todos (igual que Previas) */}
-                <div
-                  className="glob-filtros-menu-item glob-mostrar-todas"
-                  onClick={() => {
-                    setQ("");
-                    setFechaSel("");
-                    setTurnoSel("");
-                    setMostrarFiltros(false);
-                    setMostrarTodos(true);    // ← clave
-                    triggerCascada();
-                  }}
-                  role="menuitem"
-                >
-                  <span>Mostrar Todos</span>
-                </div>
+                {/* (Se quitó el botón "Mostrar todos") */}
               </div>
             )}
           </div>
@@ -831,10 +810,10 @@ const MesasExamen = () => {
                 <div className="glob-contador-container">
                   <span className="glob-profesores-desktop">
                     {vista === "grupos" ? "Grupos: " : "No agrupadas: "}
-                    {(hayFiltros || mostrarTodos) ? filasFiltradas.length : 0}
+                    {filasFiltradas.length}
                   </span>
                   <span className="glob-profesores-mobile">
-                    {(hayFiltros || mostrarTodos) ? filasFiltradas.length : 0}
+                    {filasFiltradas.length}
                   </span>
                   <FaUsers className="glob-icono-profesor" />
                 </div>
@@ -843,7 +822,7 @@ const MesasExamen = () => {
                 <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Cambiar vista">
                   <button
                     className={`glob-tab ${vista === "grupos" ? "glob-tab--active" : ""}`}
-                    onClick={() => { setVista("grupos"); setMostrarTodos(false); }}
+                    onClick={() => { setVista("grupos"); }}
                     title="Ver grupos armados"
                     aria-pressed={vista === "grupos"}
                     role="tab"
@@ -853,7 +832,7 @@ const MesasExamen = () => {
                   </button>
                   <button
                     className={`glob-tab ${vista === "no-agrupadas" ? "glob-tab--active" : ""}`}
-                    onClick={() => { setVista("no-agrupadas"); setMostrarTodos(false); }}
+                    onClick={() => { setVista("no-agrupadas"); }}
                     title="Ver mesas no agrupadas"
                     aria-pressed={vista === "no-agrupadas"}
                     role="tab"
@@ -919,7 +898,6 @@ const MesasExamen = () => {
                       setQ("");
                       setFechaSel("");
                       setTurnoSel("");
-                      // mantenemos mostrarTodos como esté (igual que Previas con "Limpiar")
                     }}
                     title="Quitar todos los filtros"
                   >
@@ -942,21 +920,7 @@ const MesasExamen = () => {
             </div>
 
             <div className="glob-body">
-              {/* ===== NUEVO estado inicial como Previas ===== */}
-              {!hayFiltros && !mostrarTodos ? (
-                <div className="glob-no-data-message">
-                  <div className="glob-message-content">
-                    <FaFilter className="glob-empty-icon" aria-hidden="true" />
-                    <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
-                    <button
-                      className="glob-btn-show-all"
-                      onClick={() => { setMostrarTodos(true); triggerCascada(); }}
-                    >
-                      Mostrar todas
-                    </button>
-                  </div>
-                </div>
-              ) : cargandoVista ? (
+              {cargandoVista ? (
                 <div className="glob-loading-spinner-container">
                   <div className="glob-loading-spinner" />
                 </div>
@@ -1025,20 +989,7 @@ const MesasExamen = () => {
                 : ""
             }`}
           >
-            {(!hayFiltros && !mostrarTodos) ? (
-              <div className="glob-no-data-message glob-no-data-mobile">
-                <div className="glob-message-content">
-                  <FaFilter className="glob-empty-icon" aria-hidden="true" />
-                  <p>Usá la búsqueda o aplicá filtros para ver resultados</p>
-                  <button
-                    className="glob-btn-show-all"
-                    onClick={() => { setMostrarTodos(true); triggerCascada(); }}
-                  >
-                    Mostrar todas
-                  </button>
-                </div>
-              </div>
-            ) : cargandoVista ? (
+            {cargandoVista ? (
               <div className="glob-no-data-message glob-no-data-mobile">
                 <div className="glob-message-content">
                   <p>Cargando {vista === "grupos" ? "grupos" : "no agrupadas"}…</p>

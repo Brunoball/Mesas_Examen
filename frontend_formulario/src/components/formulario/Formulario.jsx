@@ -124,9 +124,14 @@ const InscripcionCerrada = ({ cfg }) => {
 
 /* ============== Subvista: Resumen Alumno ============== */
 const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro }) => {
+  // Materias inscribibles (cond=3)
+  const materiasCond3 = data?.alumno?.materias ?? [];
+  // Materias “Tercera materia” (cond=5) — solo visualización
+  const materiasCond5 = data?.alumno?.materias_cond5 ?? [];
+
   const [seleccion, setSeleccion] = useState(
     () => new Set(
-      data.alumno.materias
+      materiasCond3
         .filter((m) => !Number(m.inscripcion))
         .map((m) => m.id_materia)
     )
@@ -148,10 +153,17 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
   };
 
   const materiasOrdenadas = useMemo(
-    () => [...data.alumno.materias].sort((a, b) =>
+    () => [...materiasCond3].sort((a, b) =>
       a.materia.localeCompare(b.materia, "es", { sensitivity: "base" })
     ),
-    [data.alumno.materias]
+    [materiasCond3]
+  );
+
+  const materias5Ordenadas = useMemo(
+    () => [...materiasCond5].sort((a, b) =>
+      a.materia.localeCompare(b.materia, "es", { sensitivity: "base" })
+    ),
+    [materiasCond5]
   );
 
   const handleConfirm = () => {
@@ -169,6 +181,15 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
 
   const a = data.alumno;
   const abierta = !!ventana?.abierta;
+
+  // Accesibilidad: permitir Enter/Espacio para activar la tarjeta
+  const handleKeyToggle = (e, m, disabled) => {
+    if (disabled) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle(m.id_materia, false);
+    }
+  };
 
   return (
     <div className="auth-card">
@@ -242,40 +263,68 @@ const ResumenAlumno = ({ data, onVolver, onConfirmar, ventana, onVentanaCerro })
           )}
         </header>
 
+        {/* Grid cond=3 (inscribibles) — SIN checkbox, seleccionando por tarjeta */}
         <div className="materias-scroll">
           <div className="materias-grid">
             {materiasOrdenadas.map((m) => {
               const yaIncripto = !!Number(m.inscripcion);
-              const checked = seleccion.has(m.id_materia);
+              const selected = seleccion.has(m.id_materia);
               const disabled = yaIncripto || !abierta;
+              const classes = [
+                "materia-card",
+                yaIncripto ? "inscripto" : selected ? "selected" : "",
+                !abierta ? "disabled" : "",
+                "clickable"
+              ].join(" ").trim();
+
+              const title = yaIncripto
+                ? "Ya estás inscripto en esta materia"
+                : !abierta
+                ? "La inscripción está cerrada"
+                : "Click para seleccionar/deseleccionar";
+
               return (
-                <label
+                <div
                   key={m.id_materia}
-                  className={`materia-card ${yaIncripto ? "inscripto" : checked ? "selected" : ""} ${!abierta ? "disabled" : ""}`}
-                  title={
-                    yaIncripto
-                      ? "Ya estás inscripto en esta materia"
-                      : !abierta
-                      ? "La inscripción está cerrada"
-                      : ""
-                  }
+                  className={classes}
+                  title={title}
+                  role="button"
+                  tabIndex={disabled ? -1 : 0}
+                  aria-pressed={selected}
+                  onClick={() => !disabled && toggle(m.id_materia, false)}
+                  onKeyDown={(e) => handleKeyToggle(e, m, disabled)}
                 >
-                  <input
-                    type="checkbox"
-                    checked={yaIncripto ? false : checked}
-                    disabled={disabled}
-                    onChange={() => !disabled && toggle(m.id_materia, false)}
-                  />
                   <span className="nombre">
                     {m.materia}
                     {yaIncripto && <span className="badge-inscripto">INSCRIPTO</span>}
                   </span>
                   <small className="sub">{`(Curso ${m.curso} • Div. ${m.division})`}</small>
-                </label>
+                </div>
               );
             })}
           </div>
         </div>
+
+        {/* Bloque adicional: Tercera materia (cond=5) - SOLO VISUALIZACIÓN */}
+        {materias5Ordenadas.length > 0 && (
+          <div className="tercera-materia-section">
+            <h3 className="auth-title" style={{ marginTop: 24 }}>Tercera materia</h3>
+            <p className="auth-sub">Solo visualización (no se puede inscribir en estas).</p>
+            <div className="materias-grid">
+              {materias5Ordenadas.map((m) => (
+                <div
+                  key={`c5-${m.id_materia}`}
+                  className="materia-card disabled only-visual"
+                  title="Tercera materia: solo visualización"
+                >
+                  <span className="nombre">{m.materia}</span>
+                  <small className="sub">{`(Curso ${m.curso} • Div. ${m.division})`}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
 
         {/* CONFIRMAR — solo desktop */}
         <div className="actions-right only-desktop">
@@ -413,9 +462,8 @@ const Formulario = () => {
       if (json.ya_inscripto) {
         mostrarToast(
           "advertencia",
-          `Este alumno ya fue inscripto en las mesas de examen ${json.anio_inscripcion}.`
+          `Este alumno ya fue inscripto en todas las materias cond=3 (${json.anio_inscripcion}).`
         );
-        return;
       }
       setDataAlumno({ ...json, gmail: gmail.trim() });
     } catch (err) {

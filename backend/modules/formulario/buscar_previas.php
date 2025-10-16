@@ -32,8 +32,8 @@ try {
 
     $anioActual = (int)date('Y');
 
-    // ===== Traer TODAS las materias cond=3 (inscriptas y no inscriptas) con nombres de curso/división =====
-    $sqlTodas = "
+    // ===== Traer materias cond=3 y cond=5 en una sola consulta; luego separar =====
+    $sql = "
         SELECT 
             p.dni,
             p.alumno,
@@ -63,35 +63,33 @@ try {
         LEFT  JOIN curso     AS c_mat ON c_mat.id_curso  = p.materia_id_curso
         LEFT  JOIN division  AS d_mat ON d_mat.id_division = p.materia_id_division
         WHERE p.dni = :dni
-          AND p.id_condicion = 3
+          AND p.id_condicion IN (3,5)
         ORDER BY m.materia ASC
     ";
-    $stTodas = $pdo->prepare($sqlTodas);
-    $stTodas->execute([':dni' => $dni]);
-    $todas = $stTodas->fetchAll();
+    $st = $pdo->prepare($sql);
+    $st->execute([':dni' => $dni]);
+    $rows = $st->fetchAll();
 
-    if (!$todas || count($todas) === 0) {
+    if (!$rows || count($rows) === 0) {
         echo json_encode([
             'exito'        => false,
-            'mensaje'      => 'No se encontraron materias previas (condición 3) para ese DNI.',
+            'mensaje'      => 'No se encontraron materias previas para ese DNI.',
             'ya_inscripto' => false
         ]);
         exit;
     }
 
-    // Armado de respuesta
-    $alumnoNombre = $todas[0]['alumno'];
-
-    // Cursando actual (incluye IDs y nombres)
+    // Cursando actual (incluye IDs y nombres) — tomamos de la 1ra fila
+    $alumnoNombre = $rows[0]['alumno'];
     $cursando = [
-        'curso_id'     => isset($todas[0]['cursando_id_curso'])    ? (int)$todas[0]['cursando_id_curso']    : null,
-        'division_id'  => isset($todas[0]['cursando_id_division']) ? (int)$todas[0]['cursando_id_division'] : null,
-        'curso'        => $todas[0]['cursando_curso_nombre']    ?? (isset($todas[0]['cursando_id_curso'])    ? (string)$todas[0]['cursando_id_curso']    : null),
-        'division'     => $todas[0]['cursando_division_nombre'] ?? (isset($todas[0]['cursando_id_division']) ? (string)$todas[0]['cursando_id_division'] : null),
+        'curso_id'     => isset($rows[0]['cursando_id_curso'])    ? (int)$rows[0]['cursando_id_curso']    : null,
+        'division_id'  => isset($rows[0]['cursando_id_division']) ? (int)$rows[0]['cursando_id_division'] : null,
+        'curso'        => $rows[0]['cursando_curso_nombre']    ?? (isset($rows[0]['cursando_id_curso'])    ? (string)$rows[0]['cursando_id_curso']    : null),
+        'division'     => $rows[0]['cursando_division_nombre'] ?? (isset($rows[0]['cursando_id_division']) ? (string)$rows[0]['cursando_id_division'] : null),
     ];
 
-    // Materias (incluye flag inscripcion + nombres de curso/división de cada materia)
-    $materias = array_map(function ($r) {
+    // Map común para ambos conjuntos
+    $mapRow = function(array $r) {
         return [
             'id_materia'   => (int)$r['id_materia'],
             'materia'      => (string)$r['materia'],
@@ -105,36 +103,53 @@ try {
             'id_condicion' => (int)$r['id_condicion'],
             'anio'         => isset($r['anio']) ? (int)$r['anio'] : null,
 
-            // 👇 importante para pintar en gris / badge
             'inscripcion'  => (int)$r['inscripcion'],
         ];
-    }, $todas);
+    };
 
-    // Conteos para saber si YA ESTÁ TODO inscripto
-    $totalCond3   = count($materias);
-    $inscriptas   = array_sum(array_map(fn($m) => (int)$m['inscripcion'] === 1 ? 1 : 0, $materias));
-    $yaInscriptasTodas = ($totalCond3 > 0 && $inscriptas === $totalCond3);
+    // Separar cond=3 y cond=5
+    $materias_cond3 = [];
+    $materias_cond5 = [];
+    foreach ($rows as $r) {
+        if ((int)$r['id_condicion'] === 3) {
+            $materias_cond3[] = $mapRow($r);
+        } elseif ((int)$r['id_condicion'] === 5) {
+            $materias_cond5[] = $mapRow($r);
+        }
+    }
+
+    // Conteos para saber si YA ESTÁ TODO inscripto (solo cond=3)
+    $totalCond3        = count($materias_cond3);
+    $inscriptasCond3   = array_sum(array_map(fn($m) => (int)$m['inscripcion'] === 1 ? 1 : 0, $materias_cond3));
+    $yaInscriptasTodas = ($totalCond3 > 0 && $inscriptasCond3 === $totalCond3);
+
+    // Si no hay cond=3 pero sí cond=5, igual devolvemos exito:true para que se visualice
+    $exito = ($totalCond3 > 0) || (count($materias_cond5) > 0);
 
     echo json_encode([
-        'exito'            => true,
+        'exito'            => $exito,
         'alumno'           => [
             'dni'         => $dni,
             'nombre'      => $alumnoNombre,
             'anio_actual' => $anioActual,
             'cursando'    => $cursando,
-            'materias'    => $materias,
+            // Compatibilidad: "materias" = SOLO cond=3 (inscribibles)
+            'materias'        => $materias_cond3,
+            // Nuevo: "Tercera materia" (solo visualización)
+            'materias_cond5'  => $materias_cond5,
         ],
         'gmail'            => $gmail,
-        'ya_inscripto'     => $yaInscriptasTodas,   // ✅ si true, el frontend muestra toast y no despliega subvista
+        // true solo si TODAS las cond=3 están inscriptas
+        'ya_inscripto'     => $yaInscriptasTodas,
         'anio_inscripcion' => $anioActual,
         'resumen'          => [
-            'total_cond3' => $totalCond3,
-            'inscriptas'  => $inscriptas,
-            'pendientes'  => $totalCond3 - $inscriptas,
+            'total_cond3'   => $totalCond3,
+            'inscriptas'    => $inscriptasCond3,
+            'pendientes'    => $totalCond3 - $inscriptasCond3,
+            'total_cond5'   => count($materias_cond5),
         ],
     ]);
 } catch (Throwable $e) {
-    // 200 con exito:false (no 5xx)
     echo json_encode([
         'exito'   => false,
         'mensaje' => 'Error al consultar previas.',

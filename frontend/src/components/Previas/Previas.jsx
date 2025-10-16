@@ -113,14 +113,14 @@ const ConfirmActionModal = ({
     mode === 'desinscribir'
       ? 'Marcar como NO inscripto'
       : mode === 'limpiar'
-      ? 'Vaciar tabla de PRUEBAS'
+      ? 'Vaciar tabla de previas'
       : 'Confirmar eliminación';
 
   const subtitulo =
     mode === 'desinscribir'
       ? '¿Confirmás pasar este alumno a NO inscripto?'
       : mode === 'limpiar'
-      ? 'Esta acción vaciará por completo la tabla de PREVIAS.'
+      ? 'Esta operación no se puede deshacer. Solo continuá si estás absolutamente seguro de que querés reiniciar toda la información de previas y mesas de examen.'
       : 'Esta acción eliminará el registro de forma definitiva.';
 
   return (
