@@ -27,6 +27,7 @@ import {
   FaFilePdf,
   FaLayerGroup,
   FaUnlink,
+  FaTable,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -75,13 +76,142 @@ function useDebounce(value, delay = 220) {
 }
 
 /* ================================
+   Helpers para “Detalle (como PDF)”
+================================ */
+const mode = (arr = []) => {
+  const counts = new Map();
+  for (const v0 of arr) {
+    const v = (v0 ?? "").toString().trim();
+    if (!v) continue;
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  let best = "", max = -1;
+  for (const [k, n] of counts) {
+    if (n > max) { max = n; best = k; }
+  }
+  return best;
+};
+
+const nombreMes = (iso = "") => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!m) return { dia: "", mesNum: "", anio: "", mesTxt: "" };
+  const meses = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+  return { dia: m[3], mesNum: m[2], anio: m[1], mesTxt: meses[parseInt(m[2], 10) - 1] || "" };
+};
+
+const diaSemana = (iso) => {
+  const dias = ["DOMINGO","LUNES","MARTES","MIERCOLES","JUEVES","VIERNES","SABADO"];
+  const d = new Date(`${iso || ""}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? "" : dias[d.getDay()] || "";
+};
+
+const horaPorTurno = (turno = "", fallback = "07:30 HS.") => {
+  const t = normalizar(turno);
+  if (t.includes("man")) return "07:30 HS.";
+  if (t.includes("tar")) return "13:30 HS.";
+  return fallback;
+};
+
+const limpiarCurso = (s) => String(s ?? "")
+  .replace(/°\s*°/g, "°")
+  .replace(/\s{2,}/g, " ")
+  .trim();
+
+/** Construye “mesas lógicas” (igual que el PDF) a partir del detalle del backend */
+function buildMesasLogicas({ detalle, agrupaciones, id_grupo }) {
+  const subMesas = (Array.isArray(detalle) ? detalle : []).map((m) => ({
+    numero_mesa: m.numero_mesa ?? null,
+    fecha: m.fecha ?? "",
+    turno: m.turno ?? "",
+    hora: m.hora ?? "",
+    materia: m.materia ?? "",
+    docentes: Array.isArray(m.docentes) ? m.docentes.filter(Boolean) : [],
+    alumnos: Array.isArray(m.alumnos)
+      ? m.alumnos.map((a) => ({ alumno: a.alumno ?? "", dni: a.dni ?? "", curso: a.curso ?? "" }))
+      : [],
+  }));
+
+  // Si viene id_grupo, la agrupación es la unión de todos los sub números.
+  let agrupacionesEfectivas = [];
+  if (Array.isArray(agrupaciones) && agrupaciones.length) {
+    agrupacionesEfectivas = agrupaciones
+      .map((arr) => (arr || []).map((n) => parseInt(n, 10)).filter(Number.isFinite))
+      .filter((a) => a.length);
+  } else if (id_grupo != null) {
+    const setNums = new Set(subMesas.map(x => parseInt(x.numero_mesa, 10)).filter(Number.isFinite));
+    agrupacionesEfectivas = [Array.from(setNums).sort((a,b)=>a-b)];
+  } else {
+    agrupacionesEfectivas = [Array.from(new Set(subMesas.map(sm => sm.numero_mesa))).filter(Boolean).sort((a,b)=>a-b)];
+  }
+
+  const buildMesaLogicaFrom = (arr) => {
+    const fechaStar = mode(arr.map(x => x.fecha)) || (arr.find(x => x.fecha)?.fecha || "");
+    const turnoStar = mode(arr.map(x => x.turno)) || (arr.find(x => x.turno)?.turno || "");
+    const materiaStar = mode(arr.map(x => x.materia)) || (arr[0]?.materia || "");
+    const subNumeros = [...new Set(arr.map(x => x.numero_mesa).filter(v => v != null))].sort((a,b)=>a-b);
+
+    // Mapa Docente -> Materia -> alumnos[]
+    const DOC_FALLBACK = "—";
+    const mapa = new Map();
+    const add = (doc, mat, al) => {
+      if (!mapa.has(doc)) mapa.set(doc, new Map());
+      const m2 = mapa.get(doc);
+      if (!m2.has(mat)) m2.set(mat, []);
+      m2.get(mat).push(...al);
+    };
+    for (const sm of arr) {
+      const docentesSM = sm.docentes?.length ? sm.docentes : [DOC_FALLBACK];
+      for (const d of docentesSM) add(d, sm.materia || "", sm.alumnos || []);
+    }
+
+    // Bloques (Materia -> Docente) con alumnos dedupe
+    const bloques = [];
+    const docentes = [...mapa.keys()];
+    const materiasSet = new Set();
+    for (const d of docentes) for (const mat of mapa.get(d).keys()) materiasSet.add(mat);
+    const materiasOrden = [...materiasSet].sort((A,B)=>String(A).localeCompare(String(B),"es",{sensitivity:"base"}));
+
+    for (const mat of materiasOrden) {
+      const dQueTienen = docentes.filter(d => mapa.get(d).has(mat))
+        .sort((A,B)=>String(A).localeCompare(String(B),"es",{sensitivity:"base"}));
+      for (const d of dQueTienen) {
+        const a = mapa.get(d).get(mat) || [];
+        const uniq = Array.from(new Map(a.map(x => [(x.dni || x.alumno || Math.random()), x])).values());
+        uniq.sort((A,B)=>String(A.alumno).localeCompare(String(B.alumno), "es", { sensitivity: "base" }));
+        bloques.push({ docente: d, materia: mat, alumnos: uniq });
+      }
+    }
+    return { fecha: fechaStar, turno: turnoStar, materia: materiaStar, subNumeros, bloques };
+  };
+
+  const mesasLogicas = [];
+  for (const nums of agrupacionesEfectivas) {
+    const setNums = new Set(nums);
+    const arr = subMesas.filter(sm => setNums.has(sm.numero_mesa));
+    if (!arr.length) continue;
+    mesasLogicas.push(buildMesaLogicaFrom(arr));
+  }
+
+  // Orden por fecha, turno (Mañana/Tarde), primer número
+  const turnRank = (t) => (normalizar(t).includes("man") ? 0 : 1);
+  mesasLogicas.sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
+    const ta = turnRank(a.turno), tb = turnRank(b.turno);
+    if (ta !== tb) return ta - tb;
+    return (a.subNumeros[0] ?? 0) - (b.subNumeros[0] ?? 0);
+  });
+  return mesasLogicas;
+}
+
+/* ================================
    Componente Mesas de Examen
 ================================ */
 const MesasExamen = () => {
   const navigate = useNavigate();
 
-  // Pestañas
+  // Vistas superiores
   const [vista, setVista] = useState("grupos"); // "grupos" | "no-agrupadas"
+  const [vistaTabla, setVistaTabla] = useState("detalle"); // "detalle" (como PDF) | "resumen"
 
   // Datos
   const [grupos, setGrupos] = useState([]);
@@ -151,9 +281,7 @@ const MesasExamen = () => {
           turnos: json.listas?.turnos || [],
         });
       }
-    } catch {
-      /* noop */
-    }
+    } catch {/* noop */}
   }, []);
 
   // ======= Carga de grupos =======
@@ -309,21 +437,9 @@ const MesasExamen = () => {
     return res;
   }, [datasetBase, qDebounced, fechaSel, turnoSel]);
 
-  const triggerCascada = useCallback(() => {
-    setPreCascada(true);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setAnimacionActiva(true);
-        setPreCascada(false);
-        const ms = 400 + (MAX_CASCADE_ITEMS - 1) * 30 + 300;
-        const t = setTimeout(() => setAnimacionActiva(false), ms);
-        return () => clearTimeout(t);
-      });
-    });
-  }, []);
-
-  // Animación en cascada ante cambios de filtros
+  // Animación en cascada ante cambios de filtros (sólo para resumen)
   useEffect(() => {
+    if (vistaTabla !== "resumen") return;
     setPreCascada(true);
     const raf1 = requestAnimationFrame(() => {
       const raf2 = requestAnimationFrame(() => {
@@ -336,7 +452,7 @@ const MesasExamen = () => {
       return () => cancelAnimationFrame(raf2);
     });
     return () => cancelAnimationFrame(raf1);
-  }, [qDebounced, fechaSel, turnoSel, vista]);
+  }, [qDebounced, fechaSel, turnoSel, vista, vistaTabla]);
 
   // Click fuera para cerrar filtros
   useEffect(() => {
@@ -356,37 +472,20 @@ const MesasExamen = () => {
     try {
       if (!filasFiltradas.length) return;
 
-      // --- Fallbacks por N° de mesa usando lo visible en la grilla ---
-      const mapaNumero = new Map(); // n° mesa -> { id_grupo, fecha, turno }
+      // Fallback por N° mesa a partir de lo visible
+      const setNums = new Set();
       for (const g of filasFiltradas) {
-        const nums = [
-          g.numero_mesa_1,
-          g.numero_mesa_2,
-          g.numero_mesa_3,
-          g.numero_mesa_4,
-        ].filter((n) => n != null);
-
-        for (const n of nums) {
-          const nn = parseInt(n, 10);
-          if (!Number.isFinite(nn)) continue;
-          if (!mapaNumero.has(nn)) {
-            mapaNumero.set(nn, {
-              id_grupo: g.id_grupo ?? null,
-              fecha: g.fecha ?? "",
-              turno: g.turno ?? "",
-            });
-          }
-        }
+        [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
+          .filter((n) => n != null)
+          .map(Number)
+          .forEach((n) => setNums.add(n));
       }
-
-      // 1) Todos los números visibles
-      const numerosOrdenados = Array.from(mapaNumero.keys()).sort((a, b) => a - b);
+      const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
       if (!numerosOrdenados.length) {
         notify({ tipo: "warning", mensaje: "No hay números de mesa visibles para exportar." });
         return;
       }
 
-      // 2) MISMO endpoint que el PDF
       const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle_pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -408,41 +507,48 @@ const MesasExamen = () => {
         return;
       }
 
-      // Helpers
-      const limpiarCurso = (s) => String(s ?? "")
+      // Convertir a filas planas (Docente×Alumno) para Excel
+      const limpiarCursoX = (s) => String(s ?? "")
         .replace(/°\s*°/g, "°")
         .replace(/\s{2,}/g, " ")
         .trim();
 
       const turnoRank = (t) => {
         const x = (t || "").toLowerCase();
-        if (x.includes("mañ") || x.includes("man")) return 0; // mañana
-        if (x.includes("tar")) return 1;                      // tarde
+        if (x.includes("mañ") || x.includes("man")) return 0;
+        if (x.includes("tar")) return 1;
         return 2;
       };
 
-      const horaPorTurno = (t, fallback = "") => {
+      const horaX = (t, fallback = "") => {
         const x = (t || "").toLowerCase();
         if (x.includes("mañ") || x.includes("man")) return "07:30";
         if (x.includes("tar")) return "13:30";
-        return fallback; // si no reconoce el turno, usa lo que vino del backend
+        return fallback;
       };
 
-      // 3) Filas planas (Docente × Alumno)
-      const filas = [];
+      // Mapa de fallback fecha/turno por número desde la grilla
+      const mapaNumero = new Map();
+      for (const g of filasFiltradas) {
+        [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
+          .filter((n) => n != null)
+          .map(Number)
+          .forEach((n) => {
+            if (!mapaNumero.has(n)) {
+              mapaNumero.set(n, { id_grupo: g.id_grupo ?? null, fecha: g.fecha ?? "", turno: g.turno ?? "" });
+            }
+          });
+      }
 
+      const filas = [];
       for (const m of detalle) {
         const numeroMesa = m.numero_mesa ?? null;
-
-        // Fallbacks desde la grilla:
         const fb = mapaNumero.get(numeroMesa) || { id_grupo: "", fecha: "", turno: "" };
         const fechaISO = m.fecha || fb.fecha || "";
         const turno    = m.turno || fb.turno || "";
         const idGrupo  = fb.id_grupo ?? "";
-
-        const horaCalculada = horaPorTurno(turno, m.hora ?? "");
-        const materia = m.materia ?? "";
-
+        const horaCalc = horaX(turno, m.hora ?? "");
+        const materia  = m.materia ?? "";
         const docentes = Array.isArray(m.docentes) && m.docentes.length ? m.docentes : ["—"];
         const alumnos  = Array.isArray(m.alumnos) && m.alumnos.length
           ? m.alumnos
@@ -455,12 +561,12 @@ const MesasExamen = () => {
               "N° Mesa": numeroMesa ?? "",
               Fecha: fechaISO ? formatearFechaISO(fechaISO) : "",
               Turno: turno || "",
-              Hora: horaCalculada,
+              Hora: horaCalc,
               "Espacio Curricular": materia || "",
               Docente: d || "—",
               Estudiante: a?.alumno || "—",
               DNI: a?.dni || "—",
-              Curso: limpiarCurso(a?.curso || "—"),
+              Curso: limpiarCursoX(a?.curso || "—"),
               _sortFechaISO: fechaISO || "9999-12-31",
               _sortTurnoRank: turnoRank(turno),
             });
@@ -468,7 +574,6 @@ const MesasExamen = () => {
         }
       }
 
-      // 4) Orden amigable
       filas.sort((A, B) => {
         if (A._sortFechaISO !== B._sortFechaISO) return A._sortFechaISO < B._sortFechaISO ? -1 : 1;
         if (A._sortTurnoRank !== B._sortTurnoRank) return A._sortTurnoRank - B._sortTurnoRank;
@@ -481,20 +586,11 @@ const MesasExamen = () => {
       });
 
       const filasFinales = filas.map(({ _sortFechaISO, _sortTurnoRank, ...rest }) => rest);
-
-      // 5) XLSX
       const headers = [
-        "ID Grupo",
-        "N° Mesa",
-        "Fecha",
-        "Turno",
-        "Hora",
-        "Espacio Curricular",
-        "Docente",
-        "Estudiante",
-        "DNI",
-        "Curso",
+        "ID Grupo","N° Mesa","Fecha","Turno","Hora","Espacio Curricular",
+        "Docente","Estudiante","DNI","Curso"
       ];
+
       const ws = XLSX.utils.json_to_sheet(filasFinales, { header: headers });
       ws["!cols"] = [
         { wch: 10 }, { wch: 9 }, { wch: 12 }, { wch: 10 }, { wch: 9 },
@@ -521,16 +617,10 @@ const MesasExamen = () => {
           : `MesasNoAgrupadas_Detalle_${yyyy}-${mm}-${dd}(${filasFinales.length} filas).xlsx`;
       saveAs(blob, nombre);
 
-      notify({
-        tipo: "exito",
-        mensaje: `Exportadas ${filasFinales.length} filas detalladas.`,
-      });
+      notify({ tipo: "exito", mensaje: `Exportadas ${filasFinales.length} filas detalladas.` });
     } catch (e) {
       console.error("Excel detalle — error:", e);
-      notify({
-        tipo: "error",
-        mensaje: e?.message || "No se pudo exportar el Excel detallado.",
-      });
+      notify({ tipo: "error", mensaje: e?.message || "No se pudo exportar el Excel detallado." });
     }
   }, [filasFiltradas, notify, vista]);
 
@@ -572,7 +662,76 @@ const MesasExamen = () => {
     [vista, notify]
   );
 
-  // Fila virtualizada (SIN columna de ID)
+  /* =======================================================
+   *  DETALLE (como PDF): fetch + render de “mesas lógicas”
+   * ======================================================= */
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+  const [mesasDetalle, setMesasDetalle] = useState([]); // arreglo de mesas lógicas
+
+  const recargarDetalle = useCallback(async () => {
+    try {
+      setLoadingDetalle(true);
+      setMesasDetalle([]);
+
+      if (!filasFiltradas.length) return;
+
+      // Reunir todos los números visibles + armar agrupaciones por fila visible
+      const agrupaciones = filasFiltradas.map((g) =>
+        [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
+          .filter((n) => n != null)
+          .map(Number)
+      );
+
+      const setNums = new Set();
+      for (const arr of agrupaciones) for (const n of arr) setNums.add(n);
+      const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
+
+      const payload = vista === "grupos" && filasFiltradas.length === 1 && filasFiltradas[0].id_grupo != null
+        ? { id_grupo: filasFiltradas[0].id_grupo }
+        : { numeros_mesa: numerosOrdenados };
+
+      const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle_pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const raw = await resp.text();
+      let json;
+      try { json = JSON.parse(raw); } catch {
+        throw new Error(raw.slice(0, 400) || "Respuesta no JSON del servidor.");
+      }
+      if (!resp.ok || !json?.exito) {
+        throw new Error(json?.mensaje || "No se pudo obtener el detalle.");
+      }
+      const detalle = Array.isArray(json.data) ? json.data : [];
+      if (!detalle.length) {
+        notify({ tipo: "warning", mensaje: "No hay detalle para mostrar." });
+        return;
+      }
+
+      const mesasLogicas = buildMesasLogicas({
+        detalle,
+        agrupaciones,
+        id_grupo: payload.id_grupo ?? null,
+      });
+      setMesasDetalle(mesasLogicas);
+    } catch (e) {
+      console.error(e);
+      notify({ tipo: "error", mensaje: e?.message || "No se pudo cargar el detalle." });
+    } finally {
+      setLoadingDetalle(false);
+    }
+  }, [filasFiltradas, notify, vista]);
+
+  // Recalcular el detalle al cambiar filtros o vista
+  useEffect(() => {
+    if (vistaTabla !== "detalle") return;
+    recargarDetalle();
+  }, [recargarDetalle, vistaTabla]);
+
+  /* ======================
+   *  Fila (RESUMEN actual)
+   * ====================== */
   const Row = React.memo(({ index, style, data }) => {
     const {
       rows,
@@ -584,8 +743,8 @@ const MesasExamen = () => {
       navigate,
     } = data;
     const g = rows[index];
-       const willAnimate = animacionActiva && index < MAX_CASCADE_ITEMS;
-    const preMask = preCascada && index < MAX_CASCADE_ITEMS;
+    const willAnimate = vistaTabla === "resumen" && animacionActiva && index < MAX_CASCADE_ITEMS;
+    const preMask = vistaTabla === "resumen" && preCascada && index < MAX_CASCADE_ITEMS;
 
     const mesasStr =
       [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
@@ -663,6 +822,9 @@ const MesasExamen = () => {
 
   const hayResultados = filasFiltradas.length > 0;
 
+  /* ======================
+   *  Render
+   * ====================== */
   return (
     <div className="glob-profesor-container">
       {/* Loader global con el escudo */}
@@ -684,9 +846,7 @@ const MesasExamen = () => {
               }
               className="glob-search-input"
               value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-              }}
+              onChange={(e) => setQ(e.target.value)}
               disabled={cargandoVista}
             />
             {q ? (
@@ -695,11 +855,7 @@ const MesasExamen = () => {
                 onClick={() => setQ("")}
               />
             ) : null}
-            <button
-              className="glob-search-button"
-              type="button"
-              title="Buscar"
-            >
+            <button className="glob-search-button" type="button" title="Buscar">
               <FaSearch className="glob-search-icon" />
             </button>
           </div>
@@ -794,8 +950,6 @@ const MesasExamen = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* (Se quitó el botón "Mostrar todos") */}
               </div>
             )}
           </div>
@@ -818,7 +972,7 @@ const MesasExamen = () => {
                   <FaUsers className="glob-icono-profesor" />
                 </div>
 
-                {/* TABS */}
+                {/* TABS vista datasets */}
                 <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Cambiar vista">
                   <button
                     className={`glob-tab ${vista === "grupos" ? "glob-tab--active" : ""}`}
@@ -841,9 +995,32 @@ const MesasExamen = () => {
                     No agrupadas
                   </button>
                 </div>
+
+                {/* TABS vista tabla */}
+                <div className="glob-tabs glob-tabs--inline" role="tablist" aria-label="Cambiar visualización">
+                  <button
+                    className={`glob-tab ${vistaTabla === "detalle" ? "glob-tab--active" : ""}`}
+                    onClick={() => setVistaTabla("detalle")}
+                    title="Ver Detalle (como PDF)"
+                    aria-pressed={vistaTabla === "detalle"}
+                    role="tab"
+                  >
+                    <FaTable style={{ marginRight: 6 }} />
+                    Detalle (como PDF)
+                  </button>
+                  <button
+                    className={`glob-tab ${vistaTabla === "resumen" ? "glob-tab--active" : ""}`}
+                    onClick={() => setVistaTabla("resumen")}
+                    title="Ver Resumen"
+                    aria-pressed={vistaTabla === "resumen"}
+                    role="tab"
+                  >
+                    Resumen
+                  </button>
+                </div>
               </div>
 
-              {/* CHIPS (si hay filtros activos) */}
+              {/* CHIPS filtros */}
               {(q || fechaSel || turnoSel) && (
                 <div className="glob-chips-container">
                   {q && (
@@ -908,20 +1085,11 @@ const MesasExamen = () => {
             </div>
           </div>
 
-          {/* TABLA */}
-          <div className="glob-box-table">
-            <div className="glob-header glob-header-mesas">
-              <div className="glob-column-header">Materia</div>
-              <div className="glob-column-header">Mesas</div>
-              <div className="glob-column-header">Fecha</div>
-              <div className="glob-column-header">Turno</div>
-              <div className="glob-column-header">Tribunal </div>
-              <div className="glob-column-header">Acciones</div>
-            </div>
-
-            <div className="glob-body">
-              {cargandoVista ? (
-                <div className="glob-loading-spinner-container">
+          {/* ----- VISTA DETALLE (como PDF) ----- */}
+          {vistaTabla === "detalle" && (
+            <div className="glob-box-table" style={{ padding: 0 }}>
+              {cargandoVista || loadingDetalle ? (
+                <div className="glob-loading-spinner-container" style={{ height: "50vh" }}>
                   <div className="glob-loading-spinner" />
                 </div>
               ) : datasetBaseDB.length === 0 ? (
@@ -940,195 +1108,259 @@ const MesasExamen = () => {
                     <p>No hay resultados con los filtros actuales</p>
                   </div>
                 </div>
+              ) : !mesasDetalle.length ? (
+                <div className="glob-no-data-message">
+                  <div className="glob-message-content">
+                    <p>No hay detalle para mostrar.</p>
+                  </div>
+                </div>
               ) : (
-                <div style={{ height: "55vh", width: "100%" }}>
-                  <AutoSizer>
-                    {({ height, width }) => (
-                      <List
-                        height={height}
-                        width={width}
-                        itemCount={filasFiltradas.length}
-                        itemSize={48}
-                        itemData={{
-                          rows: filasFiltradas,
-                          animacionActiva,
-                          preCascada,
-                          onInfo: (g) => {
-                            setGrupoSel(g);
-                            setAbrirInfo(true);
-                          },
-                          onDeleteMesa: (m) => {
-                            setMesaAEliminar({ numero_mesa: m.numero_mesa, grupo: m.grupo });
-                            setAbrirEliminarUno(true);
-                          },
-                          vista,
-                          navigate,
-                        }}
-                        overscanCount={10}
-                        itemKey={(index, data) => {
-                          const r = data.rows[index];
-                          return `${vista}-${r.id ?? r.id_grupo}-${r.fecha || "sinf"}-${
-                            r.id_turno || 0
-                          }`;
-                        }}
-                      >
-                        {Row}
-                      </List>
-                    )}
-                  </AutoSizer>
+                <div className="glob-detalle-wrapper" style={{ padding: "8px 10px" }}>
+                  {mesasDetalle.map((mesa, idxMesa) => {
+                    const { dia, mesTxt, anio } = nombreMes(mesa.fecha);
+                    const headerTitulo = `MESAS DE EXAMEN ${mesTxt ? mesTxt + " " : ""}${anio || ""}`.trim();
+                    const sub =
+                      `${diaSemana(mesa.fecha)} ${String(dia).padStart(2,"0")} - ` +
+                      `${String(mesa.turno || "").toUpperCase()} - ${horaPorTurno(mesa.turno)}`;
+
+                    // preparar “segmentos contiguos” para fusionar celdas Materia y Docente
+                    const nRowsPorBloque = mesa.bloques.map(b => Math.max(1, b.alumnos.length));
+                    const totalRows = nRowsPorBloque.reduce((a,b)=>a+b,0);
+
+                    const segMateria = [];
+                    let curMat = null, accMat = 0, startMat = 0, rowCursor = 0;
+                    for (let i = 0; i < mesa.bloques.length; i++) {
+                      const mat = mesa.bloques[i].materia || "";
+                      const n = nRowsPorBloque[i];
+                      if (curMat === null) { curMat = mat; startMat = rowCursor; accMat = 0; }
+                      if (mat !== curMat) {
+                        segMateria.push({ materia: curMat, startRow: startMat, rowSpan: accMat });
+                        curMat = mat; startMat = rowCursor; accMat = 0;
+                      }
+                      accMat += n; rowCursor += n;
+                    }
+                    if (curMat !== null) segMateria.push({ materia: curMat, startRow: startMat, rowSpan: accMat });
+
+                    const segDocente = [];
+                    let curDoc = null, accDoc = 0, startDoc = 0, rowCursor2 = 0;
+                    for (let i = 0; i < mesa.bloques.length; i++) {
+                      const doc = mesa.bloques[i].docente || "—";
+                      const n = nRowsPorBloque[i];
+                      if (curDoc === null) { curDoc = doc; startDoc = rowCursor2; accDoc = 0; }
+                      if (doc !== curDoc) {
+                        segDocente.push({ docente: curDoc, startRow: startDoc, rowSpan: accDoc });
+                        curDoc = doc; startDoc = rowCursor2; accDoc = 0;
+                      }
+                      accDoc += n; rowCursor2 += n;
+                    }
+                    if (curDoc !== null) segDocente.push({ docente: curDoc, startRow: startDoc, rowSpan: accDoc });
+
+                    // mapa rápido para saber dónde dibujar celdas fusionadas
+                    const materiaStart = new Map(segMateria.map(s => [s.startRow, s]));
+                    const docenteStart = new Map(segDocente.map(s => [s.startRow, s]));
+
+                    // construir filas HTML
+                    const rowsHTML = [];
+                    let filaGlobal = 0;
+                    for (let bi = 0; bi < mesa.bloques.length; bi++) {
+                      const bloque = mesa.bloques[bi];
+                      const n = nRowsPorBloque[bi];
+
+                      for (let i = 0; i < n; i++) {
+                        const a = bloque.alumnos[i] || { alumno: "—", dni: "—", curso: "—" };
+                        const celdas = [];
+
+                        if (filaGlobal === 0) {
+                          // Hora comprimida (se apila texto en líneas) – ocupa todas las filas
+                          const horaCell = (
+                            <td key="hora" rowSpan={Math.max(totalRows,1)} style={{ whiteSpace: "pre-line", textAlign: "center", fontWeight: 700 }}>
+                              {`${diaSemana(mesa.fecha)}\n${String(dia).padStart(2,"0")}\n${mesTxt}\n${String(mesa.turno || "").toUpperCase()}\n${horaPorTurno(mesa.turno)}`}
+                            </td>
+                          );
+                          celdas.push(horaCell);
+                        }
+
+                        const mStart = materiaStart.get(filaGlobal);
+                        if (mStart) {
+                          celdas.push(
+                            <td key={`mat-${filaGlobal}`} rowSpan={mStart.rowSpan || 1} style={{ fontWeight: 700 }}>
+                              {String(mStart.materia || "")}
+                            </td>
+                          );
+                        }
+
+                        celdas.push(<td key={`al-${filaGlobal}`}>{String(a.alumno || "")}</td>);
+                        celdas.push(<td key={`dni-${filaGlobal}`} style={{ textAlign: "center" }}>{String(a.dni || "")}</td>);
+                        celdas.push(<td key={`cur-${filaGlobal}`} style={{ textAlign: "center" }}>{limpiarCurso(a.curso)}</td>);
+
+                        const dStart = docenteStart.get(filaGlobal);
+                        if (dStart) {
+                          celdas.push(
+                            <td key={`doc-${filaGlobal}`} rowSpan={dStart.rowSpan || 1} style={{ fontWeight: 700 }}>
+                              {String(dStart.docente || "—")}
+                            </td>
+                          );
+                        }
+
+                        rowsHTML.push(<tr key={`r-${idxMesa}-${filaGlobal}`}>{celdas}</tr>);
+                        filaGlobal++;
+                      }
+                    }
+
+                    if (totalRows === 0) {
+                      rowsHTML.push(
+                        <tr key={`r-empty-${idxMesa}`}>
+                          <td style={{ whiteSpace: "pre-line", textAlign: "center", fontWeight: 700 }}>
+                            {`${diaSemana(mesa.fecha)}\n${String(dia).padStart(2,"0")}\n${mesTxt}\n${String(mesa.turno || "").toUpperCase()}\n${horaPorTurno(mesa.turno)}`}
+                          </td>
+                          <td style={{ fontWeight: 700 }}>{mesa.materia || "—"}</td>
+                          <td>—</td>
+                          <td style={{ textAlign: "center" }}>—</td>
+                          <td style={{ textAlign: "center" }}>—</td>
+                          <td>—</td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <div key={`mesa-${idxMesa}`} className="mesa-detalle-box" style={{ background: "#fff", borderRadius: 10, boxShadow: "0 2px 10px rgba(0,0,0,.06)", marginBottom: 16, padding: 12 }}>
+                        {/* Header “idéntico” al PDF */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <img src={`${window.location.origin}/img/Escudo.png`} alt="Logo" style={{ width: 40, height: 40 }} />
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: 18, lineHeight: 1 }}>{headerTitulo}</div>
+                              <div style={{ fontSize: 12, opacity: .85 }}>IPET N° 50 "Ing. Emilio F. Olmos"</div>
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontWeight: 700, fontSize: 12 }}>{sub}</div>
+                            <div style={{ fontSize: 12, marginTop: 4 }}>
+                              <strong>N° de mesa:</strong> {mesa.subNumeros.join(" • ") || "—"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Tabla como el PDF */}
+                        <div style={{ overflowX: "auto", marginTop: 10 }}>
+                          <table className="tabla-detalle-mesa" style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ background: "#f0f0f0" }}>
+                                <th style={{ padding: 6, border: "1px solid #ddd", textAlign: "center" }}>Hora</th>
+                                <th style={{ padding: 6, border: "1px solid #ddd", textAlign: "left" }}>Espacio Curricular</th>
+                                <th style={{ padding: 6, border: "1px solid #ddd", textAlign: "left" }}>Estudiante</th>
+                                <th style={{ padding: 6, border: "1px solid #ddd", textAlign: "center" }}>DNI</th>
+                                <th style={{ padding: 6, border: "1px solid #ddd", textAlign: "center" }}>Curso</th>
+                                <th style={{ padding: 6, border: "1px solid #ddd", textAlign: "left" }}>Docentes</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rowsHTML}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Acciones rápidas por mesa/agrupación */}
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+                          <button
+                            className="glob-iconchip"
+                            title="Exportar esta mesa a PDF"
+                            onClick={() => {
+                              const agrupacion = [mesa.subNumeros];
+                              generarPDFMesas({
+                                mesasFiltradas: mesa.subNumeros.map(n => ({ numero_mesa: n })),
+                                agrupaciones: agrupacion,
+                                baseUrl: BASE_URL,
+                                notify,
+                                logoPath: `${window.location.origin}/img/Escudo.png`,
+                              });
+                            }}
+                            aria-label="Exportar PDF de esta mesa"
+                          >
+                            <FaFilePdf />&nbsp; PDF (esta mesa)
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
-          </div>
+          )}
 
-          {/* CARDS (mobile) */}
-          <div
-            className={`glob-cards-wrapper ${
-              animacionActiva && filasFiltradas.length <= MAX_CASCADE_ITEMS
-                ? "glob-cascade-animation"
-                : ""
-            }`}
-          >
-            {cargandoVista ? (
-              <div className="glob-no-data-message glob-no-data-mobile">
-                <div className="glob-message-content">
-                  <p>Cargando {vista === "grupos" ? "grupos" : "no agrupadas"}…</p>
-                </div>
+          {/* ----- VISTA RESUMEN (tu grilla original) ----- */}
+          {vistaTabla === "resumen" && (
+            <div className="glob-box-table">
+              <div className="glob-header glob-header-mesas">
+                <div className="glob-column-header">Materia</div>
+                <div className="glob-column-header">Mesas</div>
+                <div className="glob-column-header">Fecha</div>
+                <div className="glob-column-header">Turno</div>
+                <div className="glob-column-header">Tribunal </div>
+                <div className="glob-column-header">Acciones</div>
               </div>
-            ) : datasetBaseDB.length === 0 ? (
-              <div className="glob-no-data-message glob-no-data-mobile">
-                <div className="glob-message-content">
-                  <p>
-                    {vista === "grupos"
-                      ? "No hay grupos registrados"
-                      : "No hay mesas no agrupadas registradas"}
-                  </p>
-                </div>
-              </div>
-            ) : !filasFiltradas.length ? (
-              <div className="glob-no-data-message glob-no-data-mobile">
-                <div className="glob-message-content">
-                  <p>No hay resultados con los filtros actuales</p>
-                </div>
-              </div>
-            ) : (
-              filasFiltradas.map((g, i) => {
-                const willAnimate = animacionActiva && i < MAX_CASCADE_ITEMS;
-                const preMask = preCascada && i < MAX_CASCADE_ITEMS;
-                const key = `card-${vista}-${g.id ?? g.id_grupo}-${g.fecha || "sinf"}-${
-                  g.id_turno || 0
-                }`;
 
-                const mesasStr =
-                  [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
-                    .filter(Boolean)
-                    .join(" • ");
-
-                return (
-                  <div
-                    key={key}
-                    className={`glob-card ${willAnimate ? "glob-cascade" : ""}`}
-                    style={{
-                      animationDelay: willAnimate ? `${i * 0.03}s` : "0s",
-                      opacity: preMask ? 0 : undefined,
-                      transform: preMask ? "translateY(8px)" : undefined,
-                    }}
-                  >
-                    <div className="glob-card-header">
-                      <h3 className="glob-card-title">{g.materia || "—"}</h3>
-                    </div>
-                    <div className="glob-card-body">
-                      <div className="glob-card-row">
-                        <span className="glob-card-label">Mesas</span>
-                        <span className="glob-card-value">{mesasStr}</span>
-                      </div>
-                      <div className="glob-card-row">
-                        <span className="glob-card-label">
-                          <FaCalendarAlt style={{ marginRight: 6 }} />
-                          Fecha
-                        </span>
-                        <span className="glob-card-value">
-                          {formatearFechaISO(g.fecha)}
-                        </span>
-                      </div>
-                      <div className="glob-card-row">
-                        <span className="glob-card-label">
-                          <FaClock style={{ marginRight: 6 }} />
-                          Turno
-                        </span>
-                        <span className="glob-card-value">{g.turno}</span>
-                      </div>
-                      <div className="glob-card-row">
-                        <span className="glob-card-label">Tribunal</span>
-                        <span className="glob-card-value">{g.profesor}</span>
-                      </div>
-                    </div>
-
-                    <div className="glob-card-actions">
-                      <button
-                        className="glob-action-btn glob-iconchip is-info"
-                        title="Información"
-                        onClick={() => {
-                          setGrupoSel(g);
-                          setAbrirInfo(true);
-                        }}
-                        aria-label="Información"
-                      >
-                        <FaInfoCircle />
-                      </button>
-
-                      <button
-                        className="glob-action-btn glob-iconchip"
-                        title="Exportar este registro a PDF"
-                        onClick={() => exportarPDFDeRegistro(g)}
-                        aria-label="Exportar PDF (solo este)"
-                      >
-                        <FaFilePdf />
-                      </button>
-
-                      {vista === "grupos" && (
-                        <>
-                          <button
-                            className="glob-action-btn glob-iconchip is-edit"
-                            title="Editar (primera mesa del grupo)"
-                            onClick={() => {
-                              const nm =
-                                g.numero_mesa_1 ??
-                                g.numero_mesa_2 ??
-                                g.numero_mesa_3 ??
-                                g.numero_mesa_4;
-                              if (nm) navigate(`/mesas/editar/${nm}`);
-                            }}
-                            aria-label="Editar"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            className="glob-action-btn glob-iconchip is-delete"
-                            title="Eliminar una mesa (elegida)"
-                            onClick={() => {
-                              const nm =
-                                g.numero_mesa_1 ??
-                                g.numero_mesa_2 ??
-                                g.numero_mesa_3 ??
-                                g.numero_mesa_4;
-                              if (nm) {
-                                setMesaAEliminar({ numero_mesa: nm, grupo: g });
-                                setAbrirEliminarUno(true);
-                              }
-                            }}
-                            aria-label="Eliminar"
-                          >
-                            <FaTrash />
-                          </button>
-                        </>
-                      )}
+              <div className="glob-body">
+                {cargandoVista ? (
+                  <div className="glob-loading-spinner-container">
+                    <div className="glob-loading-spinner" />
+                  </div>
+                ) : datasetBaseDB.length === 0 ? (
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
+                      <p>
+                        {vista === "grupos"
+                          ? "No hay grupos registrados"
+                          : "No hay mesas no agrupadas registradas"}
+                      </p>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
+                ) : !hayResultados ? (
+                  <div className="glob-no-data-message">
+                    <div className="glob-message-content">
+                      <p>No hay resultados con los filtros actuales</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ height: "55vh", width: "100%" }}>
+                    <AutoSizer>
+                      {({ height, width }) => (
+                        <List
+                          height={height}
+                          width={width}
+                          itemCount={filasFiltradas.length}
+                          itemSize={48}
+                          itemData={{
+                            rows: filasFiltradas,
+                            animacionActiva,
+                            preCascada,
+                            onInfo: (g) => {
+                              setGrupoSel(g);
+                              setAbrirInfo(true);
+                            },
+                            onDeleteMesa: (m) => {
+                              setMesaAEliminar({ numero_mesa: m.numero_mesa, grupo: m.grupo });
+                              setAbrirEliminarUno(true);
+                            },
+                            vista,
+                            navigate,
+                          }}
+                          overscanCount={10}
+                          itemKey={(index, data) => {
+                            const r = data.rows[index];
+                            return `${vista}-${r.id ?? r.id_grupo}-${r.fecha || "sinf"}-${r.id_turno || 0}`;
+                          }}
+                        >
+                          {Row}
+                        </List>
+                      )}
+                    </AutoSizer>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* BOTONERA INFERIOR */}
@@ -1171,7 +1403,7 @@ const MesasExamen = () => {
               <p>Exportar Excel</p>
             </button>
 
-            {/* PDF general (TODAS las visibles): una hoja por fila */}
+            {/* PDF general (TODAS las visibles): una hoja por mesa */}
             <button
               className="glob-profesor-button glob-hover-effect"
               onClick={() => {
@@ -1197,7 +1429,7 @@ const MesasExamen = () => {
               }}
               disabled={!filasFiltradas.length}
               aria-label="Exportar PDF"
-              title="Exportar PDF (una hoja por mesa/fila)"
+              title="Exportar PDF (una hoja por mesa)"
               style={{ background: "var(--glob-primary, #2d3436)" }}
             >
               <FaFilePdf className="glob-profesor-icon-button" />
@@ -1229,6 +1461,7 @@ const MesasExamen = () => {
             setAbrirCrear(false);
             await fetchGrupos();
             await fetchNoAgrupadas();
+            if (vistaTabla === "detalle") await recargarDetalle();
             notify({ tipo: "exito", mensaje: "Mesas creadas y grupos actualizados." });
           }}
           onError={(mensaje) => {
@@ -1242,20 +1475,15 @@ const MesasExamen = () => {
         <ModalEliminarMesas
           open={abrirEliminar}
           onClose={() => setAbrirEliminar(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setAbrirEliminar(false);
-            fetchGrupos();
-            fetchNoAgrupadas();
-            notify({
-              tipo: "exito",
-              mensaje: "Mesas eliminadas correctamente",
-            });
+            await fetchGrupos();
+            await fetchNoAgrupadas();
+            if (vistaTabla === "detalle") await recargarDetalle();
+            notify({ tipo: "exito", mensaje: "Mesas eliminadas correctamente" });
           }}
           onError={(mensaje) =>
-            notify({
-              tipo: "error",
-              mensaje: mensaje || "No se pudieron eliminar las mesas.",
-            })
+            notify({ tipo: "error", mensaje: mensaje || "No se pudieron eliminar las mesas." })
           }
           listas={listas}
         />
@@ -1267,17 +1495,15 @@ const MesasExamen = () => {
           open={abrirEliminarUno}
           mesa={{ numero_mesa: mesaAEliminar.numero_mesa }}
           onClose={() => setAbrirEliminarUno(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setAbrirEliminarUno(false);
-            fetchGrupos();
-            fetchNoAgrupadas();
+            await fetchGrupos();
+            await fetchNoAgrupadas();
+            if (vistaTabla === "detalle") await recargarDetalle();
             notify({ tipo: "exito", mensaje: "Mesa eliminada." });
           }}
           onError={(mensaje) =>
-            notify({
-              tipo: "error",
-              mensaje: mensaje || "No se pudo eliminar la mesa.",
-            })}
+            notify({ tipo: "error", mensaje: mensaje || "No se pudo eliminar la mesa." })}
         />
       )}
 
