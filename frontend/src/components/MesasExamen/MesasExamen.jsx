@@ -164,6 +164,87 @@ const limpiarCurso = (s) =>
     .replace(/\s{2,}/g, " ")
     .trim();
 
+/* ================================
+   ✅ ORDEN: Curso → División → Apellido
+================================ */
+
+/**
+ * Convierte "3° E" / "3 E" / "3°E" / "5° 2" / "5 10" / "1° A" a clave ordenable
+ * ✅ MÁS ROBUSTO: división puede ser letra(s) o número(s)
+ */
+const cursoKey = (cursoRaw = "") => {
+  const c = limpiarCurso(cursoRaw);
+  const s = c.replace(/\s+/g, " ").trim().toUpperCase();
+
+  // primer número = curso/año
+  const mYear = s.match(/(\d{1,2})/);
+  const year = mYear ? parseInt(mYear[1], 10) : 999;
+
+  // intentar tomar "división" como el primer token alfanumérico DESPUÉS del año
+  // ejemplos: "3° E", "3 E", "3° 2", "3 10", "3° B"
+  let divToken = "";
+  const afterYear = s.slice(mYear ? mYear.index + mYear[1].length : 0);
+  const mDiv = afterYear.match(/^\s*°?\s*([A-ZÑ0-9]{1,3})/i);
+  if (mDiv && mDiv[1]) divToken = String(mDiv[1]).toUpperCase();
+
+  const divIsNum = /^\d+$/.test(divToken);
+  const divNum = divIsNum ? parseInt(divToken, 10) : null;
+
+  return {
+    year: Number.isFinite(year) ? year : 999,
+    divToken: divToken || "Z",
+    divIsNum,
+    divNum,
+  };
+};
+
+const compararDivision = (a, b) => {
+  // num vs num => numérico
+  if (a.divIsNum && b.divIsNum) return (a.divNum ?? 999) - (b.divNum ?? 999);
+  // num primero, letras después (si querés al revés, invertí el return)
+  if (a.divIsNum && !b.divIsNum) return -1;
+  if (!a.divIsNum && b.divIsNum) return 1;
+  // letras vs letras => alfabético
+  return String(a.divToken || "").localeCompare(String(b.divToken || ""), "es", {
+    sensitivity: "base",
+    numeric: true,
+  });
+};
+
+// Extrae apellido de "APELLIDO, NOMBRE" (fallback: primera palabra)
+const apellidoKey = (nombreRaw = "") => {
+  const s = String(nombreRaw ?? "").trim();
+  if (!s) return "";
+  const idx = s.indexOf(",");
+  if (idx >= 0) return s.slice(0, idx).trim().toUpperCase();
+  return s.split(/\s+/)[0].trim().toUpperCase();
+};
+
+// ✅ Comparador: curso/año → división → apellido → nombre completo → DNI
+const compararAlumnoCursoDivisionApellido = (A, B) => {
+  const cA = cursoKey(A?.curso);
+  const cB = cursoKey(B?.curso);
+
+  if (cA.year !== cB.year) return cA.year - cB.year;
+
+  const divCmp = compararDivision(cA, cB);
+  if (divCmp !== 0) return divCmp;
+
+  const apA = apellidoKey(A?.alumno);
+  const apB = apellidoKey(B?.alumno);
+  const apCmp = apA.localeCompare(apB, "es", { sensitivity: "base" });
+  if (apCmp !== 0) return apCmp;
+
+  const nA = String(A?.alumno ?? "");
+  const nB = String(B?.alumno ?? "");
+  const nCmp = nA.localeCompare(nB, "es", { sensitivity: "base" });
+  if (nCmp !== 0) return nCmp;
+
+  const dA = String(A?.dni ?? "");
+  const dB = String(B?.dni ?? "");
+  return dA.localeCompare(dB, "es", { sensitivity: "base" });
+};
+
 /**
  * Construye "mesas lógicas" (igual que el PDF) a partir del detalle del backend.
  * ✅ MOD: ahora preserva nota/fecha_nota por alumno + id_previa
@@ -302,19 +383,14 @@ function buildMesasLogicas({
         const uniq = Array.from(
           new Map(
             a.map((x, idx) => [
-              (x.dni || "").trim() ||
-                (x.alumno || "").trim() ||
-                `idx-${idx}`,
+              (x.dni || "").trim() || (x.alumno || "").trim() || `idx-${idx}`,
               x,
             ])
           ).values()
         );
 
-        uniq.sort((A, B) =>
-          String(A.alumno).localeCompare(String(B.alumno), "es", {
-            sensitivity: "base",
-          })
-        );
+        // ✅ ORDEN: Curso → División → Apellido (y luego desempates)
+        uniq.sort(compararAlumnoCursoDivisionApellido);
 
         bloques.push({ docente: d, materia: mat, alumnos: uniq });
       }
@@ -908,6 +984,50 @@ const MesasExamen = () => {
         return "";
       };
 
+      // ✅ MISMO CRITERIO en Excel: Curso → División → Apellido
+      const cursoKeyExcel = (cursoRaw = "") => {
+        const c = limpiarCursoX(cursoRaw);
+        const s = c.replace(/\s+/g, " ").trim().toUpperCase();
+
+        const mYear = s.match(/(\d{1,2})/);
+        const year = mYear ? parseInt(mYear[1], 10) : 999;
+
+        let divToken = "";
+        const afterYear = s.slice(mYear ? mYear.index + mYear[1].length : 0);
+        const mDiv = afterYear.match(/^\s*°?\s*([A-ZÑ0-9]{1,3})/i);
+        if (mDiv && mDiv[1]) divToken = String(mDiv[1]).toUpperCase();
+
+        const divIsNum = /^\d+$/.test(divToken);
+        const divNum = divIsNum ? parseInt(divToken, 10) : null;
+
+        return {
+          year: Number.isFinite(year) ? year : 999,
+          divToken: divToken || "Z",
+          divIsNum,
+          divNum,
+        };
+      };
+
+      const compararDivisionExcel = (a, b) => {
+        if (a.divIsNum && b.divIsNum)
+          return (a.divNum ?? 999) - (b.divNum ?? 999);
+        if (a.divIsNum && !b.divIsNum) return -1;
+        if (!a.divIsNum && b.divIsNum) return 1;
+        return String(a.divToken || "").localeCompare(
+          String(b.divToken || ""),
+          "es",
+          { sensitivity: "base", numeric: true }
+        );
+      };
+
+      const apellidoKeyExcel = (nombreRaw = "") => {
+        const s = String(nombreRaw ?? "").trim();
+        if (!s) return "";
+        const idx = s.indexOf(",");
+        if (idx >= 0) return s.slice(0, idx).trim().toUpperCase();
+        return s.split(/\s+/)[0].trim().toUpperCase();
+      };
+
       const mapaNumero = new Map();
       for (const g of filasFiltradas) {
         [
@@ -974,15 +1094,31 @@ const MesasExamen = () => {
           return A._sortFechaISO < B._sortFechaISO ? -1 : 1;
         if (A._sortTurnoRank !== B._sortTurnoRank)
           return A._sortTurnoRank - B._sortTurnoRank;
+
         const nA = parseInt(A["N° Mesa"] || 0, 10);
         const nB = parseInt(B["N° Mesa"] || 0, 10);
         if (nA !== nB) return nA - nB;
+
         const d = String(A.Docente || "").localeCompare(
           String(B.Docente || ""),
           "es",
           { sensitivity: "base" }
         );
         if (d !== 0) return d;
+
+        // ✅ Curso → División → Apellido → Estudiante
+        const cA = cursoKeyExcel(A.Curso || "");
+        const cB = cursoKeyExcel(B.Curso || "");
+        if (cA.year !== cB.year) return cA.year - cB.year;
+
+        const divCmp = compararDivisionExcel(cA, cB);
+        if (divCmp !== 0) return divCmp;
+
+        const apA = apellidoKeyExcel(A.Estudiante || "");
+        const apB = apellidoKeyExcel(B.Estudiante || "");
+        const apCmp = apA.localeCompare(apB, "es", { sensitivity: "base" });
+        if (apCmp !== 0) return apCmp;
+
         return String(A.Estudiante || "").localeCompare(
           String(B.Estudiante || ""),
           "es",
@@ -1170,7 +1306,10 @@ const MesasExamen = () => {
       if (!limpiar) {
         const parsed = parseInt(raw, 10);
         if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
-          notify({ tipo: "warning", mensaje: "La nota debe estar entre 1 y 10." });
+          notify({
+            tipo: "warning",
+            mensaje: "La nota debe estar entre 1 y 10.",
+          });
           return;
         }
         n = parsed;
@@ -1208,8 +1347,6 @@ const MesasExamen = () => {
       }
 
       try {
-        // ✅ SIEMPRE mandamos numero_mesa (y fecha_mesa) para que PHP resuelva id_previa desde mesas
-        // Si además hay id_previa, lo mandamos igual (por si existe), pero el PHP ya resuelve si no existe.
         const body = {
           id_previa: Number.isFinite(id_previa) && id_previa > 0 ? id_previa : 0,
           numero_mesa,
