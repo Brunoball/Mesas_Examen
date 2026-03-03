@@ -40,7 +40,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
-require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../../config/db.php';
 
 // ---------------- Utils ----------------
 function respondJSON(bool $ok, $payload = null, int $status = 200): void {
@@ -65,6 +65,54 @@ function validarFecha(?string $s): bool {
 }
 
 /**
+ * ✅ FIX CLAVE:
+ * Garantiza que un numero_mesa NO quede en más de un grupo.
+ * Elimina $nm de cualquier columna numero_mesa_1..4 en TODOS los grupos,
+ * excepto opcionalmente un id_mesa_grupos (para no borrarlo del grupo destino/origen).
+ */
+function removerMesaDeTodosLosGrupos(PDO $pdo, int $nm, ?int $exceptId = null): void {
+    $sql = "
+        UPDATE mesas_grupos
+        SET
+          numero_mesa_1 = IF(numero_mesa_1 = :nm, 0, numero_mesa_1),
+          numero_mesa_2 = IF(numero_mesa_2 = :nm, 0, numero_mesa_2),
+          numero_mesa_3 = IF(numero_mesa_3 = :nm, 0, numero_mesa_3),
+          numero_mesa_4 = IF(numero_mesa_4 = :nm, 0, numero_mesa_4)
+        WHERE :nm IN (numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4)
+          AND (:exceptId IS NULL OR id_mesa_grupos <> :exceptId)
+    ";
+    $st = $pdo->prepare($sql);
+    $st->execute([':nm' => $nm, ':exceptId' => $exceptId]);
+}
+
+/**
+ * ✅ “Guardrail” de seguridad: si quedan duplicados en mesas_grupos, abortamos.
+ * Devuelve array de duplicados: [ ['nm'=>123,'cant'=>2], ... ]
+ */
+function detectarDuplicadosEnGrupos(PDO $pdo): array {
+    $sql = "
+        SELECT nm, COUNT(*) cant FROM (
+            SELECT numero_mesa_1 nm FROM mesas_grupos WHERE numero_mesa_1 > 0
+            UNION ALL
+            SELECT numero_mesa_2 nm FROM mesas_grupos WHERE numero_mesa_2 > 0
+            UNION ALL
+            SELECT numero_mesa_3 nm FROM mesas_grupos WHERE numero_mesa_3 > 0
+            UNION ALL
+            SELECT numero_mesa_4 nm FROM mesas_grupos WHERE numero_mesa_4 > 0
+        ) x
+        GROUP BY nm
+        HAVING COUNT(*) > 1
+        ORDER BY cant DESC, nm
+    ";
+    $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    $out = [];
+    foreach ($rows as $r) {
+        $out[] = ['nm' => (int)$r['nm'], 'cant' => (int)$r['cant']];
+    }
+    return $out;
+}
+
+/**
  * Carga docentes_bloques_no:
  *   - docNoTurn[id_docente][id_turno] = true
  *   - docNoDay[id_docente][fecha][id_turno] = true  (si turno NULL => bloquea ambos turnos ese día)
@@ -81,20 +129,17 @@ function cargarBloquesDocentes(PDO $pdo): array {
             $f   = $r['fecha'] ?? null;
 
             if ($t !== null && ($f === null || $f === '')) {
-                // Bloqueo por turno (todos los días)
                 $docNoTurn[$idd][$t] = true;
                 continue;
             }
 
             if ($t === null && $f !== null && $f !== '') {
-                // Bloqueo por día completo (ambos turnos)
                 $docNoDay[$idd][$f][1] = true;
                 $docNoDay[$idd][$f][2] = true;
                 continue;
             }
 
             if ($t !== null && $f !== null && $f !== '') {
-                // Bloqueo por día + turno
                 $docNoDay[$idd][$f][$t] = true;
             }
         }
@@ -283,7 +328,6 @@ function unionDNIsMesas(array $dnisPorMesa, array $mesas): array {
  *  - horarioAlumno[dni]["YYYY-MM-DD|turno"] = true
  */
 function buildSlotsYHorario(PDO $pdo): array {
-    // slots ordenados
     $rowsSlots = $pdo->query("
         SELECT DISTINCT fecha_mesa, id_turno
         FROM mesas
@@ -300,7 +344,6 @@ function buildSlotsYHorario(PDO $pdo): array {
         }
     }
 
-    // horario por alumno
     $horarioAlumno = [];
     $rowsHA = $pdo->query("
         SELECT p.dni, m.fecha_mesa, m.id_turno
@@ -320,15 +363,6 @@ function buildSlotsYHorario(PDO $pdo): array {
 
 /**
  * Construye restricciones de correlatividad por numero_mesa.
- *
- * Devuelve:
- *   restricciones[numero_mesa][] = [
- *       'tipo'    => 'base' | 'adv',
- *       'idx_otro'=> idx slot de la otra mesa
- *   ]
- *
- * 'base'  => esta mesa debe ir ANTES que idx_otro
- * 'adv'   => esta mesa debe ir DESPUÉS de idx_otro
  */
 function buildCorrelRestricciones(PDO $pdo, array $slotIndex): array {
     $sql = "
@@ -350,7 +384,7 @@ function buildCorrelRestricciones(PDO $pdo, array $slotIndex): array {
     ";
     $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-    $porClave = []; // clave = "dni|correlativa"
+    $porClave = [];
     foreach ($rows as $r) {
         $keySlot = $r['fecha_mesa'] . '|' . (int)$r['id_turno'];
         $idxSlot = $slotIndex[$keySlot] ?? -1;
@@ -365,10 +399,9 @@ function buildCorrelRestricciones(PDO $pdo, array $slotIndex): array {
 
     $restricciones = [];
 
-    foreach ($porClave as $clave => $lst) {
+    foreach ($porClave as $lst) {
         if (count($lst) < 2) continue;
 
-        // Ordenamos por curso (materia_id_curso)
         usort($lst, fn($a,$b) => $a['curso'] <=> $b['curso']);
 
         $minCurso = $lst[0]['curso'];
@@ -385,12 +418,10 @@ function buildCorrelRestricciones(PDO $pdo, array $slotIndex): array {
                 $nmBase = $b['numero_mesa'];
                 $nmAdv  = $a['numero_mesa'];
 
-                // base -> debe ir antes de la avanzada
                 $restricciones[$nmBase][] = [
                     'tipo'     => 'base',
                     'idx_otro' => $a['idx_slot'],
                 ];
-                // avanzada -> debe ir después de la base
                 $restricciones[$nmAdv][] = [
                     'tipo'     => 'adv',
                     'idx_otro' => $b['idx_slot'],
@@ -402,10 +433,6 @@ function buildCorrelRestricciones(PDO $pdo, array $slotIndex): array {
     return $restricciones;
 }
 
-/**
- * Verifica si mover la mesa $nm al slot (fecha, turno) respeta correlatividad
- * según las restricciones precalculadas.
- */
 function respetaCorrelMovimiento(
     int $nm,
     string $fecha,
@@ -417,7 +444,6 @@ function respetaCorrelMovimiento(
 
     $key = $fecha . '|' . $turno;
     if (!isset($slotIndex[$key])) {
-        // slot no conocido, no lo usamos (en la práctica no debería pasar)
         return true;
     }
     $idxNuevo = $slotIndex[$key];
@@ -427,10 +453,8 @@ function respetaCorrelMovimiento(
         if ($idxOtro < 0) continue;
 
         if ($r['tipo'] === 'base') {
-            // base debe ir antes que la avanzada
             if ($idxNuevo >= $idxOtro) return false;
-        } else { // 'adv'
-            // avanzada debe ir después de la base
+        } else {
             if ($idxNuevo <= $idxOtro) return false;
         }
     }
@@ -462,26 +486,19 @@ try {
         bad_request("Parámetro 'id_turno' inválido (1|2). Debe ser 1 (mañana) o 2 (tarde).");
     }
 
-    // Bloqueos docentes
     [$docNoTurn, $docNoDay] = cargarBloquesDocentes($pdo);
     $slotProhibido = buildSlotProhibido($docNoTurn, $docNoDay);
 
-    // Info de mesas
     [$dnisPorMesa, $areaPorMesa, $docsPorMesa] = cargarInfoMesas($pdo);
 
-    // Slots y horario alumno
     [$slotIndex, $horarioAlumno] = buildSlotsYHorario($pdo);
 
-    // Restricciones de correlatividad
     $correlRestricciones = buildCorrelRestricciones($pdo, $slotIndex);
 
-    // Grupos actuales
     $grupos = cargarGrupos($pdo);
 
-    // Singles actuales
     $singles = cargarSingles($pdo);
 
-    // Filtrar por fecha/turno si hace falta (para esta ejecución)
     if ($filtroFecha !== null || $filtroTurno !== null) {
         $gruposFil = [];
         foreach ($grupos as $g) {
@@ -500,7 +517,6 @@ try {
         $singles = $singlesFil;
     }
 
-    // Indexar grupos por (fecha|turno|area) y por área
     $gruposPorSlot = [];
     $gruposPorArea = [];
 
@@ -513,7 +529,6 @@ try {
         $gruposPorArea[$g['area']][] = $idx;
     }
 
-    // Singles por slot (para la pasada 1: mismo día/turno)
     $singlesPorSlot = [];
     foreach ($singles as $i => $s) {
         $key = $s['fecha'] . '|' . $s['turno'] . '|' . $s['area'];
@@ -521,7 +536,6 @@ try {
         $singlesPorSlot[$key][] = $i;
     }
 
-    // Preparar SQL para actualizar mesas_grupos, borrar de mesas_no_agrupadas y mover fecha/turno en mesas
     $stGetGrupo = $pdo->prepare("
         SELECT numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4
         FROM mesas_grupos
@@ -549,7 +563,6 @@ try {
         WHERE numero_mesa = :n
     ");
 
-    // NUEVO: insertar un grupo 2+ (single + donante)
     $stInsGrupo = $pdo->prepare("
         INSERT INTO mesas_grupos
             (numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4, fecha_mesa, id_turno)
@@ -561,15 +574,14 @@ try {
         $pdo->beginTransaction();
     }
 
-    $movimientos = [];  // logs de movimientos
-    $pendientes  = [];  // singles que no se pudieron agrupar en la pasada 1
+    $movimientos = [];
+    $pendientes  = [];
 
     // -----------------------------------------------------------------
-    // PASADA 1: solo dentro del MISMO slot (fecha + turno + área)
+    // PASADA 1: mismo slot
     // -----------------------------------------------------------------
     foreach ($singlesPorSlot as $slotKey => $idxSingles) {
         if (empty($gruposPorSlot[$slotKey])) {
-            // No hay grupos en este slot: se van a intentar en pasada 2
             [$fecha, $turno, $area] = explode('|', $slotKey);
             $turno = (int)$turno;
             $area  = (int)$area;
@@ -594,7 +606,6 @@ try {
 
         $idxGruposSlot = $gruposPorSlot[$slotKey];
 
-        // Para evitar agregar 2 veces el mismo single si se mapea raro
         $procesadosSingles = [];
 
         foreach ($idxSingles as $iSingle) {
@@ -604,7 +615,6 @@ try {
             $s = $singles[$iSingle];
             $nmSingle = $s['numero_mesa'];
 
-            // Confirmar área por las dudas
             $areaMesa = $areaPorMesa[$nmSingle] ?? null;
             if ($areaMesa === null || $areaMesa !== $area) {
                 $pendientes[$nmSingle] = [
@@ -620,26 +630,20 @@ try {
             $dnisSingle = $dnisPorMesa[$nmSingle] ?? [];
             $docsSingle = $docsPorMesa[$nmSingle] ?? [];
 
-            // Buscamos un grupo compatible EN ESTE slot
             $grupoElegidoIdx = null;
 
             foreach ($idxGruposSlot as $idxG) {
                 $g = $grupos[$idxG];
 
-                // Grupo debe tener 1, 2 o 3 mesas (nunca 4)
                 $mesasG = $g['mesas'];
                 $sizeG  = count($mesasG);
                 if ($sizeG >= 4) continue;
 
-                // Mismo área garantizado por index, pero validamos igual
                 if ((int)$g['area'] !== $area) continue;
 
-                // DNI: no puede haber repetición dentro del grupo
                 $dnisGrupo = unionDNIsMesas($dnisPorMesa, $mesasG);
                 if (!empty(array_intersect($dnisGrupo, $dnisSingle))) continue;
 
-                // Docentes: ninguno de los docentes de la mesa single
-                // puede estar bloqueado en este slot
                 $bloqueado = false;
                 foreach ($docsSingle as $idDoc) {
                     if ($slotProhibido((int)$idDoc, $fecha, $turno)) {
@@ -649,16 +653,11 @@ try {
                 }
                 if ($bloqueado) continue;
 
-                // Este slot es el mismo en el que ya está la mesa, por lo que
-                // correlatividad no se ve afectada (no cambiamos de día/turno).
-
-                // Grupo compatible encontrado
                 $grupoElegidoIdx = $idxG;
                 break;
             }
 
             if ($grupoElegidoIdx === null) {
-                // Se probará reubicar en otro día/turno (pasada 2)
                 $pendientes[$nmSingle] = [
                     'numero_mesa' => $nmSingle,
                     'fecha'       => $fecha,
@@ -669,10 +668,8 @@ try {
                 continue;
             }
 
-            // Tenemos un grupo elegido EN EL MISMO SLOT
             $g = $grupos[$grupoElegidoIdx];
 
-            // Leemos la fila real de mesas_grupos para evitar pisar algo raro
             $stGetGrupo->execute([':id' => $g['id']]);
             $actual = $stGetGrupo->fetch(PDO::FETCH_ASSOC);
             if (!$actual) {
@@ -691,7 +688,6 @@ try {
             $n3 = (int)$actual['numero_mesa_3'];
             $n4 = (int)$actual['numero_mesa_4'];
 
-            // Si ya está dentro
             if (in_array($nmSingle, [$n1,$n2,$n3,$n4], true)) {
                 if (!$dryRun) {
                     $stDelNoAgr->execute([
@@ -712,7 +708,6 @@ try {
                 continue;
             }
 
-            // Buscamos la primera posición libre
             $nNuevo1 = $n1;
             $nNuevo2 = $n2;
             $nNuevo3 = $n3;
@@ -723,7 +718,6 @@ try {
             elseif ($nNuevo3 === 0) $nNuevo3 = $nmSingle;
             elseif ($nNuevo4 === 0) $nNuevo4 = $nmSingle;
             else {
-                // No hay lugar, lo dejamos pendiente para la pasada 2
                 $pendientes[$nmSingle] = [
                     'numero_mesa' => $nmSingle,
                     'fecha'       => $fecha,
@@ -746,7 +740,10 @@ try {
                     'accion'      => 'simular_agregar_a_grupo_mismo_slot',
                 ];
             } else {
-                // Actualizamos la fila de mesas_grupos
+                // ✅ FIX: garantizar que la mesa no esté en ningún otro grupo
+                // (por datos basura previos). No tocamos el grupo destino.
+                removerMesaDeTodosLosGrupos($pdo, $nmSingle, (int)$g['id']);
+
                 $stUpdGrupo->execute([
                     ':n1' => $nNuevo1,
                     ':n2' => $nNuevo2,
@@ -755,7 +752,6 @@ try {
                     ':id' => $g['id'],
                 ]);
 
-                // Borramos la entrada de mesas_no_agrupadas en este slot
                 $stDelNoAgr->execute([
                     ':n' => $nmSingle,
                     ':f' => $fecha,
@@ -773,16 +769,13 @@ try {
                     'accion'      => 'agregado_a_grupo_mismo_slot',
                 ];
 
-                // Actualizamos en memoria el grupo ($grupos) para futuros singles en este slot
                 $grupos[$grupoElegidoIdx]['mesas'][] = $nmSingle;
             }
         }
     }
 
     // -----------------------------------------------------------------
-    // PASADA 2: reubicar singles pendientes a OTROS slots (fecha/turno)
-    //           respetando DNIs, bloques de docentes, horario y
-    //           CORRELATIVIDAD.
+    // PASADA 2: reubicar a otros slots
     // -----------------------------------------------------------------
     if (!empty($pendientes)) {
         foreach ($pendientes as $nmSingle => $info) {
@@ -791,18 +784,14 @@ try {
             $areaMesa      = $areaPorMesa[$nmSingle] ?? null;
 
             if ($areaMesa === null || $areaMesa <= 0) {
-                // no sabemos área, lo dejamos sin lugar
                 continue;
             }
 
-            // DNIs y docentes de la mesa
             $dnisSingle = $dnisPorMesa[$nmSingle] ?? [];
             $docsSingle = $docsPorMesa[$nmSingle] ?? [];
 
-            // Todos los grupos de esta área (en cualquier slot)
             $idxGruposArea = $gruposPorArea[$areaMesa] ?? [];
             if (!$idxGruposArea) {
-                // no hay grupos de esa área en todo el calendario
                 continue;
             }
 
@@ -812,10 +801,6 @@ try {
             $antes = null;
             $despues = null;
 
-            // Elegimos grupo con heurística:
-            //  - que tenga lugares (<4 mesas)
-            //  - que cumpla DNIs, bloqueos, horario y correlatividad
-            //  - preferimos grupos con menos mesas, y luego slots más tempranos
             $mejorScore = null;
 
             foreach ($idxGruposArea as $idxG) {
@@ -828,11 +813,9 @@ try {
                 $f = $g['fecha'];
                 $t = (int)$g['turno'];
 
-                // DNI: no puede haber repetición dentro del grupo
                 $dnisGrupo = unionDNIsMesas($dnisPorMesa, $mesasG);
                 if (!empty(array_intersect($dnisGrupo, $dnisSingle))) continue;
 
-                // Bloqueo de docentes en el slot destino
                 $bloqueado = false;
                 foreach ($docsSingle as $idDoc) {
                     if ($slotProhibido((int)$idDoc, $f, $t)) {
@@ -842,8 +825,6 @@ try {
                 }
                 if ($bloqueado) continue;
 
-                // Horario alumno: ningún alumno puede rendir otra cosa
-                // en ese mismo slot (fecha+turno)
                 $keySlot = $f . '|' . $t;
                 $choqueHorario = false;
                 foreach ($dnisSingle as $dni) {
@@ -854,13 +835,10 @@ try {
                 }
                 if ($choqueHorario) continue;
 
-                // Correlatividad: checamos que mover nmSingle a (f,t)
-                // no rompa el orden base/avanzada
                 if (!respetaCorrelMovimiento($nmSingle, $f, $t, $slotIndex, $correlRestricciones)) {
                     continue;
                 }
 
-                // Calculamos posición libre simulada
                 $stGetGrupo->execute([':id' => $g['id']]);
                 $actual = $stGetGrupo->fetch(PDO::FETCH_ASSOC);
                 if (!$actual) continue;
@@ -871,19 +849,17 @@ try {
                 $n4 = (int)$actual['numero_mesa_4'];
 
                 if (in_array($nmSingle, [$n1,$n2,$n3,$n4], true)) {
-                    // ya está dentro en ese grupo (raro, pero podría haber basura)
-                    // en este caso solo haríamos el movimiento de slot si cambia de día.
+                    // ya está dentro (basura previa). Lo permitimos como candidato,
+                    // pero el FIX va a limpiar duplicados igual.
                 } else {
                     if ($n1 !== 0 && $n2 !== 0 && $n3 !== 0 && $n4 !== 0) {
-                        // lleno
                         continue;
                     }
                 }
 
-                // Score: preferimos grupos con menos mesas y slots más tempranos
                 $slotKey   = $f . '|' . $t;
                 $idxSlot   = $slotIndex[$slotKey] ?? 9999;
-                $score     = $sizeG * 100 + $idxSlot; // primero tamaño, luego cronología
+                $score     = $sizeG * 100 + $idxSlot;
 
                 if ($mejorScore === null || $score < $mejorScore) {
                     $mejorScore   = $score;
@@ -892,7 +868,6 @@ try {
                     $turnoDestino = $t;
                     $antes = [$n1,$n2,$n3,$n4];
 
-                    // simulamos cómo quedaría
                     $nNuevo1 = $n1;
                     $nNuevo2 = $n2;
                     $nNuevo3 = $n3;
@@ -908,11 +883,9 @@ try {
             }
 
             if ($grupoElegidoIdx === null || $fechaDestino === null) {
-                // no encontró lugar compatible en ningún grupo
                 continue;
             }
 
-            // Aplicamos el movimiento
             $g = $grupos[$grupoElegidoIdx];
 
             if ($dryRun) {
@@ -929,14 +902,16 @@ try {
                     'accion'         => 'simular_reubicar_y_agregar_a_grupo_otro_slot',
                 ];
             } else {
-                // Actualizamos slot de la mesa
+                // ✅ FIX: antes de meterla al grupo destino, sacar nmSingle de cualquier otro grupo
+                // (si ya estaba en alguno, esto elimina duplicados).
+                removerMesaDeTodosLosGrupos($pdo, $nmSingle, (int)$g['id']);
+
                 $stUpdMesaSlot->execute([
                     ':f' => $fechaDestino,
                     ':t' => $turnoDestino,
                     ':n' => $nmSingle,
                 ]);
 
-                // Actualizamos mesas_grupos
                 $stUpdGrupo->execute([
                     ':n1' => $despues[0],
                     ':n2' => $despues[1],
@@ -945,7 +920,6 @@ try {
                     ':id' => $g['id'],
                 ]);
 
-                // Borramos la entrada de mesas_no_agrupadas en el slot original
                 $stDelNoAgr->execute([
                     ':n' => $nmSingle,
                     ':f' => $fechaOriginal,
@@ -965,10 +939,8 @@ try {
                     'accion'         => 'reubicado_y_agregado_a_grupo_otro_slot',
                 ];
 
-                // Actualizamos estructuras en memoria:
                 $grupos[$grupoElegidoIdx]['mesas'][] = $nmSingle;
 
-                // Actualizamos horarioAlumno
                 $keyOrig  = $fechaOriginal . '|' . $turnoOriginal;
                 $keyDest  = $fechaDestino  . '|' . $turnoDestino;
                 foreach ($dnisSingle as $dni) {
@@ -977,17 +949,12 @@ try {
                 }
             }
 
-            // Ya no es pendiente
             unset($pendientes[$nmSingle]);
         }
     }
 
     // -----------------------------------------------------------------
-    // PASADA 3 (NUEVA):
-    // Usar grupos de 4 como "donantes" para rescatar singles que
-    // siguen sin lugar. Tomamos 1 mesa del grupo de 4 y la combinamos
-    // con la mesa single en el slot de la single, formando un grupo
-    // nuevo de 2 mesas y dejando el original con 3.
+    // PASADA 3: donantes
     // -----------------------------------------------------------------
     if (!empty($pendientes)) {
         foreach ($pendientes as $nmSingle => $info) {
@@ -1002,7 +969,6 @@ try {
             $dnisSingle = $dnisPorMesa[$nmSingle] ?? [];
             $slotKeySingle = $fechaSingle . '|' . $turnoSingle;
 
-            // Buscamos grupos de ESTA área con 4 mesas (donantes)
             $idxGruposArea = $gruposPorArea[$areaMesa] ?? [];
             if (!$idxGruposArea) {
                 continue;
@@ -1019,20 +985,17 @@ try {
                 $mesasG = $g['mesas'];
                 $sizeG  = count($mesasG);
 
-                // Solo usamos grupos con 4 mesas como donantes
                 if ($sizeG !== 4) continue;
 
                 foreach ($mesasG as $candMesa) {
                     $dnisDonor = $dnisPorMesa[$candMesa] ?? [];
 
-                    // No pueden compartir alumnos single ↔ donante
                     if (!empty(array_intersect($dnisDonor, $dnisSingle))) {
                         continue;
                     }
 
                     $docsDonor = $docsPorMesa[$candMesa] ?? [];
 
-                    // Docentes del donante disponibles en el slot de la single
                     $bloqueado = false;
                     foreach ($docsDonor as $idDoc) {
                         if ($slotProhibido((int)$idDoc, $fechaSingle, $turnoSingle)) {
@@ -1042,8 +1005,6 @@ try {
                     }
                     if ($bloqueado) continue;
 
-                    // Horario alumno: los alumnos del donante no pueden
-                    // tener otra mesa en ese mismo slot
                     $choque = false;
                     foreach ($dnisDonor as $dni) {
                         if (isset($horarioAlumno[$dni][$slotKeySingle])) {
@@ -1053,25 +1014,21 @@ try {
                     }
                     if ($choque) continue;
 
-                    // Correlatividad al mover el DONANTE al slot de la single
                     if (!respetaCorrelMovimiento($candMesa, $fechaSingle, $turnoSingle, $slotIndex, $correlRestricciones)) {
                         continue;
                     }
 
-                    // Encontramos candidato
                     $grupoDonIdx  = $idxG;
                     $nmDonor      = $candMesa;
                     $dnisDonorSel = $dnisDonor;
-                    break 2; // salimos de ambos foreach
+                    break 2;
                 }
             }
 
             if ($grupoDonIdx === null || $nmDonor === null) {
-                // no hubo grupo donante que cumpla
                 continue;
             }
 
-            // Leemos la fila real del grupo donante
             $g = $grupos[$grupoDonIdx];
 
             $stGetGrupo->execute([':id' => $g['id']]);
@@ -1087,17 +1044,11 @@ try {
 
             $antesGrupo = [$n1,$n2,$n3,$n4];
 
-            // Sacamos la mesa donante del grupo original (queda en 3)
-            if ($n1 === $nmDonor) {
-                $n1 = 0;
-            } elseif ($n2 === $nmDonor) {
-                $n2 = 0;
-            } elseif ($n3 === $nmDonor) {
-                $n3 = 0;
-            } elseif ($n4 === $nmDonor) {
-                $n4 = 0;
-            } else {
-                // Por alguna razón no está en la fila (datos inconsistentes)
+            if ($n1 === $nmDonor)      { $n1 = 0; }
+            elseif ($n2 === $nmDonor)  { $n2 = 0; }
+            elseif ($n3 === $nmDonor)  { $n3 = 0; }
+            elseif ($n4 === $nmDonor)  { $n4 = 0; }
+            else {
                 continue;
             }
 
@@ -1115,7 +1066,12 @@ try {
                     'accion'              => 'simular_rearmar_grupo_lleno_con_single',
                 ];
             } else {
-                // 1) Actualizar grupo original (quitar donante -> 3 mesas)
+                // ✅ FIX: garantizar unicidad global antes de tocar grupos
+                // - single: no puede estar en ningún otro grupo
+                removerMesaDeTodosLosGrupos($pdo, $nmSingle, null);
+                // - donor: puede estar en este grupo origen, pero no en otros
+                removerMesaDeTodosLosGrupos($pdo, $nmDonor, (int)$g['id']);
+
                 $stUpdGrupo->execute([
                     ':n1' => $n1,
                     ':n2' => $n2,
@@ -1124,14 +1080,12 @@ try {
                     ':id' => $g['id'],
                 ]);
 
-                // 2) Mover la mesa donante al slot de la single
                 $stUpdMesaSlot->execute([
                     ':f' => $fechaSingle,
                     ':t' => $turnoSingle,
                     ':n' => $nmDonor,
                 ]);
 
-                // 3) Crear el nuevo grupo con [single, donante]
                 $stInsGrupo->execute([
                     ':n1' => $nmSingle,
                     ':n2' => $nmDonor,
@@ -1142,21 +1096,16 @@ try {
                 ]);
                 $nuevoGrupoId = (int)$pdo->lastInsertId();
 
-                // 4) Borrar la single de mesas_no_agrupadas en su slot
                 $stDelNoAgr->execute([
                     ':n' => $nmSingle,
                     ':f' => $fechaSingle,
                     ':t' => $turnoSingle,
                 ]);
 
-                // 5) Actualizar estructuras en memoria
-                //    Grupo original: quitar donante de array 'mesas'
                 $grupos[$grupoDonIdx]['mesas'] = array_values(
                     array_filter($grupos[$grupoDonIdx]['mesas'], fn($x) => $x !== $nmDonor)
                 );
 
-                //    Horario de alumnos de la mesa donante:
-                //    dejan el slot viejo (del grupo original) y pasan al slot de la single
                 $keyOld = $g['fecha'] . '|' . (int)$g['turno'];
                 foreach ($dnisDonorSel as $dni) {
                     unset($horarioAlumno[$dni][$keyOld]);
@@ -1176,16 +1125,24 @@ try {
                 ];
             }
 
-            // Esta mesa ya no es pendiente
             unset($pendientes[$nmSingle]);
         }
     }
 
-    // Lo que quedó en $pendientes son singles que ya sea:
-    //  - no tenían grupos de su área
-    //  - o ningún slot disponible respetando DNIs/bloqueos/horario/correlatividad
-    //  - o ningún grupo de 4 pudo ceder una mesa compatible
     $sinLugar = array_values($pendientes);
+
+    // ✅ Guardrail final: si quedaron duplicados en mesas_grupos, abortamos (rollback).
+    $dups = detectarDuplicadosEnGrupos($pdo);
+    if (!empty($dups)) {
+        if ($dryRun) {
+            $movimientos[] = [
+                'accion' => 'WARNING_DUPLICADOS_DETECTADOS_DRYRUN',
+                'duplicados' => $dups,
+            ];
+        } else {
+            throw new RuntimeException("Se detectaron numero_mesa duplicados en mesas_grupos. Abortando para no guardar corrupción. Ej: nm={$dups[0]['nm']} cant={$dups[0]['cant']}");
+        }
+    }
 
     if (!$dryRun && $pdo->inTransaction()) {
         $pdo->commit();

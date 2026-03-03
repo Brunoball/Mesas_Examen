@@ -6,7 +6,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 try {
-    require_once __DIR__ . '/../../config/db.php'; // $pdo
+    require_once __DIR__ . '/../../../../config/db.php';
 
     if (!($pdo instanceof PDO)) {
         throw new RuntimeException('Conexión PDO no disponible.');

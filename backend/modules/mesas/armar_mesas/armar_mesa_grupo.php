@@ -61,7 +61,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
-require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../../config/db.php';
 
 // ---------------- Config ----------------
 const UMBRAL_SPLIT_MUCHOS_ALUMNOS = 3; // si el numero_mesa tiene ≥3 DNIs, se habilita split selectivo

@@ -40,7 +40,7 @@ error_reporting(E_ALL);
 header('Content-Type: application/json; charset=utf-8');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
-require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../../../config/db.php';
 
 function respond_json(bool $ok, $payload = null, int $status = 200): void {
     http_response_code($status);

@@ -1,3 +1,4 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/MesasExamen/MesasExamen.jsx
 import React, {
   useEffect,
@@ -24,6 +25,7 @@ import {
   FaFilePdf,
   FaLayerGroup,
   FaUnlink,
+  FaCheck,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -37,7 +39,7 @@ import FullScreenLoader from "../Global/FullScreenLoader";
 import ModalCrearMesas from "./modales/ModalCrearMesas";
 import ModalEliminarMesas from "./modales/ModalEliminarMesas";
 import ModalEliminarMesa from "./modales/ModalEliminarMesa";
-import ModalTituloPDF from "./modales/ModalTituloPDF"; // ✅ NUEVO IMPORT
+import ModalTituloPDF from "./modales/ModalTituloPDF";
 
 import { generarPDFMesas } from "./modales/GenerarPDF";
 import escudo from "../../imagenes/Escudo.png";
@@ -58,6 +60,13 @@ const formatearFechaISO = (v) => {
   const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return v;
   return `${m[3]}/${m[2]}/${m[1]}`;
+};
+
+/** ✅ Helper para extraer solo YYYY-MM-DD de cualquier formato de fecha */
+const fechaKey = (v) => {
+  const s = String(v ?? "").trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
 };
 
 /** Debounce hook */
@@ -157,12 +166,16 @@ const limpiarCurso = (s) =>
 
 /**
  * Construye "mesas lógicas" (igual que el PDF) a partir del detalle del backend.
- *
- * AHORA con fallbackPorNumero:
- *  - Si en el detalle viene alguna mesa sin fecha/turno/hora,
- *    se completan desde los grupos/no-agrupadas (dataset base).
+ * ✅ MOD: ahora preserva nota/fecha_nota por alumno + id_previa
+ * ✅ MOD: preserva id_materia por submesa
+ * Con fallbackPorNumero para completar fecha/turno/hora si faltan en el detalle.
  */
-function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero }) {
+function buildMesasLogicas({
+  detalle,
+  agrupaciones,
+  id_grupo,
+  fallbackPorNumero,
+}) {
   const subMesas = (Array.isArray(detalle) ? detalle : []).map((m) => {
     const numero = m.numero_mesa ?? null;
 
@@ -170,8 +183,6 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
     let turno = m.turno ?? "";
     let hora = m.hora ?? "";
 
-    // ✅ Fallback: si falta fecha/turno/hora en el detalle,
-    // usamos la info proveniente de los grupos/no-agrupadas.
     if (fallbackPorNumero && Number.isFinite(Number(numero))) {
       const fb = fallbackPorNumero.get(Number(numero));
       if (fb) {
@@ -185,7 +196,11 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
       numero_mesa: numero,
       fecha,
       turno,
-      hora, // viene de la DB o fallback
+      hora,
+
+      // ✅ NUEVO: si el backend lo devuelve, lo preservamos
+      id_materia: m.id_materia ?? null,
+
       materia: m.materia ?? "",
       docentes: Array.isArray(m.docentes) ? m.docentes.filter(Boolean) : [],
       alumnos: Array.isArray(m.alumnos)
@@ -193,12 +208,18 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
             alumno: a.alumno ?? "",
             dni: a.dni ?? "",
             curso: a.curso ?? "",
+            nota: a.nota ?? null,
+            fecha_nota: a.fecha_nota ?? null,
+            id_previa: a.id_previa ?? null,
+
+            // ✅ CLAVE: id_materia real de ESA submesa
+            id_materia: m.id_materia ?? a.id_materia ?? null,
+            numero_mesa: m.numero_mesa ?? null,
           }))
         : [],
     };
   });
 
-  // Si viene id_grupo, la agrupación es la unión de todos los sub números.
   let agrupacionesEfectivas = [];
   if (Array.isArray(agrupaciones) && agrupaciones.length) {
     agrupacionesEfectivas = agrupaciones
@@ -232,11 +253,17 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
       mode(arr.map((x) => x.hora)) || arr.find((x) => x.hora)?.hora || "";
     const materiaStar =
       mode(arr.map((x) => x.materia)) || arr[0]?.materia || "";
-    const subNumeros = [...new Set(arr.map((x) => x.numero_mesa).filter((v) => v != null))].sort(
-      (a, b) => a - b
-    );
 
-    // Mapa Docente -> Materia -> alumnos[]
+    // ✅ Elegimos un id_materia representativo (si existe)
+    const idMateriaStar =
+      parseInt(mode(arr.map((x) => x.id_materia)), 10) ||
+      arr.find((x) => Number.isFinite(Number(x.id_materia)))?.id_materia ||
+      null;
+
+    const subNumeros = [
+      ...new Set(arr.map((x) => x.numero_mesa).filter((v) => v != null)),
+    ].sort((a, b) => a - b);
+
     const DOC_FALLBACK = "-";
     const mapa = new Map();
     const add = (doc, mat, al) => {
@@ -245,16 +272,18 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
       if (!m2.has(mat)) m2.set(mat, []);
       m2.get(mat).push(...al);
     };
+
     for (const sm of arr) {
       const docentesSM = sm.docentes?.length ? sm.docentes : [DOC_FALLBACK];
       for (const d of docentesSM) add(d, sm.materia || "", sm.alumnos || []);
     }
 
-    // Bloques (Materia -> Docente) con alumnos dedupe
     const bloques = [];
     const docentes = [...mapa.keys()];
     const materiasSet = new Set();
-    for (const d of docentes) for (const mat of mapa.get(d).keys()) materiasSet.add(mat);
+    for (const d of docentes)
+      for (const mat of mapa.get(d).keys()) materiasSet.add(mat);
+
     const materiasOrden = [...materiasSet].sort((A, B) =>
       String(A).localeCompare(String(B), "es", { sensitivity: "base" })
     );
@@ -265,26 +294,38 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
         .sort((A, B) =>
           String(A).localeCompare(String(B), "es", { sensitivity: "base" })
         );
+
       for (const d of dQueTienen) {
         const a = mapa.get(d).get(mat) || [];
+
+        // ✅ Mantener nota/fecha_nota/id_previa por alumno al “unique”
         const uniq = Array.from(
           new Map(
-            a.map((x) => [x.dni || x.alumno || Math.random(), x])
+            a.map((x, idx) => [
+              (x.dni || "").trim() ||
+                (x.alumno || "").trim() ||
+                `idx-${idx}`,
+              x,
+            ])
           ).values()
         );
+
         uniq.sort((A, B) =>
           String(A.alumno).localeCompare(String(B.alumno), "es", {
             sensitivity: "base",
           })
         );
+
         bloques.push({ docente: d, materia: mat, alumnos: uniq });
       }
     }
+
     return {
       fecha: fechaStar,
       turno: turnoStar,
-      hora: horaStar, // << hora principal del grupo (ya con fallback)
+      hora: horaStar,
       materia: materiaStar,
+      id_materia: idMateriaStar, // ✅ NUEVO
       subNumeros,
       bloques,
     };
@@ -298,7 +339,6 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
     mesasLogicas.push(buildMesaLogicaFrom(arr));
   }
 
-  // Orden por fecha, turno (Mañana/Tarde), primer número
   const turnRank = (t) => (normalizar(t).includes("man") ? 0 : 1);
   mesasLogicas.sort((a, b) => {
     if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
@@ -307,6 +347,7 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
     if (ta !== tb) return ta - tb;
     return (a.subNumeros[0] ?? 0) - (b.subNumeros[0] ?? 0);
   });
+
   return mesasLogicas;
 }
 
@@ -316,8 +357,10 @@ function buildMesasLogicas({ detalle, agrupaciones, id_grupo, fallbackPorNumero 
 
 // CLAVE PARA GUARDAR ESTADO ENTRE PANTALLAS
 const STORAGE_KEY = "mesasExamenUI_v1";
-// Flag en sessionStorage para saber si volvemos de Editar
 const STORAGE_FLAG_FROM_EDIT = "mesasExamen_from_edit";
+
+// ✅ (Antes usabas STORAGE_NOTAS_KEY) — ahora NO persistimos notas en localStorage
+// const STORAGE_NOTAS_KEY = "mesasExamenNotas_v1";
 
 const MesasExamen = () => {
   const navigate = useNavigate();
@@ -367,9 +410,8 @@ const MesasExamen = () => {
   const [abrirEliminarUno, setAbrirEliminarUno] = useState(false);
   const [mesaAEliminar, setMesaAEliminar] = useState(null);
 
-  // ✅ Modal título PDF (antes de exportar)
+  // ✅ Modal título PDF
   const [abrirTituloPDF, setAbrirTituloPDF] = useState(false);
-  // guardamos la acción a ejecutar cuando confirmen
   const exportActionRef = useRef(null);
 
   // Toast
@@ -384,8 +426,10 @@ const MesasExamen = () => {
   const pdfScrollRef = useRef(null);
   const scrollPosRef = useRef(0);
   const initialStateLoadedRef = useRef(false);
-  const dataLoadedRef = useRef(false);
   const scrollRestoredRef = useRef(false);
+
+  // ✅ Notas: solo pendientes (NO guardamos confirmadas en localStorage)
+  const [notasPendientes, setNotasPendientes] = useState({});
 
   // Restaurar estado (vista, filtros, scroll) SOLO si volvemos de Editar
   useEffect(() => {
@@ -400,24 +444,17 @@ const MesasExamen = () => {
       const flag = window.sessionStorage.getItem(STORAGE_FLAG_FROM_EDIT);
       if (flag === "1") {
         shouldRestore = true;
-        // Consumimos el flag para que no se reaplique en el futuro
         window.sessionStorage.removeItem(STORAGE_FLAG_FROM_EDIT);
       }
-    } catch (e) {
-      console.warn("No se pudo leer flag de from_edit:", e);
-    }
+    } catch (e) {}
 
-    // Si NO venimos de editar => limpiar cualquier estado viejo y salir
     if (!shouldRestore) {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
-      } catch (e) {
-        console.warn("No se pudo limpiar estado antiguo MesasExamen:", e);
-      }
+      } catch (e) {}
       return;
     }
 
-    // Si SÍ venimos de editar => restaurar estado guardado
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
@@ -432,9 +469,7 @@ const MesasExamen = () => {
       if (typeof st.scrollTop === "number") {
         scrollPosRef.current = st.scrollTop;
       }
-    } catch (e) {
-      console.warn("No se pudo restaurar estado MesasExamen:", e);
-    }
+    } catch (e) {}
   }, []);
 
   const persistState = useCallback(() => {
@@ -452,17 +487,13 @@ const MesasExamen = () => {
         scrollTop,
       };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    } catch (e) {
-      console.warn("No se pudo guardar estado MesasExamen:", e);
-    }
+    } catch {}
   }, [vista, q, fechaSel, turnoSel]);
 
-  // Guardar cada vez que cambian vista / filtros / búsqueda
   useEffect(() => {
     persistState();
   }, [vista, q, fechaSel, turnoSel, persistState]);
 
-  // Guardar también al desmontar
   useEffect(() => {
     return () => {
       persistState();
@@ -483,15 +514,12 @@ const MesasExamen = () => {
           turnos: json.listas?.turnos || [],
         });
       }
-    } catch {
-      /* noop */
-    }
+    } catch {}
   }, []);
 
   // ======= Carga de grupos =======
   const fetchGrupos = useCallback(async () => {
     setCargando(true);
-    dataLoadedRef.current = false;
     scrollRestoredRef.current = false;
     try {
       const resp = await fetch(`${BASE_URL}/api.php?action=mesas_listar_grupos`, {
@@ -500,7 +528,8 @@ const MesasExamen = () => {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const json = await resp.json();
-      if (!json?.exito) throw new Error(json?.mensaje || "Error al listar grupos.");
+      if (!json?.exito)
+        throw new Error(json?.mensaje || "Error al listar grupos.");
 
       const data = Array.isArray(json.data) ? json.data : [];
 
@@ -518,24 +547,21 @@ const MesasExamen = () => {
           numero_mesa_4: g.numero_mesa_4 ?? null,
           id_materia: g.id_materia ?? null,
           materia: g.materia ?? "",
-          fecha: g.fecha ?? "",
+          fecha: fechaKey(g.fecha),
           id_turno: g.id_turno ?? null,
           turno: g.turno ?? "",
           profesor: tribunalStr,
           _materia: normalizar(g.materia ?? ""),
           _turno: normalizar(g.turno ?? ""),
-          // si el backend más adelante manda hora, la podés mapear acá:
           hora: g.hora ?? "",
         };
       });
 
       setGrupos(procesadas);
       setGruposDB(procesadas);
-      dataLoadedRef.current = true;
     } catch {
       setGrupos([]);
       setGruposDB([]);
-      dataLoadedRef.current = true;
     } finally {
       setCargando(false);
     }
@@ -544,7 +570,6 @@ const MesasExamen = () => {
   // ======= Carga de "no agrupadas" =======
   const fetchNoAgrupadas = useCallback(async () => {
     setCargandoNo(true);
-    dataLoadedRef.current = false;
     scrollRestoredRef.current = false;
     try {
       const resp = await fetch(
@@ -568,7 +593,7 @@ const MesasExamen = () => {
         numero_mesa_4: null,
         id_materia: r.id_materia ?? null,
         materia: r.materia ?? "",
-        fecha: r.fecha ?? "",
+        fecha: fechaKey(r.fecha),
         id_turno: r.id_turno ?? null,
         turno: r.turno ?? "",
         profesor: r.tribunal || "",
@@ -580,11 +605,9 @@ const MesasExamen = () => {
 
       setNoAgrupadas(procesadas);
       setNoAgrupadasDB(procesadas);
-      dataLoadedRef.current = true;
     } catch {
       setNoAgrupadas([]);
       setNoAgrupadasDB([]);
-      dataLoadedRef.current = true;
     } finally {
       setCargandoNo(false);
     }
@@ -610,10 +633,12 @@ const MesasExamen = () => {
     );
   }, [gruposDB, noAgrupadasDB, listas.turnos, vista]);
 
-  // Fechas únicas (ISO)
+  // Fechas únicas
   const fechasUnicas = useMemo(() => {
     const dataset = vista === "grupos" ? gruposDB : noAgrupadasDB;
-    const set = new Set((dataset || []).map((m) => m.fecha).filter(Boolean));
+    const set = new Set(
+      (dataset || []).map((m) => fechaKey(m.fecha)).filter(Boolean)
+    );
     return Array.from(set).sort();
   }, [gruposDB, noAgrupadasDB, vista]);
 
@@ -624,126 +649,123 @@ const MesasExamen = () => {
 
   /* =======================================================
    *  DETALLE (como PDF): fetch + cache de docentes/alumnos
+   *  ✅ loadDetalle reutilizable + refresh al guardar nota
    * ======================================================= */
   const [loadingDetalle, setLoadingDetalle] = useState(false);
   const [mesasDetalle, setMesasDetalle] = useState([]);
-  // Cache: numero_mesa -> texto normalizado (docentes + alumnos)
   const [detalleCache, setDetalleCache] = useState({});
 
-  useEffect(() => {
-    const cargarDetalle = async () => {
-      try {
-        setLoadingDetalle(true);
-        setMesasDetalle([]);
-        setDetalleCache({});
+  const loadDetalle = useCallback(async () => {
+    try {
+      setLoadingDetalle(true);
+      setMesasDetalle([]);
+      setDetalleCache({});
 
-        const datasetDBLocal = vista === "grupos" ? gruposDB : noAgrupadasDB;
-        if (!datasetDBLocal || !datasetDBLocal.length) return;
+      const datasetDBLocal = vista === "grupos" ? gruposDB : noAgrupadasDB;
+      if (!datasetDBLocal || !datasetDBLocal.length) return;
 
-        // Agrupaciones por filas (igual que antes)
-        const agrupaciones = datasetDBLocal
-          .map((g) =>
-            [
-              g.numero_mesa_1,
-              g.numero_mesa_2,
-              g.numero_mesa_3,
-              g.numero_mesa_4,
-            ]
-              .filter((n) => n != null)
-              .map(Number)
-          )
-          .filter((arr) => arr.length);
-
-        // ✅ Mapa de fallback: número de mesa -> {fecha, turno, hora}
-        const fallbackPorNumero = new Map();
-        for (const g of datasetDBLocal) {
-          const numeros = [
+      const agrupaciones = datasetDBLocal
+        .map((g) =>
+          [
             g.numero_mesa_1,
             g.numero_mesa_2,
             g.numero_mesa_3,
             g.numero_mesa_4,
           ]
             .filter((n) => n != null)
-            .map(Number);
+            .map(Number)
+        )
+        .filter((arr) => arr.length);
 
-          for (const n of numeros) {
-            if (!fallbackPorNumero.has(n)) {
-              fallbackPorNumero.set(n, {
-                fecha: g.fecha ?? "",
-                turno: g.turno ?? "",
-                hora: g.hora ?? "",
-              });
-            }
+      const fallbackPorNumero = new Map();
+      for (const g of datasetDBLocal) {
+        const numeros = [
+          g.numero_mesa_1,
+          g.numero_mesa_2,
+          g.numero_mesa_3,
+          g.numero_mesa_4,
+        ]
+          .filter((n) => n != null)
+          .map(Number);
+
+        for (const n of numeros) {
+          if (!fallbackPorNumero.has(n)) {
+            fallbackPorNumero.set(n, {
+              fecha: g.fecha ?? "",
+              turno: g.turno ?? "",
+              hora: g.hora ?? "",
+            });
           }
         }
-
-        const setNums = new Set();
-        agrupaciones.forEach((arr) => arr.forEach((n) => setNums.add(n)));
-        const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
-        if (!numerosOrdenados.length) return;
-
-        const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle_pdf`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ numeros_mesa: numerosOrdenados }),
-        });
-        const raw = await resp.text();
-        let json;
-        try {
-          json = JSON.parse(raw);
-        } catch {
-          throw new Error(raw.slice(0, 400) || "Respuesta no JSON del servidor.");
-        }
-        if (!resp.ok || !json?.exito) {
-          throw new Error(json?.mensaje || "No se pudo obtener el detalle.");
-        }
-        const detalle = Array.isArray(json.data) ? json.data : [];
-        if (!detalle.length) {
-          notify({ tipo: "warning", mensaje: "No hay detalle para mostrar." });
-          return;
-        }
-
-        // ✅ ahora le pasamos también fallbackPorNumero
-        const mesasLogicas = buildMesasLogicas({
-          detalle,
-          agrupaciones,
-          id_grupo: null,
-          fallbackPorNumero,
-        });
-        setMesasDetalle(mesasLogicas);
-
-        // Cache de texto docentes + alumnos
-        const nuevoCache = {};
-        for (const m of detalle) {
-          const num = Number(m.numero_mesa);
-          if (!Number.isFinite(num)) continue;
-          let texto = "";
-          if (Array.isArray(m.docentes)) {
-            texto += " " + m.docentes.join(" ");
-          }
-          if (Array.isArray(m.alumnos)) {
-            for (const a of m.alumnos) {
-              if (a?.alumno) texto += " " + a.alumno;
-            }
-          }
-          const norm = normalizar(texto);
-          if (!norm) continue;
-          nuevoCache[num] = (nuevoCache[num] || "") + " " + norm;
-        }
-        setDetalleCache(nuevoCache);
-      } catch (e) {
-        console.error(e);
-        notify({
-          tipo: "error",
-          mensaje: e?.message || "No se pudo cargar el detalle.",
-        });
-      } finally {
-        setLoadingDetalle(false);
       }
-    };
 
-    cargarDetalle();
+      const setNums = new Set();
+      agrupaciones.forEach((arr) => arr.forEach((n) => setNums.add(n)));
+      const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
+      if (!numerosOrdenados.length) return;
+
+      const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle_pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numeros_mesa: numerosOrdenados }),
+        cache: "no-store",
+      });
+
+      const raw = await resp.text();
+      let json;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        throw new Error(raw.slice(0, 400) || "Respuesta no JSON del servidor.");
+      }
+      if (!resp.ok || !json?.exito) {
+        throw new Error(json?.mensaje || "No se pudo obtener el detalle.");
+      }
+
+      const detalle = Array.isArray(json.data) ? json.data : [];
+      if (!detalle.length) {
+        notify({ tipo: "warning", mensaje: "No hay detalle para mostrar." });
+        return;
+      }
+
+      const mesasLogicas = buildMesasLogicas({
+        detalle,
+        agrupaciones,
+        id_grupo: null,
+        fallbackPorNumero,
+      });
+      setMesasDetalle(mesasLogicas);
+
+      const nuevoCache = {};
+      for (const m of detalle) {
+        const num = Number(m.numero_mesa);
+        if (!Number.isFinite(num)) continue;
+        let texto = "";
+        if (Array.isArray(m.docentes)) texto += " " + m.docentes.join(" ");
+        if (Array.isArray(m.alumnos)) {
+          for (const a of m.alumnos) if (a?.alumno) texto += " " + a.alumno;
+        }
+        const norm = normalizar(texto);
+        if (!norm) continue;
+        nuevoCache[num] = (nuevoCache[num] || "") + " " + norm;
+      }
+      setDetalleCache(nuevoCache);
+
+      // ✅ IMPORTANTE: si cambió el detalle, cualquier pendiente queda “viejo”
+      setNotasPendientes({});
+    } catch (e) {
+      notify({
+        tipo: "error",
+        mensaje: e?.message || "No se pudo cargar el detalle.",
+      });
+    } finally {
+      setLoadingDetalle(false);
+    }
   }, [vista, gruposDB, noAgrupadasDB, notify]);
+
+  useEffect(() => {
+    loadDetalle();
+  }, [loadDetalle]);
 
   // Filtrado (incluyendo búsqueda por docentes / alumnos)
   const filasFiltradas = useMemo(() => {
@@ -753,7 +775,6 @@ const MesasExamen = () => {
       const nq = normalizar(qDebounced);
 
       res = res.filter((m) => {
-        // Coincidencias base (materia, turno, fecha, id, números)
         const baseMatch =
           m._materia.includes(nq) ||
           m._turno.includes(nq) ||
@@ -766,7 +787,6 @@ const MesasExamen = () => {
 
         if (baseMatch) return true;
 
-        // Extra: buscar también en docentes + alumnos usando el cache
         if (detalleCache && Object.keys(detalleCache).length) {
           const nums = [
             m.numero_mesa_1,
@@ -788,7 +808,7 @@ const MesasExamen = () => {
     }
 
     if (fechaSel) {
-      res = res.filter((m) => (m.fecha || "") === fechaSel);
+      res = res.filter((m) => fechaKey(m.fecha) === fechaSel);
     }
 
     if (turnoSel) {
@@ -801,7 +821,7 @@ const MesasExamen = () => {
 
   const hayResultados = filasFiltradas.length > 0;
 
-  // Para deshabilitar "Crear Mesas" si ya existe al menos UNA mesa (en grupos o no agrupadas)
+  // Para deshabilitar "Crear Mesas"
   const hayAlgunaMesa = useMemo(() => {
     return (gruposDB?.length || 0) + (noAgrupadasDB?.length || 0) > 0;
   }, [gruposDB, noAgrupadasDB]);
@@ -838,6 +858,7 @@ const MesasExamen = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ numeros_mesa: numerosOrdenados }),
+        cache: "no-store",
       });
 
       const raw = await resp.text();
@@ -875,7 +896,6 @@ const MesasExamen = () => {
         return 2;
       };
 
-      // hora para Excel: usa DB si viene, si no por turno
       const horaX = (t, desdeDB = "") => {
         const limpia = (desdeDB || "").trim();
         if (limpia) {
@@ -923,9 +943,7 @@ const MesasExamen = () => {
         const horaCalc = horaX(turno, m.hora ?? "");
         const materia = m.materia ?? "";
         const docentes =
-          Array.isArray(m.docentes) && m.docentes.length
-            ? m.docentes
-            : ["-"];
+          Array.isArray(m.docentes) && m.docentes.length ? m.docentes : ["-"];
         const alumnos =
           Array.isArray(m.alumnos) && m.alumnos.length
             ? m.alumnos
@@ -975,6 +993,7 @@ const MesasExamen = () => {
       const filasFinales = filas.map(
         ({ _sortFechaISO, _sortTurnoRank, ...rest }) => rest
       );
+
       const headers = [
         "ID Grupo",
         "N° Mesa",
@@ -1027,7 +1046,6 @@ const MesasExamen = () => {
         mensaje: `Exportadas ${filasFinales.length} filas detalladas.`,
       });
     } catch (e) {
-      console.error("Excel detalle — error:", e);
       notify({
         tipo: "error",
         mensaje: e?.message || "No se pudo exportar el Excel detallado.",
@@ -1035,60 +1053,10 @@ const MesasExamen = () => {
     }
   }, [filasFiltradas, notify, vista]);
 
-  // ===== Exportar PDF SOLO del registro (fila actual) =====
-  const exportarPDFDeRegistro = useCallback(
-    (g) => {
-      if (!g) return;
-
-      const logoPath = escudo;
-
-      if (vista === "grupos" && g.id_grupo != null) {
-        const agrupaciones = [
-          [
-            g.numero_mesa_1,
-            g.numero_mesa_2,
-            g.numero_mesa_3,
-            g.numero_mesa_4,
-          ]
-            .filter((n) => n != null)
-            .map(Number),
-        ];
-
-        generarPDFMesas({
-          mesasFiltradas: [],
-          agrupaciones,
-          id_grupo: g.id_grupo,
-          baseUrl: BASE_URL,
-          notify,
-          logoPath,
-        });
-        return;
-      }
-
-      const nums = [
-        g.numero_mesa_1,
-        g.numero_mesa_2,
-        g.numero_mesa_3,
-        g.numero_mesa_4,
-      ]
-        .filter((n) => n != null)
-        .map(Number);
-      const agrupaciones = [nums.length ? nums : []];
-
-      generarPDFMesas({
-        mesasFiltradas: nums.map((n) => ({ numero_mesa: n })),
-        agrupaciones,
-        baseUrl: BASE_URL,
-        notify,
-        logoPath,
-      });
-    },
-    [vista, notify]
-  );
-
-  // Mesas lógicas filtradas según las filas visibles (para la vista PDF)
+  // ✅ Mesas lógicas filtradas según las filas visibles
   const mesasDetalleFiltradas = useMemo(() => {
     if (!mesasDetalle.length || !filasFiltradas.length) return [];
+
     const setNums = new Set();
     for (const g of filasFiltradas) {
       [
@@ -1101,13 +1069,24 @@ const MesasExamen = () => {
         .map(Number)
         .forEach((n) => setNums.add(n));
     }
+
     if (!setNums.size) return [];
-    return mesasDetalle.filter(
+
+    let out = mesasDetalle.filter(
       (mesa) =>
         Array.isArray(mesa.subNumeros) &&
         mesa.subNumeros.some((n) => setNums.has(n))
     );
-  }, [mesasDetalle, filasFiltradas]);
+
+    if (fechaSel) {
+      out = out.filter((m) => fechaKey(m.fecha) === fechaSel);
+    }
+    if (turnoSel) {
+      out = out.filter((m) => normalizar(m.turno) === normalizar(turnoSel));
+    }
+
+    return out;
+  }, [mesasDetalle, filasFiltradas, fechaSel, turnoSel]);
 
   // RESTAURAR SCROLL CUANDO YA CARGÓ TODO
   useEffect(() => {
@@ -1125,7 +1104,6 @@ const MesasExamen = () => {
     return () => clearTimeout(timer);
   }, [cargandoVista, loadingDetalle, mesasDetalleFiltradas.length]);
 
-  // Función para restaurar scroll manualmente después de operaciones
   const restaurarScroll = useCallback(() => {
     const timer = setTimeout(() => {
       const el = pdfScrollRef.current;
@@ -1143,11 +1121,204 @@ const MesasExamen = () => {
   }, []);
 
   /* ======================
+   *  NOTAS (UI + BACKEND)
+   * ====================== */
+
+  // Genera un ID estable por fila (mesa + bloque + alumno)
+  const buildRowId = useCallback((mesa, bloque, alumno, filaFallback = 0) => {
+    const mesaKey = Array.isArray(mesa?.subNumeros)
+      ? mesa.subNumeros.join("-")
+      : "NA";
+    const fecha = fechaKey(mesa?.fecha || "");
+    const turno = String(mesa?.turno || "");
+    const materia = String(bloque?.materia || "");
+    const docente = String(bloque?.docente || "");
+    const dni = String(alumno?.dni || "").trim();
+    const nom = String(alumno?.alumno || "").trim();
+    const alumKey = dni || nom || String(filaFallback);
+    return `${fecha}|${turno}|${mesaKey}|${materia}|${docente}|${alumKey}`;
+  }, []);
+
+  // ✅ CLAVE: solo pendientes. Si no hay pendiente, el select queda vacío.
+  const getNotaUIValue = useCallback(
+    (rowId) => {
+      const pend = notasPendientes[rowId];
+      if (pend && typeof pend === "object") return String(pend.value ?? "");
+      return "";
+    },
+    [notasPendientes]
+  );
+
+  const onChangeNota = useCallback((rowId, nueva) => {
+    setNotasPendientes((prev) => ({
+      ...prev,
+      [rowId]: { value: nueva },
+    }));
+  }, []);
+
+  // ✅ CONFIRMAR = guarda en DB + actualiza TODOS los registros del alumno + recarga detalle
+  // ✅ REEMPLAZAR COMPLETO (solo esta función)
+  const confirmarNota = useCallback(
+    async ({ rowId, alumno, mesa, bloque }) => {
+      const pend = notasPendientes[rowId];
+      if (!pend) return;
+
+      const raw = String(pend.value ?? "").trim();
+      const limpiar = raw === "";
+
+      let n = null;
+      if (!limpiar) {
+        const parsed = parseInt(raw, 10);
+        if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
+          notify({ tipo: "warning", mensaje: "La nota debe estar entre 1 y 10." });
+          return;
+        }
+        n = parsed;
+      }
+
+      const id_previa = parseInt(String(alumno?.id_previa ?? ""), 10);
+      const dni = String(alumno?.dni ?? "").trim();
+      const nombreAlumno = String(alumno?.alumno ?? "").trim();
+
+      // ✅ CLAVE: el numero de mesa real de ESA fila (vos ya lo guardás)
+      const numero_mesa = Number(
+        alumno?.numero_mesa ?? mesa?.subNumeros?.[0] ?? 0
+      );
+
+      // ✅ opcional pero útil
+      const fecha_mesa = fechaKey(mesa?.fecha || ""); // YYYY-MM-DD
+
+      const hoyISO = (() => {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      })();
+
+      // Si no hay numero_mesa, no hay forma robusta de resolver el “taller”
+      if (!Number.isFinite(numero_mesa) || numero_mesa <= 0) {
+        notify({
+          tipo: "error",
+          mensaje:
+            "No puedo guardar la nota: falta numero_mesa en el alumno. " +
+            "Asegurate que mesas_detalle_pdf devuelva numero_mesa y que buildMesasLogicas lo preserve.",
+        });
+        return;
+      }
+
+      try {
+        // ✅ SIEMPRE mandamos numero_mesa (y fecha_mesa) para que PHP resuelva id_previa desde mesas
+        // Si además hay id_previa, lo mandamos igual (por si existe), pero el PHP ya resuelve si no existe.
+        const body = {
+          id_previa: Number.isFinite(id_previa) && id_previa > 0 ? id_previa : 0,
+          numero_mesa,
+          fecha_mesa,
+          nota: limpiar ? "" : n,
+          fecha_nota: limpiar ? "" : hoyISO,
+        };
+
+        const resp = await fetch(`${BASE_URL}/api.php?action=agregar_nota`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          cache: "no-store",
+        });
+
+        const rawTxt = await resp.text();
+        let json;
+        try {
+          json = JSON.parse(rawTxt);
+        } catch {
+          throw new Error(rawTxt.slice(0, 300) || "Respuesta no JSON del servidor.");
+        }
+
+        if (!resp.ok || !json?.exito) {
+          throw new Error(json?.mensaje || "No se pudo guardar la nota.");
+        }
+
+        setNotasPendientes((prev) => {
+          const next = { ...prev };
+          delete next[rowId];
+          return next;
+        });
+
+        // ✅ actualizar instantáneo en la tabla (por DNI; fallback por nombre)
+        setMesasDetalle((prev) => {
+          if (!Array.isArray(prev) || !prev.length) return prev;
+
+          const targetDni = String(dni || "").trim();
+          const targetNom = String(nombreAlumno || "").trim();
+
+          const matchAlumno = (a) => {
+            const dniA = String(a?.dni || "").trim();
+            const nomA = String(a?.alumno || "").trim();
+            if (targetDni) return dniA && dniA === targetDni;
+            return targetNom && nomA === targetNom;
+          };
+
+          return prev.map((m) => ({
+            ...m,
+            bloques: (m.bloques || []).map((b) => ({
+              ...b,
+              alumnos: (b.alumnos || []).map((a) => {
+                if (!matchAlumno(a)) return a;
+                return {
+                  ...a,
+                  nota: limpiar ? null : n,
+                  fecha_nota: limpiar ? null : hoyISO,
+                };
+              }),
+            })),
+          }));
+        });
+
+        // y resync real
+        await loadDetalle();
+
+        notify({
+          tipo: "exito",
+          mensaje: limpiar
+            ? "Nota eliminada y tabla actualizada."
+            : `Nota ${n} guardada y tabla actualizada.`,
+        });
+      } catch (e) {
+        notify({
+          tipo: "error",
+          mensaje: e?.message || "Error guardando la nota en el backend.",
+        });
+      }
+    },
+    [notasPendientes, notify, loadDetalle]
+  );
+
+  const cancelarNota = useCallback((rowId) => {
+    setNotasPendientes((prev) => {
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+  }, []);
+
+  /* =========================================================
+     ✅ Nota "de la DB" (para mostrar en texto plano)
+     Reglas:
+       - Si el alumno ya viene con nota (a.nota) => mostrar texto plano
+       - Si NO tiene nota de DB => mostrar el select (frontend)
+  ========================================================= */
+  const getNotaDB = useCallback((alumno) => {
+    const rawN = alumno?.nota;
+    if (rawN === null || rawN === undefined || rawN === "") return null;
+    const n = parseInt(String(rawN), 10);
+    if (!Number.isFinite(n) || n < 1 || n > 10) return null;
+    return n;
+  }, []);
+
+  /* ======================
    *  Render
    * ====================== */
   return (
     <div className="glob-profesor-container">
-      {/* Loader global con el escudo */}
       <FullScreenLoader visible={creandoMesas} title="Procesando…" />
 
       <div className="glob-profesor-box">
@@ -1191,6 +1362,7 @@ const MesasExamen = () => {
                 });
               }}
               disabled={cargandoVista}
+              type="button"
             >
               <FaFilter className="glob-icon-button" />
               <span>Aplicar Filtros</span>
@@ -1229,6 +1401,7 @@ const MesasExamen = () => {
                       {fechasUnicas.map((f) => (
                         <button
                           key={`fecha-${f}`}
+                          type="button"
                           className={`glob-chip-filtro ${
                             fechaSel === f ? "glob-active" : ""
                           }`}
@@ -1270,6 +1443,7 @@ const MesasExamen = () => {
                       {turnosUnicos.map((t) => (
                         <button
                           key={`turno-${t}`}
+                          type="button"
                           className={`glob-chip-filtro ${
                             turnoSel === t ? "glob-active" : ""
                           }`}
@@ -1294,7 +1468,6 @@ const MesasExamen = () => {
         <div className="glob-profesores-list">
           <div className="glob-contenedor-list-items">
             <div className="glob-left-inline">
-              {/* CONTADOR */}
               <div className="contador-grups-noencontrado">
                 <div className="glob-contador-container">
                   <span className="glob-profesores-desktop">
@@ -1307,7 +1480,7 @@ const MesasExamen = () => {
                   <FaUsers className="glob-icono-profesor" />
                 </div>
 
-                {/* TABS vista datasets */}
+                {/* TABS */}
                 <div
                   className="glob-tabs glob-tabs--inline"
                   role="tablist"
@@ -1324,6 +1497,7 @@ const MesasExamen = () => {
                     title="Ver grupos armados"
                     aria-pressed={vista === "grupos"}
                     role="tab"
+                    type="button"
                   >
                     <FaLayerGroup style={{ marginRight: 6 }} />
                     Grupos
@@ -1339,13 +1513,14 @@ const MesasExamen = () => {
                     title="Ver mesas no agrupadas"
                     aria-pressed={vista === "no-agrupadas"}
                     role="tab"
+                    type="button"
                   >
                     <FaUnlink style={{ marginRight: 6 }} />
                     No agrupadas
                   </button>
                 </div>
 
-                {/* CHIPS filtros */}
+                {/* CHIPS */}
                 {(q || fechaSel || turnoSel) && (
                   <div className="glob-chips-container">
                     {q && (
@@ -1360,6 +1535,7 @@ const MesasExamen = () => {
                           className="glob-chip-mini-close"
                           onClick={() => setQ("")}
                           aria-label="Quitar"
+                          type="button"
                         >
                           ×
                         </button>
@@ -1375,6 +1551,7 @@ const MesasExamen = () => {
                           className="glob-chip-mini-close"
                           onClick={() => setFechaSel("")}
                           aria-label="Quitar"
+                          type="button"
                         >
                           ×
                         </button>
@@ -1390,6 +1567,7 @@ const MesasExamen = () => {
                           className="glob-chip-mini-close"
                           onClick={() => setTurnoSel("")}
                           aria-label="Quitar"
+                          type="button"
                         >
                           ×
                         </button>
@@ -1404,6 +1582,7 @@ const MesasExamen = () => {
                         setTurnoSel("");
                       }}
                       title="Quitar todos los filtros"
+                      type="button"
                     >
                       Limpiar
                     </button>
@@ -1452,16 +1631,12 @@ const MesasExamen = () => {
                     mesTxt ? mesTxt + " " : ""
                   }${anio || ""}`.trim();
                   const sub =
-                    `${diaSemana(mesa.fecha)} ${String(dia).padStart(
-                      2,
-                      "0"
-                    )} · ` +
+                    `${diaSemana(mesa.fecha)} ${String(dia).padStart(2, "0")} · ` +
                     `${String(mesa.turno || "").toUpperCase()} · ${formatearHoraDesdeDB(
                       mesa.hora,
                       mesa.turno
                     )}`;
 
-                  // preparar "segmentos contiguos" para fusionar celdas Materia y Docente
                   const nRowsPorBloque = mesa.bloques.map((b) =>
                     Math.max(1, b.alumnos.length)
                   );
@@ -1539,7 +1714,7 @@ const MesasExamen = () => {
                   const docenteStart = new Map(
                     segDocente.map((s) => [s.startRow, s])
                   );
-                  // filas fin de cada bloque
+
                   const materiaEndRows = new Set(
                     Array.from(materiaStart.values()).map(
                       (s) => s.startRow + (s.rowSpan || 1) - 1
@@ -1553,6 +1728,7 @@ const MesasExamen = () => {
 
                   const rowsHTML = [];
                   let filaGlobal = 0;
+
                   for (let bi = 0; bi < mesa.bloques.length; bi++) {
                     const bloque = mesa.bloques[bi];
                     const n = nRowsPorBloque[bi];
@@ -1564,6 +1740,13 @@ const MesasExamen = () => {
                           dni: "-",
                           curso: "-",
                         };
+
+                      const notaDB = getNotaDB(a);
+
+                      const rowId = buildRowId(mesa, bloque, a, filaGlobal);
+                      const notaUI = getNotaUIValue(rowId);
+                      const tienePendiente = Boolean(notasPendientes[rowId]);
+
                       const celdas = [];
 
                       if (filaGlobal === 0) {
@@ -1599,7 +1782,7 @@ const MesasExamen = () => {
                         );
                       }
 
-                      // Celdas de Estudiante/DNI/Curso
+                      // Estudiante/DNI/Curso
                       celdas.push(
                         <td
                           key={`al-${filaGlobal}`}
@@ -1622,6 +1805,114 @@ const MesasExamen = () => {
                         </td>
                       );
 
+                      // ✅ COLUMNA NOTA
+                      celdas.push(
+                        <td
+                          key={`nota-${filaGlobal}`}
+                          className="pdf-td-center col-nota"
+                          style={{ whiteSpace: "nowrap" }}
+                        >
+                          {notaDB != null ? (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                minWidth: 78,
+                                padding: "6px 8px",
+                                borderRadius: 8,
+                                fontWeight: 800,
+                                border: "1px solid rgba(0,0,0,0.10)",
+                                background: "rgba(0,0,0,0.04)",
+                              }}
+                              title="Nota ya cargada"
+                            >
+                              {notaDB}
+                            </span>
+                          ) : (
+                            <>
+                              <select
+                                value={notaUI}
+                                onChange={(e) =>
+                                  onChangeNota(rowId, e.target.value)
+                                }
+                                style={{
+                                  padding: "6px 8px",
+                                  borderRadius: 8,
+                                  border: "1px solid rgba(0,0,0,0.12)",
+                                  outline: "none",
+                                  fontWeight: 700,
+                                  width: 78,
+                                  background: tienePendiente
+                                    ? "rgba(255, 193, 7, 0.18)"
+                                    : "white",
+                                }}
+                                title={
+                                  tienePendiente
+                                    ? "Nota pendiente de confirmación"
+                                    : "Seleccionar nota"
+                                }
+                              >
+                                <option value="">—</option>
+                                {Array.from({ length: 10 }, (_, k) =>
+                                  String(k + 1)
+                                ).map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}
+                                  </option>
+                                ))}
+                              </select>
+
+                              {tienePendiente && (
+                                <span
+                                  style={{
+                                    marginLeft: 8,
+                                    display: "inline-flex",
+                                    gap: 6,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      confirmarNota({
+                                        rowId,
+                                        alumno: a,
+                                        mesa,
+                                        bloque,
+                                      })
+                                    }
+                                    title="Confirmar nota (guardar en DB)"
+                                    style={{
+                                      border: "none",
+                                      borderRadius: 8,
+                                      padding: "6px 8px",
+                                      cursor: "pointer",
+                                      background: "rgba(46, 204, 113, 0.18)",
+                                    }}
+                                    aria-label="Confirmar nota"
+                                  >
+                                    <FaCheck />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => cancelarNota(rowId)}
+                                    title="Cancelar"
+                                    style={{
+                                      border: "none",
+                                      borderRadius: 8,
+                                      padding: "6px 8px",
+                                      cursor: "pointer",
+                                      background: "rgba(231, 76, 60, 0.15)",
+                                    }}
+                                    aria-label="Cancelar nota"
+                                  >
+                                    <FaTimes />
+                                  </button>
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      );
+
                       const dStart = docenteStart.get(filaGlobal);
                       if (dStart) {
                         celdas.push(
@@ -1639,7 +1930,6 @@ const MesasExamen = () => {
                         );
                       }
 
-                      // Flags de inicio/fin de bloque
                       const isDocenteStart = docenteStart.has(filaGlobal);
                       const isDocenteEnd = docenteEndRows.has(filaGlobal);
                       const isMateriaStart = materiaStart.has(filaGlobal);
@@ -1663,6 +1953,23 @@ const MesasExamen = () => {
                   }
 
                   if (totalRows === 0) {
+                    const bloqueFake = {
+                      materia: mesa.materia || "-",
+                      docente: "-",
+                    };
+                    const alumnoFake = {
+                      alumno: "-",
+                      dni: "-",
+                      curso: "-",
+                      nota: null,
+                      id_previa: null,
+                    };
+                    const notaDB = getNotaDB(alumnoFake);
+
+                    const rowId = buildRowId(mesa, bloqueFake, alumnoFake, 0);
+                    const notaUI = getNotaUIValue(rowId);
+                    const tienePendiente = Boolean(notasPendientes[rowId]);
+
                     rowsHTML.push(
                       <tr
                         key={`r-empty-${idxMesa}`}
@@ -1685,6 +1992,102 @@ const MesasExamen = () => {
                         <td className="pdf-td-left col-estudiante">-</td>
                         <td className="pdf-td-center col-dni">-</td>
                         <td className="pdf-td-center col-curso">-</td>
+
+                        <td
+                          className="pdf-td-center col-nota"
+                          style={{ whiteSpace: "nowrap" }}
+                        >
+                          {notaDB != null ? (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                minWidth: 78,
+                                padding: "6px 8px",
+                                borderRadius: 8,
+                                fontWeight: 800,
+                                border: "1px solid rgba(0,0,0,0.10)",
+                                background: "rgba(0,0,0,0.04)",
+                              }}
+                            >
+                              {notaDB}
+                            </span>
+                          ) : (
+                            <>
+                              <select
+                                value={notaUI}
+                                onChange={(e) =>
+                                  onChangeNota(rowId, e.target.value)
+                                }
+                                style={{
+                                  padding: "6px 8px",
+                                  borderRadius: 8,
+                                  border: "1px solid rgba(0,0,0,0.12)",
+                                  outline: "none",
+                                  fontWeight: 700,
+                                  width: 78,
+                                  background: tienePendiente
+                                    ? "rgba(255, 193, 7, 0.18)"
+                                    : "white",
+                                }}
+                              >
+                                <option value="">—</option>
+                                {Array.from({ length: 10 }, (_, k) =>
+                                  String(k + 1)
+                                ).map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}
+                                  </option>
+                                ))}
+                              </select>
+                              {tienePendiente && (
+                                <span
+                                  style={{
+                                    marginLeft: 8,
+                                    display: "inline-flex",
+                                    gap: 6,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      confirmarNota({
+                                        rowId,
+                                        alumno: alumnoFake,
+                                        mesa,
+                                        bloque: bloqueFake,
+                                      })
+                                    }
+                                    title="Confirmar nota (guardar en DB)"
+                                    style={{
+                                      border: "none",
+                                      borderRadius: 8,
+                                      padding: "6px 8px",
+                                      cursor: "pointer",
+                                      background: "rgba(46, 204, 113, 0.18)",
+                                    }}
+                                  >
+                                    <FaCheck />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => cancelarNota(rowId)}
+                                    title="Cancelar"
+                                    style={{
+                                      border: "none",
+                                      borderRadius: 8,
+                                      padding: "6px 8px",
+                                      cursor: "pointer",
+                                      background: "rgba(231, 76, 60, 0.15)",
+                                    }}
+                                  >
+                                    <FaTimes />
+                                  </button>
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </td>
+
                         <td className="pdf-docente-cell">
                           <div className="docente-cell-content">
                             <span className="docente-nombre">-</span>
@@ -1694,7 +2097,6 @@ const MesasExamen = () => {
                     );
                   }
 
-                  // Primer número de mesa de la agrupación (para editar/eliminar)
                   const primerNumero =
                     Array.isArray(mesa.subNumeros) && mesa.subNumeros.length
                       ? mesa.subNumeros[0]
@@ -1702,7 +2104,7 @@ const MesasExamen = () => {
 
                   return (
                     <div key={`mesa-${idxMesa}`} className="mesa-detalle-box">
-                      {/* Header "idéntico" al PDF */}
+                      {/* Header */}
                       <div className="pdf-header">
                         <div className="pdf-header-left">
                           <img src={escudo} alt="Logo" className="pdf-logo" />
@@ -1723,7 +2125,7 @@ const MesasExamen = () => {
                         </div>
                       </div>
 
-                      {/* Tabla como el PDF */}
+                      {/* Tabla */}
                       <div className="pdf-table-wrapper">
                         <table className="tabla-detalle-mesa">
                           <thead>
@@ -1733,6 +2135,7 @@ const MesasExamen = () => {
                               <th>Estudiante</th>
                               <th className="col-dni">DNI</th>
                               <th className="pdf-td-center">Curso</th>
+                              <th className="pdf-td-center">Nota</th>
                               <th>Docentes</th>
                             </tr>
                           </thead>
@@ -1740,7 +2143,7 @@ const MesasExamen = () => {
                         </table>
                       </div>
 
-                      {/* Acciones rápidas por mesa/agrupación */}
+                      {/* Acciones rápidas */}
                       <div className="pdf-actions">
                         <button
                           className="glob-iconchip pdfbuttons"
@@ -1758,12 +2161,12 @@ const MesasExamen = () => {
                             });
                           }}
                           aria-label="Exportar PDF de esta mesa"
+                          type="button"
                         >
                           <FaFilePdf />
                           &nbsp; PDF (esta mesa)
                         </button>
 
-                        {/* Botón Editar */}
                         <button
                           className="glob-iconchip pdfbuttons"
                           title="Editar (primera mesa de la agrupación)"
@@ -1777,24 +2180,19 @@ const MesasExamen = () => {
                                   "1"
                                 );
                               }
-                            } catch (e) {
-                              console.warn(
-                                "No se pudo setear flag from_edit:",
-                                e
-                              );
-                            }
+                            } catch {}
 
                             persistState();
                             navigate(`/mesas/editar/${primerNumero}`);
                           }}
                           aria-label="Editar mesa"
                           style={{ marginLeft: 8 }}
+                          type="button"
                         >
                           <FaEdit />
                           &nbsp; Editar
                         </button>
 
-                        {/* Botón Eliminar */}
                         <button
                           className="glob-iconchip pdfbuttons"
                           title="Eliminar (primera mesa de la agrupación)"
@@ -1805,6 +2203,7 @@ const MesasExamen = () => {
                           }}
                           aria-label="Eliminar mesa"
                           style={{ marginLeft: 8 }}
+                          type="button"
                         >
                           <FaTrash />
                           &nbsp; Eliminar
@@ -1828,13 +2227,12 @@ const MesasExamen = () => {
                   window.localStorage.removeItem(STORAGE_KEY);
                   window.sessionStorage.removeItem(STORAGE_FLAG_FROM_EDIT);
                 }
-              } catch (e) {
-                console.warn("No se pudo limpiar estado al volver:", e);
-              }
+              } catch {}
               navigate("/panel");
             }}
             aria-label="Volver"
             title="Volver"
+            type="button"
           >
             <FaArrowLeft className="glob-profesor-icon-button" />
             <p>Volver Atrás</p>
@@ -1852,6 +2250,7 @@ const MesasExamen = () => {
                   : "Crear mesas (confirmar)"
               }
               disabled={hayAlgunaMesa}
+              type="button"
             >
               <FaUserPlus className="glob-profesor-icon-button" />
               <p>Crear Mesas</p>
@@ -1867,6 +2266,7 @@ const MesasExamen = () => {
                   ? "Exportar Excel (detalle completo por mesa)"
                   : "No hay filas visibles para exportar"
               }
+              type="button"
             >
               <FaFileExcel className="glob-profesor-icon-button" />
               <p>Exportar Excel</p>
@@ -1879,23 +2279,33 @@ const MesasExamen = () => {
 
                 pedirTituloYExportar(({ tituloBase, tituloExtra }) => {
                   const agrupaciones = filasFiltradas.map((g) =>
-                    [g.numero_mesa_1, g.numero_mesa_2, g.numero_mesa_3, g.numero_mesa_4]
+                    [
+                      g.numero_mesa_1,
+                      g.numero_mesa_2,
+                      g.numero_mesa_3,
+                      g.numero_mesa_4,
+                    ]
                       .filter((n) => n != null)
                       .map(Number)
                   );
 
                   const setNums = new Set();
-                  for (const arr of agrupaciones) for (const n of arr) setNums.add(n);
-                  const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
+                  for (const arr of agrupaciones)
+                    for (const n of arr) setNums.add(n);
+                  const numerosOrdenados = Array.from(setNums).sort(
+                    (a, b) => a - b
+                  );
 
                   generarPDFMesas({
-                    mesasFiltradas: numerosOrdenados.map((n) => ({ numero_mesa: n })),
+                    mesasFiltradas: numerosOrdenados.map((n) => ({
+                      numero_mesa: n,
+                    })),
                     agrupaciones,
                     baseUrl: BASE_URL,
                     notify,
                     logoPath: escudo,
-                    pdfTituloBase: tituloBase,   // ✅
-                    pdfTituloExtra: tituloExtra, // ✅
+                    pdfTituloBase: tituloBase,
+                    pdfTituloExtra: tituloExtra,
                   });
                 });
               }}
@@ -1903,6 +2313,7 @@ const MesasExamen = () => {
               aria-label="Exportar PDF"
               title="Exportar PDF (una hoja por mesa)"
               style={{ background: "var(--glob-primary, #2d3436)" }}
+              type="button"
             >
               <FaFilePdf className="glob-profesor-icon-button" />
               <p>Exportar PDF</p>
@@ -1915,6 +2326,7 @@ const MesasExamen = () => {
               aria-label="Eliminar"
               title="Eliminar mesas (confirmar)"
               disabled={!hayAlgunaMesa}
+              type="button"
             >
               <FaEraser className="glob-profesor-icon-button" />
               <p>Eliminar Mesas</p>
@@ -2001,7 +2413,7 @@ const MesasExamen = () => {
         />
       )}
 
-      {/* ✅ Modal para elegir título antes de exportar PDF */}
+      {/* Modal título PDF */}
       {abrirTituloPDF && (
         <ModalTituloPDF
           open={abrirTituloPDF}

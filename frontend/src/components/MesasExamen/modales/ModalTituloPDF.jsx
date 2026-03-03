@@ -18,7 +18,7 @@ export default function ModalTituloPDF({
   // Reset cuando abre + focus
   useEffect(() => {
     if (!open) return;
-    setExtra(defaultExtra || "");
+    setExtra((defaultExtra || "").toUpperCase());
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [open, defaultExtra]);
 
@@ -66,7 +66,7 @@ export default function ModalTituloPDF({
         aria-labelledby="mi-modal-title-titulo-pdf"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header (misma estética) */}
+        {/* Header */}
         <div className="mi-modal__header">
           <div className="mi-modal__head-left">
             <h2 id="mi-modal-title-titulo-pdf" className="mi-modal__title">
@@ -87,7 +87,7 @@ export default function ModalTituloPDF({
           </button>
         </div>
 
-        {/* Body (misma estructura que tus modales) */}
+        {/* Body */}
         <form className="mi-modal__content" onSubmit={confirmar}>
           <section className="mi-tabpanel">
             <div className="mi-grid">
@@ -97,19 +97,28 @@ export default function ModalTituloPDF({
                 <div className="mi-form-grid-2">
                   <div className="mi-form-row">
                     <label className="mi-label-strong">Título fijo</label>
-                    <input className="mi-input" value={tituloBase} readOnly />
-                    <div className="mi-hint">Este texto siempre se mantiene.</div>
+                    <input
+                      className="mi-input"
+                      value={String(tituloBase || "").toUpperCase()}
+                      readOnly
+                    />
+                    <div className="mi-hint">
+                      Este texto siempre se mantiene.
+                    </div>
                   </div>
 
                   <div className="mi-form-row">
                     <label className="mi-label-strong">
-                      Continuación <span className="mi-optional">(opcional)</span>
+                      Continuación{" "}
+                      <span className="mi-optional">(opcional)</span>
                     </label>
                     <input
                       ref={inputRef}
                       className="mi-input"
                       value={extra}
-                      onChange={(e) => setExtra(e.target.value)}
+                      onChange={(e) =>
+                        setExtra(e.target.value.toUpperCase())
+                      }
                       placeholder="Ej: FEBRERO 2026"
                     />
                     <div className="mi-hint">
@@ -125,7 +134,7 @@ export default function ModalTituloPDF({
             </div>
           </section>
 
-          {/* Footer (misma estética) */}
+          {/* Footer */}
           <div className="mi-modal__footer">
             <button
               type="button"

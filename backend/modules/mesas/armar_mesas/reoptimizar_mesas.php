@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/../../../config/db.php';
 
 function respond(bool $ok, $payload = null, int $status = 200): void {
     if (ob_get_length()) { @ob_clean(); }
