@@ -27,7 +27,6 @@ import { saveAs } from "file-saver";
 
 import BASE_URL from "../../config/config";
 
-// ✅ Usamos el MISMO CSS global del diseño rojo
 import "../Global/section-ui.css";
 
 import ModalAgregar from "./Modales/ModalAgregar";
@@ -45,8 +44,11 @@ const normalizar = (str = "") =>
     .trim();
 
 const MAX_CASCADE_ITEMS = 15;
-// 🔄 Ahora son 5 columnas: ID | Materia | Curso(=curso+div) | Docente | Acciones
+const ITEM_SIZE = 48;
 const GRID_COLS = "0.5fr 1.6fr 0.9fr 1fr 0.8fr";
+
+// Clave para sessionStorage
+const SCROLL_KEY = "catedras_scroll_offset";
 
 /* Debounce simple */
 function useDebouncedValue(value, delay = 200) {
@@ -101,7 +103,6 @@ const Row = React.memo(({ index, style, data }) => {
         {cat.materia}
       </div>
 
-      {/* ✅ Curso unificado: nombre_curso + nombre_division (ej: 1A) */}
       <div className="glob-column" title={`${cat.nombre_curso}${cat.nombre_division}`}>
         {cat.cursoDiv}
       </div>
@@ -138,7 +139,7 @@ const Catedras = () => {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
-  // Toast global (aparece acá, no en el modal)
+  // Toast global
   const [toast, setToast] = useState({
     abierto: false,
     tipo: "exito",
@@ -154,33 +155,36 @@ const Catedras = () => {
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const filtrosRef = useRef(null);
 
-  // Buscador: input inmediato + valor con debounce (para filtrar)
   const [qInput, setQInput] = useState("");
   const q = useDebouncedValue(qInput, 200);
 
-  const [cursoSel, setCursoSel] = useState(""); // nombre del curso
-  const [divisionSel, setDivisionSel] = useState(""); // nombre de la división
+  const [cursoSel, setCursoSel] = useState("");
+  const [divisionSel, setDivisionSel] = useState("");
+  const [filtroActivo, setFiltroActivo] = useState(null);
 
-  // Igual que en Previas: controla si se está mostrando "todos" explícito
-  const [filtroActivo, setFiltroActivo] = useState(null); // null | 'filtros' | 'todos'
-
-  // Acordeón de grupos (siempre cerrados al abrir el menú)
   const [openAcc, setOpenAcc] = useState({ curso: false, division: false });
-  const toggleAcc = useCallback(
-    (key) => setOpenAcc((p) => ({ ...p, [key]: !p[key] })),
-    []
-  );
   useEffect(() => {
     if (mostrarFiltros) setOpenAcc({ curso: false, division: false });
   }, [mostrarFiltros]);
 
-  // Animación
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
 
-  // Modal asignar/editar docente
+  // Modal
   const [showModal, setShowModal] = useState(false);
   const [catedraSel, setCatedraSel] = useState(null);
+
+  // Refs para scroll
+  const listRef = useRef(null);
+  const savedScrollOffsetRef = useRef(0);
+  const viewportHeightRef = useRef(0);
+
+  // Para restauración desde editar
+  const scrollFromEditRef = useRef(null);
+  const pendingEditScrollRef = useRef(false);
+
+  // Para restauraciones internas
+  const restorationRef = useRef(null);
 
   // ======= Carga desde API =======
   const abortRef = useRef(null);
@@ -202,7 +206,7 @@ const Catedras = () => {
       const data = (json.catedras || []).map((c) => {
         const cur = (c.nombre_curso ?? "").toString().trim();
         const div = (c.nombre_division ?? "").toString().trim();
-        const cursoDiv = `${cur} ${div}`; // ✅ "1A"
+        const cursoDiv = `${cur} ${div}`;
         return {
           ...c,
           cursoDiv,
@@ -226,10 +230,23 @@ const Catedras = () => {
     }
   }, []);
 
+  /* ================================
+     Al montar: leer sessionStorage ANTES de cargar datos
+  ================================= */
   useEffect(() => {
+    const stored = sessionStorage.getItem(SCROLL_KEY);
+    if (stored !== null) {
+      const parsed = parseFloat(stored);
+      if (!isNaN(parsed) && parsed > 0) {
+        scrollFromEditRef.current = parsed;
+        pendingEditScrollRef.current = true;
+      }
+      sessionStorage.removeItem(SCROLL_KEY);
+    }
     fetchCatedras();
     return () => abortRef.current?.abort();
-  }, [fetchCatedras]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ======= Listas únicas para chips =======
   const cursosUnicos = useMemo(() => {
@@ -257,7 +274,7 @@ const Catedras = () => {
           c._docente.includes(nq) ||
           c._curso.includes(nq) ||
           c._division.includes(nq) ||
-          c._cursoDiv.includes(nq) // ✅ también matchea "1a", etc.
+          c._cursoDiv.includes(nq)
       );
     }
 
@@ -273,6 +290,59 @@ const Catedras = () => {
 
     return res;
   }, [catedras, q, cursoSel, divisionSel]);
+
+  /* ================================
+     Helper: aplicar scroll a la lista
+  ================================= */
+  const aplicarScroll = useCallback((offset, itemCount) => {
+    if (!listRef.current) return;
+    const max = Math.max(0, itemCount * ITEM_SIZE - (viewportHeightRef.current || 0));
+    const clamped = Math.min(Math.max(0, offset), max);
+    listRef.current.scrollTo(clamped);
+  }, []);
+
+  /* ================================
+     RESTAURAR SCROLL DESDE EDITAR/MODAL
+     Espera a que cargando sea false y haya datos
+  ================================= */
+  useEffect(() => {
+    if (!pendingEditScrollRef.current) return;
+    if (cargando) return;
+    if (catedrasFiltradas.length === 0) return;
+
+    const target = scrollFromEditRef.current;
+    if (target === null) return;
+
+    pendingEditScrollRef.current = false;
+    scrollFromEditRef.current = null;
+
+    const timer = setTimeout(() => {
+      aplicarScroll(target, catedrasFiltradas.length);
+    }, 80);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargando, catedrasFiltradas.length]);
+
+  /* ================================
+     RESTAURAR SCROLL INTERNO
+     (tras refrescar tabla por asignar docente, etc.)
+  ================================= */
+  useEffect(() => {
+    const pending = restorationRef.current;
+    if (!pending || pending.type !== "offset") return;
+    if (cargando) return;
+    if (catedrasFiltradas.length === 0) return;
+
+    const target = pending.value;
+    restorationRef.current = null;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        aplicarScroll(target, catedrasFiltradas.length);
+      });
+    });
+  }, [catedrasFiltradas, cargando, aplicarScroll]);
 
   // ======= Animación en cascada =======
   const dispararCascadaUnaVez = useCallback(
@@ -318,7 +388,7 @@ const Catedras = () => {
     const filas = catedrasFiltradas.map((c) => ({
       ID: c.id_catedra ?? "",
       Materia: c.materia ?? "",
-      Curso: c.cursoDiv ?? "", // ✅ unificado
+      Curso: c.cursoDiv ?? "",
       Docente: c.docente ?? "",
     }));
 
@@ -344,18 +414,27 @@ const Catedras = () => {
 
   // ======= Modal =======
   const abrirModal = useCallback((catedra) => {
+    // Guardar scroll antes de abrir el modal (por si recarga la tabla al cerrar)
+    restorationRef.current = {
+      type: "offset",
+      value: savedScrollOffsetRef.current || 0,
+    };
     setCatedraSel(catedra);
     setShowModal(true);
   }, []);
+
   const cerrarModal = useCallback(() => setShowModal(false), []);
+
   const refrescarTrasAsignar = useCallback(() => {
-    // 1) refrescar la tabla
     fetchCatedras();
-    // 2) mostrar toast global
     mostrarToast("exito", "Docente asignado correctamente", 2200);
-    // 3) cerrar modal (lo hacemos acá para asegurar que el toast esté en pantalla)
     cerrarModal();
   }, [fetchCatedras, mostrarToast, cerrarModal]);
+
+  // ======= Track scroll =======
+  const handleListScroll = useCallback(({ scrollOffset }) => {
+    savedScrollOffsetRef.current = scrollOffset;
+  }, []);
 
   // ======= Handlers (memo) =======
   const onChangeBusqueda = useCallback(
@@ -390,10 +469,9 @@ const Catedras = () => {
     setQInput("");
     setCursoSel("");
     setDivisionSel("");
-    setFiltroActivo(null); // vuelve al estado "neutro" (sin nada visible)
+    setFiltroActivo(null);
   }, []);
 
-  // Igual a Previas: “Mostrar Todos” (tabla / header)
   const mostrarTodos = useCallback(() => {
     setQInput("");
     setCursoSel("");
@@ -412,7 +490,6 @@ const Catedras = () => {
     );
   }, [hayFiltros, filtroActivo, catedrasFiltradas.length, cargando]);
 
-  // contador solo cuenta cuando hay algo visible (igual que Previas)
   const contadorVisible =
     hayFiltros || filtroActivo === "todos" ? catedrasFiltradas.length : 0;
 
@@ -647,14 +724,12 @@ const Catedras = () => {
               <div className="glob-header" style={{ gridTemplateColumns: GRID_COLS }}>
                 <div className="glob-column-header">ID</div>
                 <div className="glob-column-header">Materia</div>
-                {/* ✅ Solo una columna de Curso (curso+div) */}
                 <div className="glob-column-header">Curso</div>
                 <div className="glob-column-header">Docente</div>
                 <div className="glob-column-header">Acciones</div>
               </div>
 
               <div className="glob-body">
-                {/* 👇 Estado vacío: icono grande + texto + botón */}
                 {!hayFiltros && filtroActivo !== "todos" ? (
                   <div className="glob-no-data-message">
                     <div className="glob-message-content">
@@ -684,24 +759,29 @@ const Catedras = () => {
                 ) : (
                   <div style={{ height: "55vh", width: "100%" }}>
                     <AutoSizer>
-                      {({ height, width }) => (
-                        <List
-                          height={height}
-                          width={width}
-                          itemCount={catedrasFiltradas.length}
-                          itemSize={48}
-                          itemData={{
-                            rows: catedrasFiltradas,
-                            animacionActiva,
-                            preCascada,
-                            onOpenModal: abrirModal,
-                          }}
-                          overscanCount={12}
-                          itemKey={(index, data) => data.rows[index]?._id ?? index}
-                        >
-                          {Row}
-                        </List>
-                      )}
+                      {({ height, width }) => {
+                        viewportHeightRef.current = height;
+                        return (
+                          <List
+                            ref={listRef}
+                            height={height}
+                            width={width}
+                            itemCount={catedrasFiltradas.length}
+                            itemSize={ITEM_SIZE}
+                            itemData={{
+                              rows: catedrasFiltradas,
+                              animacionActiva,
+                              preCascada,
+                              onOpenModal: abrirModal,
+                            }}
+                            overscanCount={12}
+                            itemKey={(index, data) => data.rows[index]?._id ?? index}
+                            onScroll={handleListScroll}
+                          >
+                            {Row}
+                          </List>
+                        );
+                      }}
                     </AutoSizer>
                   </div>
                 )}
@@ -718,7 +798,6 @@ const Catedras = () => {
                   : ""
               }`}
             >
-              {/* 👇 Estado vacío mobile: icono grande + texto + botón */}
               {!hayFiltros && filtroActivo !== "todos" ? (
                 <div className="glob-no-data-message glob-no-data-mobile">
                   <div className="glob-message-content">
@@ -769,7 +848,6 @@ const Catedras = () => {
                       <div className="glob-card-body">
                         <div className="glob-card-row">
                           <span className="glob-card-label">Curso</span>
-                          {/* ✅ curso unificado */}
                           <span className="glob-card-value">{c.cursoDiv}</span>
                         </div>
                         <div className="glob-card-row">
@@ -795,7 +873,6 @@ const Catedras = () => {
             </div>
           )}
         </div>
-        {/* FIN lista */}
 
         {/* BOTONERA INFERIOR */}
         <div className="glob-down-container">

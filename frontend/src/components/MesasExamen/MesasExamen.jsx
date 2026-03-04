@@ -168,20 +168,13 @@ const limpiarCurso = (s) =>
    ✅ ORDEN: Curso → División → Apellido
 ================================ */
 
-/**
- * Convierte "3° E" / "3 E" / "3°E" / "5° 2" / "5 10" / "1° A" a clave ordenable
- * ✅ MÁS ROBUSTO: división puede ser letra(s) o número(s)
- */
 const cursoKey = (cursoRaw = "") => {
   const c = limpiarCurso(cursoRaw);
   const s = c.replace(/\s+/g, " ").trim().toUpperCase();
 
-  // primer número = curso/año
   const mYear = s.match(/(\d{1,2})/);
   const year = mYear ? parseInt(mYear[1], 10) : 999;
 
-  // intentar tomar "división" como el primer token alfanumérico DESPUÉS del año
-  // ejemplos: "3° E", "3 E", "3° 2", "3 10", "3° B"
   let divToken = "";
   const afterYear = s.slice(mYear ? mYear.index + mYear[1].length : 0);
   const mDiv = afterYear.match(/^\s*°?\s*([A-ZÑ0-9]{1,3})/i);
@@ -199,19 +192,15 @@ const cursoKey = (cursoRaw = "") => {
 };
 
 const compararDivision = (a, b) => {
-  // num vs num => numérico
   if (a.divIsNum && b.divIsNum) return (a.divNum ?? 999) - (b.divNum ?? 999);
-  // num primero, letras después (si querés al revés, invertí el return)
   if (a.divIsNum && !b.divIsNum) return -1;
   if (!a.divIsNum && b.divIsNum) return 1;
-  // letras vs letras => alfabético
   return String(a.divToken || "").localeCompare(String(b.divToken || ""), "es", {
     sensitivity: "base",
     numeric: true,
   });
 };
 
-// Extrae apellido de "APELLIDO, NOMBRE" (fallback: primera palabra)
 const apellidoKey = (nombreRaw = "") => {
   const s = String(nombreRaw ?? "").trim();
   if (!s) return "";
@@ -220,7 +209,6 @@ const apellidoKey = (nombreRaw = "") => {
   return s.split(/\s+/)[0].trim().toUpperCase();
 };
 
-// ✅ Comparador: curso/año → división → apellido → nombre completo → DNI
 const compararAlumnoCursoDivisionApellido = (A, B) => {
   const cA = cursoKey(A?.curso);
   const cB = cursoKey(B?.curso);
@@ -246,10 +234,7 @@ const compararAlumnoCursoDivisionApellido = (A, B) => {
 };
 
 /**
- * Construye "mesas lógicas" (igual que el PDF) a partir del detalle del backend.
- * ✅ MOD: ahora preserva nota/fecha_nota por alumno + id_previa
- * ✅ MOD: preserva id_materia por submesa
- * Con fallbackPorNumero para completar fecha/turno/hora si faltan en el detalle.
+ * Construye "mesas lógicas" a partir del detalle del backend.
  */
 function buildMesasLogicas({
   detalle,
@@ -278,10 +263,7 @@ function buildMesasLogicas({
       fecha,
       turno,
       hora,
-
-      // ✅ NUEVO: si el backend lo devuelve, lo preservamos
       id_materia: m.id_materia ?? null,
-
       materia: m.materia ?? "",
       docentes: Array.isArray(m.docentes) ? m.docentes.filter(Boolean) : [],
       alumnos: Array.isArray(m.alumnos)
@@ -292,8 +274,6 @@ function buildMesasLogicas({
             nota: a.nota ?? null,
             fecha_nota: a.fecha_nota ?? null,
             id_previa: a.id_previa ?? null,
-
-            // ✅ CLAVE: id_materia real de ESA submesa
             id_materia: m.id_materia ?? a.id_materia ?? null,
             numero_mesa: m.numero_mesa ?? null,
           }))
@@ -335,7 +315,6 @@ function buildMesasLogicas({
     const materiaStar =
       mode(arr.map((x) => x.materia)) || arr[0]?.materia || "";
 
-    // ✅ Elegimos un id_materia representativo (si existe)
     const idMateriaStar =
       parseInt(mode(arr.map((x) => x.id_materia)), 10) ||
       arr.find((x) => Number.isFinite(Number(x.id_materia)))?.id_materia ||
@@ -379,7 +358,6 @@ function buildMesasLogicas({
       for (const d of dQueTienen) {
         const a = mapa.get(d).get(mat) || [];
 
-        // ✅ Mantener nota/fecha_nota/id_previa por alumno al “unique”
         const uniq = Array.from(
           new Map(
             a.map((x, idx) => [
@@ -389,7 +367,6 @@ function buildMesasLogicas({
           ).values()
         );
 
-        // ✅ ORDEN: Curso → División → Apellido (y luego desempates)
         uniq.sort(compararAlumnoCursoDivisionApellido);
 
         bloques.push({ docente: d, materia: mat, alumnos: uniq });
@@ -401,7 +378,7 @@ function buildMesasLogicas({
       turno: turnoStar,
       hora: horaStar,
       materia: materiaStar,
-      id_materia: idMateriaStar, // ✅ NUEVO
+      id_materia: idMateriaStar,
       subNumeros,
       bloques,
     };
@@ -431,20 +408,17 @@ function buildMesasLogicas({
    Componente Mesas de Examen
 ================================ */
 
-// CLAVE PARA GUARDAR ESTADO ENTRE PANTALLAS
 const STORAGE_KEY = "mesasExamenUI_v1";
 const STORAGE_FLAG_FROM_EDIT = "mesasExamen_from_edit";
 
-// ✅ (Antes usabas STORAGE_NOTAS_KEY) — ahora NO persistimos notas en localStorage
-// const STORAGE_NOTAS_KEY = "mesasExamenNotas_v1";
+// ✅ NUEVO: valor especial para "Ausente"
+const VALOR_AUSENTE = "AUSENTE";
 
 const MesasExamen = () => {
   const navigate = useNavigate();
 
-  // Vistas superiores
-  const [vista, setVista] = useState("grupos"); // "grupos" | "no-agrupadas"
+  const [vista, setVista] = useState("grupos");
 
-  // Datos
   const [grupos, setGrupos] = useState([]);
   const [gruposDB, setGruposDB] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -453,44 +427,35 @@ const MesasExamen = () => {
   const [noAgrupadasDB, setNoAgrupadasDB] = useState([]);
   const [cargandoNo, setCargandoNo] = useState(false);
 
-  // Loader global durante creación + armado
   const [creandoMesas, setCreandoMesas] = useState(false);
 
-  // listas básicas (para filtros / combos)
   const [listas, setListas] = useState({
     cursos: [],
     divisiones: [],
     turnos: [],
   });
 
-  // filtros y UI
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const filtrosRef = useRef(null);
 
   const [q, setQ] = useState("");
   const qDebounced = useDebounce(q, 220);
 
-  // Filtros seleccionados
   const [fechaSel, setFechaSel] = useState("");
   const [turnoSel, setTurnoSel] = useState("");
 
-  // Estado de acordeones (cerrados por defecto)
   const [openFecha, setOpenFecha] = useState(false);
   const [openTurno, setOpenTurno] = useState(false);
 
-  // modales (lote)
   const [abrirCrear, setAbrirCrear] = useState(false);
   const [abrirEliminar, setAbrirEliminar] = useState(false);
 
-  // modal eliminar individual
   const [abrirEliminarUno, setAbrirEliminarUno] = useState(false);
   const [mesaAEliminar, setMesaAEliminar] = useState(null);
 
-  // ✅ Modal título PDF
   const [abrirTituloPDF, setAbrirTituloPDF] = useState(false);
   const exportActionRef = useRef(null);
 
-  // Toast
   const [toast, setToast] = useState(null);
   const notify = useCallback(
     ({ tipo = "info", mensaje = "", duracion = 3000 }) =>
@@ -498,16 +463,18 @@ const MesasExamen = () => {
     []
   );
 
-  // ====== SCROLL / ESTADO PERSISTENTE ======
   const pdfScrollRef = useRef(null);
   const scrollPosRef = useRef(0);
   const initialStateLoadedRef = useRef(false);
   const scrollRestoredRef = useRef(false);
 
-  // ✅ Notas: solo pendientes (NO guardamos confirmadas en localStorage)
+  // ✅ MODIFICADO: notasPendientes ahora puede tener valor VALOR_AUSENTE o número 1-10
   const [notasPendientes, setNotasPendientes] = useState({});
 
-  // Restaurar estado (vista, filtros, scroll) SOLO si volvemos de Editar
+  // ✅ NUEVO: set de rowIds que están en modo edición (nota ya cargada, doble click)
+  const [editandoNotas, setEditandoNotas] = useState(new Set());
+
+  // Restaurar estado
   useEffect(() => {
     if (initialStateLoadedRef.current) return;
     initialStateLoadedRef.current = true;
@@ -576,7 +543,28 @@ const MesasExamen = () => {
     };
   }, [persistState]);
 
-  // ======= Carga de listas =======
+  // ✅ NUEVO: guardar scroll antes de recargar detalle para no perder posición
+  const captureScroll = useCallback(() => {
+    const el = pdfScrollRef.current;
+    if (el) {
+      scrollPosRef.current = el.scrollTop;
+    }
+  }, []);
+
+  const restoreScroll = useCallback(() => {
+    const pos = scrollPosRef.current;
+    if (!pos) return;
+    const tryRestore = (attempts = 0) => {
+      const el = pdfScrollRef.current;
+      if (el) {
+        el.scrollTop = pos;
+      } else if (attempts < 10) {
+        setTimeout(() => tryRestore(attempts + 1), 50);
+      }
+    };
+    setTimeout(() => tryRestore(), 80);
+  }, []);
+
   const fetchListas = useCallback(async () => {
     try {
       const resp = await fetch(`${BASE_URL}/api.php?action=obtener_listas`, {
@@ -593,7 +581,6 @@ const MesasExamen = () => {
     } catch {}
   }, []);
 
-  // ======= Carga de grupos =======
   const fetchGrupos = useCallback(async () => {
     setCargando(true);
     scrollRestoredRef.current = false;
@@ -643,7 +630,6 @@ const MesasExamen = () => {
     }
   }, []);
 
-  // ======= Carga de "no agrupadas" =======
   const fetchNoAgrupadas = useCallback(async () => {
     setCargandoNo(true);
     scrollRestoredRef.current = false;
@@ -695,7 +681,6 @@ const MesasExamen = () => {
     fetchNoAgrupadas();
   }, [fetchListas, fetchGrupos, fetchNoAgrupadas]);
 
-  // Turnos únicos
   const turnosUnicos = useMemo(() => {
     if (listas.turnos?.length) {
       return listas.turnos
@@ -709,7 +694,6 @@ const MesasExamen = () => {
     );
   }, [gruposDB, noAgrupadasDB, listas.turnos, vista]);
 
-  // Fechas únicas
   const fechasUnicas = useMemo(() => {
     const dataset = vista === "grupos" ? gruposDB : noAgrupadasDB;
     const set = new Set(
@@ -718,132 +702,140 @@ const MesasExamen = () => {
     return Array.from(set).sort();
   }, [gruposDB, noAgrupadasDB, vista]);
 
-  // Dataset base según pestaña
   const datasetBase = vista === "grupos" ? grupos : noAgrupadas;
   const datasetBaseDB = vista === "grupos" ? gruposDB : noAgrupadasDB;
   const cargandoVista = vista === "grupos" ? cargando : cargandoNo;
 
-  /* =======================================================
-   *  DETALLE (como PDF): fetch + cache de docentes/alumnos
-   *  ✅ loadDetalle reutilizable + refresh al guardar nota
-   * ======================================================= */
   const [loadingDetalle, setLoadingDetalle] = useState(false);
   const [mesasDetalle, setMesasDetalle] = useState([]);
   const [detalleCache, setDetalleCache] = useState({});
 
-  const loadDetalle = useCallback(async () => {
-    try {
-      setLoadingDetalle(true);
-      setMesasDetalle([]);
-      setDetalleCache({});
+  const loadDetalle = useCallback(
+    async ({ preservarScroll = false } = {}) => {
+      try {
+        // ✅ Capturar scroll ANTES de recargar si se pide
+        if (preservarScroll) {
+          captureScroll();
+        }
 
-      const datasetDBLocal = vista === "grupos" ? gruposDB : noAgrupadasDB;
-      if (!datasetDBLocal || !datasetDBLocal.length) return;
+        setLoadingDetalle(true);
+        setMesasDetalle([]);
+        setDetalleCache({});
 
-      const agrupaciones = datasetDBLocal
-        .map((g) =>
-          [
+        const datasetDBLocal = vista === "grupos" ? gruposDB : noAgrupadasDB;
+        if (!datasetDBLocal || !datasetDBLocal.length) return;
+
+        const agrupaciones = datasetDBLocal
+          .map((g) =>
+            [
+              g.numero_mesa_1,
+              g.numero_mesa_2,
+              g.numero_mesa_3,
+              g.numero_mesa_4,
+            ]
+              .filter((n) => n != null)
+              .map(Number)
+          )
+          .filter((arr) => arr.length);
+
+        const fallbackPorNumero = new Map();
+        for (const g of datasetDBLocal) {
+          const numeros = [
             g.numero_mesa_1,
             g.numero_mesa_2,
             g.numero_mesa_3,
             g.numero_mesa_4,
           ]
             .filter((n) => n != null)
-            .map(Number)
-        )
-        .filter((arr) => arr.length);
+            .map(Number);
 
-      const fallbackPorNumero = new Map();
-      for (const g of datasetDBLocal) {
-        const numeros = [
-          g.numero_mesa_1,
-          g.numero_mesa_2,
-          g.numero_mesa_3,
-          g.numero_mesa_4,
-        ]
-          .filter((n) => n != null)
-          .map(Number);
-
-        for (const n of numeros) {
-          if (!fallbackPorNumero.has(n)) {
-            fallbackPorNumero.set(n, {
-              fecha: g.fecha ?? "",
-              turno: g.turno ?? "",
-              hora: g.hora ?? "",
-            });
+          for (const n of numeros) {
+            if (!fallbackPorNumero.has(n)) {
+              fallbackPorNumero.set(n, {
+                fecha: g.fecha ?? "",
+                turno: g.turno ?? "",
+                hora: g.hora ?? "",
+              });
+            }
           }
         }
-      }
 
-      const setNums = new Set();
-      agrupaciones.forEach((arr) => arr.forEach((n) => setNums.add(n)));
-      const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
-      if (!numerosOrdenados.length) return;
+        const setNums = new Set();
+        agrupaciones.forEach((arr) => arr.forEach((n) => setNums.add(n)));
+        const numerosOrdenados = Array.from(setNums).sort((a, b) => a - b);
+        if (!numerosOrdenados.length) return;
 
-      const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle_pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numeros_mesa: numerosOrdenados }),
-        cache: "no-store",
-      });
+        const resp = await fetch(`${BASE_URL}/api.php?action=mesas_detalle_pdf`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numeros_mesa: numerosOrdenados }),
+          cache: "no-store",
+        });
 
-      const raw = await resp.text();
-      let json;
-      try {
-        json = JSON.parse(raw);
-      } catch {
-        throw new Error(raw.slice(0, 400) || "Respuesta no JSON del servidor.");
-      }
-      if (!resp.ok || !json?.exito) {
-        throw new Error(json?.mensaje || "No se pudo obtener el detalle.");
-      }
-
-      const detalle = Array.isArray(json.data) ? json.data : [];
-      if (!detalle.length) {
-        notify({ tipo: "warning", mensaje: "No hay detalle para mostrar." });
-        return;
-      }
-
-      const mesasLogicas = buildMesasLogicas({
-        detalle,
-        agrupaciones,
-        id_grupo: null,
-        fallbackPorNumero,
-      });
-      setMesasDetalle(mesasLogicas);
-
-      const nuevoCache = {};
-      for (const m of detalle) {
-        const num = Number(m.numero_mesa);
-        if (!Number.isFinite(num)) continue;
-        let texto = "";
-        if (Array.isArray(m.docentes)) texto += " " + m.docentes.join(" ");
-        if (Array.isArray(m.alumnos)) {
-          for (const a of m.alumnos) if (a?.alumno) texto += " " + a.alumno;
+        const raw = await resp.text();
+        let json;
+        try {
+          json = JSON.parse(raw);
+        } catch {
+          throw new Error(raw.slice(0, 400) || "Respuesta no JSON del servidor.");
         }
-        const norm = normalizar(texto);
-        if (!norm) continue;
-        nuevoCache[num] = (nuevoCache[num] || "") + " " + norm;
-      }
-      setDetalleCache(nuevoCache);
+        if (!resp.ok || !json?.exito) {
+          throw new Error(json?.mensaje || "No se pudo obtener el detalle.");
+        }
 
-      // ✅ IMPORTANTE: si cambió el detalle, cualquier pendiente queda “viejo”
-      setNotasPendientes({});
-    } catch (e) {
-      notify({
-        tipo: "error",
-        mensaje: e?.message || "No se pudo cargar el detalle.",
-      });
-    } finally {
-      setLoadingDetalle(false);
-    }
-  }, [vista, gruposDB, noAgrupadasDB, notify]);
+        const detalle = Array.isArray(json.data) ? json.data : [];
+        if (!detalle.length) {
+          notify({ tipo: "warning", mensaje: "No hay detalle para mostrar." });
+          return;
+        }
+
+        const mesasLogicas = buildMesasLogicas({
+          detalle,
+          agrupaciones,
+          id_grupo: null,
+          fallbackPorNumero,
+        });
+        setMesasDetalle(mesasLogicas);
+
+        const nuevoCache = {};
+        for (const m of detalle) {
+          const num = Number(m.numero_mesa);
+          if (!Number.isFinite(num)) continue;
+          let texto = "";
+          if (Array.isArray(m.docentes)) texto += " " + m.docentes.join(" ");
+          if (Array.isArray(m.alumnos)) {
+            for (const a of m.alumnos) if (a?.alumno) texto += " " + a.alumno;
+          }
+          const norm = normalizar(texto);
+          if (!norm) continue;
+          nuevoCache[num] = (nuevoCache[num] || "") + " " + norm;
+        }
+        setDetalleCache(nuevoCache);
+
+        setNotasPendientes({});
+        // ✅ Limpiar también el modo edición al recargar
+        setEditandoNotas(new Set());
+
+        // ✅ Restaurar scroll luego de que el DOM actualice
+        if (preservarScroll) {
+          restoreScroll();
+        }
+      } catch (e) {
+        notify({
+          tipo: "error",
+          mensaje: e?.message || "No se pudo cargar el detalle.",
+        });
+      } finally {
+        setLoadingDetalle(false);
+      }
+    },
+    [vista, gruposDB, noAgrupadasDB, notify, captureScroll, restoreScroll]
+  );
 
   useEffect(() => {
     loadDetalle();
   }, [loadDetalle]);
 
-  // Filtrado (incluyendo búsqueda por docentes / alumnos)
   const filasFiltradas = useMemo(() => {
     let res = datasetBase;
 
@@ -897,13 +889,12 @@ const MesasExamen = () => {
 
   const hayResultados = filasFiltradas.length > 0;
 
-  // Para deshabilitar "Crear Mesas"
   const hayAlgunaMesa = useMemo(() => {
     return (gruposDB?.length || 0) + (noAgrupadasDB?.length || 0) > 0;
   }, [gruposDB, noAgrupadasDB]);
 
   /* =======================================================
-   *  Exportar Excel — DETALLADO
+   *  Exportar Excel
    * ======================================================= */
   const exportarExcel = useCallback(async () => {
     try {
@@ -984,7 +975,6 @@ const MesasExamen = () => {
         return "";
       };
 
-      // ✅ MISMO CRITERIO en Excel: Curso → División → Apellido
       const cursoKeyExcel = (cursoRaw = "") => {
         const c = limpiarCursoX(cursoRaw);
         const s = c.replace(/\s+/g, " ").trim().toUpperCase();
@@ -1106,7 +1096,6 @@ const MesasExamen = () => {
         );
         if (d !== 0) return d;
 
-        // ✅ Curso → División → Apellido → Estudiante
         const cA = cursoKeyExcel(A.Curso || "");
         const cB = cursoKeyExcel(B.Curso || "");
         if (cA.year !== cB.year) return cA.year - cB.year;
@@ -1189,7 +1178,6 @@ const MesasExamen = () => {
     }
   }, [filasFiltradas, notify, vista]);
 
-  // ✅ Mesas lógicas filtradas según las filas visibles
   const mesasDetalleFiltradas = useMemo(() => {
     if (!mesasDetalle.length || !filasFiltradas.length) return [];
 
@@ -1224,7 +1212,7 @@ const MesasExamen = () => {
     return out;
   }, [mesasDetalle, filasFiltradas, fechaSel, turnoSel]);
 
-  // RESTAURAR SCROLL CUANDO YA CARGÓ TODO
+  // Restaurar scroll cuando carga inicial termina
   useEffect(() => {
     if (cargandoVista || loadingDetalle) return;
 
@@ -1250,17 +1238,15 @@ const MesasExamen = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // ✅ Función para pedir título y exportar
   const pedirTituloYExportar = useCallback((fnExport) => {
     exportActionRef.current = fnExport;
     setAbrirTituloPDF(true);
   }, []);
 
   /* ======================
-   *  NOTAS (UI + BACKEND)
+   *  NOTAS
    * ====================== */
 
-  // Genera un ID estable por fila (mesa + bloque + alumno)
   const buildRowId = useCallback((mesa, bloque, alumno, filaFallback = 0) => {
     const mesaKey = Array.isArray(mesa?.subNumeros)
       ? mesa.subNumeros.join("-")
@@ -1275,12 +1261,13 @@ const MesasExamen = () => {
     return `${fecha}|${turno}|${mesaKey}|${materia}|${docente}|${alumKey}`;
   }, []);
 
-  // ✅ CLAVE: solo pendientes. Si no hay pendiente, el select queda vacío.
+  // ✅ MODIFICADO: valor por defecto es VALOR_AUSENTE si no hay pendiente
   const getNotaUIValue = useCallback(
     (rowId) => {
       const pend = notasPendientes[rowId];
       if (pend && typeof pend === "object") return String(pend.value ?? "");
-      return "";
+      // Si no hay pendiente, default = VALOR_AUSENTE
+      return VALOR_AUSENTE;
     },
     [notasPendientes]
   );
@@ -1292,15 +1279,42 @@ const MesasExamen = () => {
     }));
   }, []);
 
-  // ✅ CONFIRMAR = guarda en DB + actualiza TODOS los registros del alumno + recarga detalle
-  // ✅ REEMPLAZAR COMPLETO (solo esta función)
+  // ✅ NUEVO: activar/desactivar modo edición para notas ya cargadas
+  const toggleEditandoNota = useCallback((rowId) => {
+    setEditandoNotas((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  }, []);
+
+  const cancelarEdicionNota = useCallback((rowId) => {
+    setEditandoNotas((prev) => {
+      const next = new Set(prev);
+      next.delete(rowId);
+      return next;
+    });
+    setNotasPendientes((prev) => {
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+  }, []);
+
+  // ✅ MODIFICADO: preserva scroll al guardar nota
   const confirmarNota = useCallback(
     async ({ rowId, alumno, mesa, bloque }) => {
       const pend = notasPendientes[rowId];
       if (!pend) return;
 
       const raw = String(pend.value ?? "").trim();
-      const limpiar = raw === "";
+
+      // ✅ Si eligió AUSENTE => limpiar nota
+      const limpiar = raw === "" || raw === VALOR_AUSENTE;
 
       let n = null;
       if (!limpiar) {
@@ -1318,14 +1332,10 @@ const MesasExamen = () => {
       const id_previa = parseInt(String(alumno?.id_previa ?? ""), 10);
       const dni = String(alumno?.dni ?? "").trim();
       const nombreAlumno = String(alumno?.alumno ?? "").trim();
-
-      // ✅ CLAVE: el numero de mesa real de ESA fila (vos ya lo guardás)
       const numero_mesa = Number(
         alumno?.numero_mesa ?? mesa?.subNumeros?.[0] ?? 0
       );
-
-      // ✅ opcional pero útil
-      const fecha_mesa = fechaKey(mesa?.fecha || ""); // YYYY-MM-DD
+      const fecha_mesa = fechaKey(mesa?.fecha || "");
 
       const hoyISO = (() => {
         const d = new Date();
@@ -1335,18 +1345,19 @@ const MesasExamen = () => {
         return `${yyyy}-${mm}-${dd}`;
       })();
 
-      // Si no hay numero_mesa, no hay forma robusta de resolver el “taller”
       if (!Number.isFinite(numero_mesa) || numero_mesa <= 0) {
         notify({
           tipo: "error",
           mensaje:
-            "No puedo guardar la nota: falta numero_mesa en el alumno. " +
-            "Asegurate que mesas_detalle_pdf devuelva numero_mesa y que buildMesasLogicas lo preserve.",
+            "No puedo guardar la nota: falta numero_mesa en el alumno.",
         });
         return;
       }
 
       try {
+        // ✅ Capturar scroll ANTES del POST
+        captureScroll();
+
         const body = {
           id_previa: Number.isFinite(id_previa) && id_previa > 0 ? id_previa : 0,
           numero_mesa,
@@ -1374,13 +1385,19 @@ const MesasExamen = () => {
           throw new Error(json?.mensaje || "No se pudo guardar la nota.");
         }
 
+        // Limpiar pendiente y modo edición para este rowId
         setNotasPendientes((prev) => {
           const next = { ...prev };
           delete next[rowId];
           return next;
         });
+        setEditandoNotas((prev) => {
+          const next = new Set(prev);
+          next.delete(rowId);
+          return next;
+        });
 
-        // ✅ actualizar instantáneo en la tabla (por DNI; fallback por nombre)
+        // ✅ Actualización optimista instantánea en la tabla
         setMesasDetalle((prev) => {
           if (!Array.isArray(prev) || !prev.length) return prev;
 
@@ -1410,8 +1427,8 @@ const MesasExamen = () => {
           }));
         });
 
-        // y resync real
-        await loadDetalle();
+        // ✅ Recarga real con preservación de scroll
+        await loadDetalle({ preservarScroll: true });
 
         notify({
           tipo: "exito",
@@ -1426,7 +1443,7 @@ const MesasExamen = () => {
         });
       }
     },
-    [notasPendientes, notify, loadDetalle]
+    [notasPendientes, notify, loadDetalle, captureScroll]
   );
 
   const cancelarNota = useCallback((rowId) => {
@@ -1437,12 +1454,6 @@ const MesasExamen = () => {
     });
   }, []);
 
-  /* =========================================================
-     ✅ Nota "de la DB" (para mostrar en texto plano)
-     Reglas:
-       - Si el alumno ya viene con nota (a.nota) => mostrar texto plano
-       - Si NO tiene nota de DB => mostrar el select (frontend)
-  ========================================================= */
   const getNotaDB = useCallback((alumno) => {
     const rawN = alumno?.nota;
     if (rawN === null || rawN === undefined || rawN === "") return null;
@@ -1463,7 +1474,6 @@ const MesasExamen = () => {
         <div className="glob-front-row-pro">
           <span className="glob-profesor-title">Mesas de Examen</span>
 
-          {/* Buscador */}
           <div className="glob-search-input-container">
             <input
               type="text"
@@ -1484,7 +1494,6 @@ const MesasExamen = () => {
             </button>
           </div>
 
-          {/* Panel de filtros */}
           <div className="glob-filtros-container" ref={filtrosRef}>
             <button
               className="glob-filtros-button"
@@ -1512,7 +1521,6 @@ const MesasExamen = () => {
 
             {mostrarFiltros && (
               <div className="glob-filtros-menu" role="menu">
-                {/* FECHA */}
                 <div className="glob-filtros-group">
                   <button
                     type="button"
@@ -1555,7 +1563,6 @@ const MesasExamen = () => {
                   </div>
                 </div>
 
-                {/* TURNO */}
                 <div className="glob-filtros-group">
                   <button
                     type="button"
@@ -1617,7 +1624,6 @@ const MesasExamen = () => {
                   <FaUsers className="glob-icono-profesor" />
                 </div>
 
-                {/* TABS */}
                 <div
                   className="glob-tabs glob-tabs--inline"
                   role="tablist"
@@ -1657,7 +1663,6 @@ const MesasExamen = () => {
                   </button>
                 </div>
 
-                {/* CHIPS */}
                 {(q || fechaSel || turnoSel) && (
                   <div className="glob-chips-container">
                     {q && (
@@ -1879,10 +1884,11 @@ const MesasExamen = () => {
                         };
 
                       const notaDB = getNotaDB(a);
-
                       const rowId = buildRowId(mesa, bloque, a, filaGlobal);
                       const notaUI = getNotaUIValue(rowId);
                       const tienePendiente = Boolean(notasPendientes[rowId]);
+                      // ✅ NUEVO: ¿está en modo edición?
+                      const estaEditando = editandoNotas.has(rowId);
 
                       const celdas = [];
 
@@ -1919,7 +1925,6 @@ const MesasExamen = () => {
                         );
                       }
 
-                      // Estudiante/DNI/Curso
                       celdas.push(
                         <td
                           key={`al-${filaGlobal}`}
@@ -1942,15 +1947,24 @@ const MesasExamen = () => {
                         </td>
                       );
 
-                      // ✅ COLUMNA NOTA
+                      // ✅ COLUMNA NOTA — lógica modificada
                       celdas.push(
                         <td
                           key={`nota-${filaGlobal}`}
                           className="pdf-td-center col-nota"
                           style={{ whiteSpace: "nowrap" }}
                         >
-                          {notaDB != null ? (
+                          {/* ✅ Caso A: tiene nota de DB y NO está en modo edición → mostrar badge con doble click */}
+                          {notaDB != null && !estaEditando ? (
                             <span
+                              onDoubleClick={() => {
+                                // ✅ Al entrar en edición, pre-cargar el valor actual
+                                setNotasPendientes((prev) => ({
+                                  ...prev,
+                                  [rowId]: { value: String(notaDB) },
+                                }));
+                                toggleEditandoNota(rowId);
+                              }}
                               style={{
                                 display: "inline-block",
                                 minWidth: 78,
@@ -1959,12 +1973,15 @@ const MesasExamen = () => {
                                 fontWeight: 800,
                                 border: "1px solid rgba(0,0,0,0.10)",
                                 background: "rgba(0,0,0,0.04)",
+                                cursor: "pointer",
+                                userSelect: "none",
                               }}
-                              title="Nota ya cargada"
+                              title="Doble clic para editar la nota"
                             >
                               {notaDB}
                             </span>
                           ) : (
+                            /* ✅ Caso B: sin nota DB, o está en modo edición → select */
                             <>
                               <select
                                 value={notaUI}
@@ -1977,18 +1994,22 @@ const MesasExamen = () => {
                                   border: "1px solid rgba(0,0,0,0.12)",
                                   outline: "none",
                                   fontWeight: 700,
-                                  width: 78,
-                                  background: tienePendiente
-                                    ? "rgba(255, 193, 7, 0.18)"
-                                    : "white",
+                                  width: 90,
+                                  background:
+                                    tienePendiente && notaUI !== VALOR_AUSENTE
+                                      ? "rgba(255, 193, 7, 0.18)"
+                                      : "white",
                                 }}
                                 title={
-                                  tienePendiente
+                                  estaEditando
+                                    ? "Editando nota — doble clic en la nota guardada para editar"
+                                    : tienePendiente && notaUI !== VALOR_AUSENTE
                                     ? "Nota pendiente de confirmación"
                                     : "Seleccionar nota"
                                 }
                               >
-                                <option value="">—</option>
+                                {/* ✅ Opción Ausente siempre primera */}
+                                <option value={VALOR_AUSENTE}>Ausente</option>
                                 {Array.from({ length: 10 }, (_, k) =>
                                   String(k + 1)
                                 ).map((v) => (
@@ -1998,7 +2019,10 @@ const MesasExamen = () => {
                                 ))}
                               </select>
 
-                              {tienePendiente && (
+                              {/* ✅ Botones confirmar/cancelar: mostrar si hay un número seleccionado O si está editando */}
+                              {(tienePendiente &&
+                                notaUI !== VALOR_AUSENTE) ||
+                              estaEditando ? (
                                 <span
                                   style={{
                                     marginLeft: 8,
@@ -2006,31 +2030,44 @@ const MesasExamen = () => {
                                     gap: 6,
                                   }}
                                 >
+                                  {/* Solo confirmar si cambió algo */}
+                                  {tienePendiente && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        confirmarNota({
+                                          rowId,
+                                          alumno: a,
+                                          mesa,
+                                          bloque,
+                                        })
+                                      }
+                                      title={
+                                        notaUI === VALOR_AUSENTE
+                                          ? "Guardar como Ausente (sin nota)"
+                                          : "Confirmar nota (guardar en DB)"
+                                      }
+                                      style={{
+                                        border: "none",
+                                        borderRadius: 8,
+                                        padding: "6px 8px",
+                                        cursor: "pointer",
+                                        background: "rgba(46, 204, 113, 0.18)",
+                                      }}
+                                      aria-label="Confirmar nota"
+                                    >
+                                      <FaCheck />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      confirmarNota({
-                                        rowId,
-                                        alumno: a,
-                                        mesa,
-                                        bloque,
-                                      })
-                                    }
-                                    title="Confirmar nota (guardar en DB)"
-                                    style={{
-                                      border: "none",
-                                      borderRadius: 8,
-                                      padding: "6px 8px",
-                                      cursor: "pointer",
-                                      background: "rgba(46, 204, 113, 0.18)",
+                                    onClick={() => {
+                                      if (estaEditando) {
+                                        cancelarEdicionNota(rowId);
+                                      } else {
+                                        cancelarNota(rowId);
+                                      }
                                     }}
-                                    aria-label="Confirmar nota"
-                                  >
-                                    <FaCheck />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => cancelarNota(rowId)}
                                     title="Cancelar"
                                     style={{
                                       border: "none",
@@ -2044,7 +2081,7 @@ const MesasExamen = () => {
                                     <FaTimes />
                                   </button>
                                 </span>
-                              )}
+                              ) : null}
                             </>
                           )}
                         </td>
@@ -2102,10 +2139,10 @@ const MesasExamen = () => {
                       id_previa: null,
                     };
                     const notaDB = getNotaDB(alumnoFake);
-
                     const rowId = buildRowId(mesa, bloqueFake, alumnoFake, 0);
                     const notaUI = getNotaUIValue(rowId);
                     const tienePendiente = Boolean(notasPendientes[rowId]);
+                    const estaEditando = editandoNotas.has(rowId);
 
                     rowsHTML.push(
                       <tr
@@ -2134,8 +2171,15 @@ const MesasExamen = () => {
                           className="pdf-td-center col-nota"
                           style={{ whiteSpace: "nowrap" }}
                         >
-                          {notaDB != null ? (
+                          {notaDB != null && !estaEditando ? (
                             <span
+                              onDoubleClick={() => {
+                                setNotasPendientes((prev) => ({
+                                  ...prev,
+                                  [rowId]: { value: String(notaDB) },
+                                }));
+                                toggleEditandoNota(rowId);
+                              }}
                               style={{
                                 display: "inline-block",
                                 minWidth: 78,
@@ -2144,7 +2188,10 @@ const MesasExamen = () => {
                                 fontWeight: 800,
                                 border: "1px solid rgba(0,0,0,0.10)",
                                 background: "rgba(0,0,0,0.04)",
+                                cursor: "pointer",
+                                userSelect: "none",
                               }}
+                              title="Doble clic para editar la nota"
                             >
                               {notaDB}
                             </span>
@@ -2161,13 +2208,14 @@ const MesasExamen = () => {
                                   border: "1px solid rgba(0,0,0,0.12)",
                                   outline: "none",
                                   fontWeight: 700,
-                                  width: 78,
-                                  background: tienePendiente
-                                    ? "rgba(255, 193, 7, 0.18)"
-                                    : "white",
+                                  width: 90,
+                                  background:
+                                    tienePendiente && notaUI !== VALOR_AUSENTE
+                                      ? "rgba(255, 193, 7, 0.18)"
+                                      : "white",
                                 }}
                               >
-                                <option value="">—</option>
+                                <option value={VALOR_AUSENTE}>Ausente</option>
                                 {Array.from({ length: 10 }, (_, k) =>
                                   String(k + 1)
                                 ).map((v) => (
@@ -2176,7 +2224,8 @@ const MesasExamen = () => {
                                   </option>
                                 ))}
                               </select>
-                              {tienePendiente && (
+                              {(tienePendiente && notaUI !== VALOR_AUSENTE) ||
+                              estaEditando ? (
                                 <span
                                   style={{
                                     marginLeft: 8,
@@ -2184,30 +2233,38 @@ const MesasExamen = () => {
                                     gap: 6,
                                   }}
                                 >
+                                  {tienePendiente && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        confirmarNota({
+                                          rowId,
+                                          alumno: alumnoFake,
+                                          mesa,
+                                          bloque: bloqueFake,
+                                        })
+                                      }
+                                      title="Confirmar nota (guardar en DB)"
+                                      style={{
+                                        border: "none",
+                                        borderRadius: 8,
+                                        padding: "6px 8px",
+                                        cursor: "pointer",
+                                        background: "rgba(46, 204, 113, 0.18)",
+                                      }}
+                                    >
+                                      <FaCheck />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      confirmarNota({
-                                        rowId,
-                                        alumno: alumnoFake,
-                                        mesa,
-                                        bloque: bloqueFake,
-                                      })
-                                    }
-                                    title="Confirmar nota (guardar en DB)"
-                                    style={{
-                                      border: "none",
-                                      borderRadius: 8,
-                                      padding: "6px 8px",
-                                      cursor: "pointer",
-                                      background: "rgba(46, 204, 113, 0.18)",
+                                    onClick={() => {
+                                      if (estaEditando) {
+                                        cancelarEdicionNota(rowId);
+                                      } else {
+                                        cancelarNota(rowId);
+                                      }
                                     }}
-                                  >
-                                    <FaCheck />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => cancelarNota(rowId)}
                                     title="Cancelar"
                                     style={{
                                       border: "none",
@@ -2220,7 +2277,7 @@ const MesasExamen = () => {
                                     <FaTimes />
                                   </button>
                                 </span>
-                              )}
+                              ) : null}
                             </>
                           )}
                         </td>
@@ -2241,7 +2298,6 @@ const MesasExamen = () => {
 
                   return (
                     <div key={`mesa-${idxMesa}`} className="mesa-detalle-box">
-                      {/* Header */}
                       <div className="pdf-header">
                         <div className="pdf-header-left">
                           <img src={escudo} alt="Logo" className="pdf-logo" />
@@ -2262,7 +2318,6 @@ const MesasExamen = () => {
                         </div>
                       </div>
 
-                      {/* Tabla */}
                       <div className="pdf-table-wrapper">
                         <table className="tabla-detalle-mesa">
                           <thead>
@@ -2280,7 +2335,6 @@ const MesasExamen = () => {
                         </table>
                       </div>
 
-                      {/* Acciones rápidas */}
                       <div className="pdf-actions">
                         <button
                           className="glob-iconchip pdfbuttons"
@@ -2376,7 +2430,6 @@ const MesasExamen = () => {
           </button>
 
           <div className="glob-botones-container">
-            {/* CREAR MESAS */}
             <button
               className="glob-profesor-button glob-hover-effect"
               onClick={() => setAbrirCrear(true)}
@@ -2456,7 +2509,6 @@ const MesasExamen = () => {
               <p>Exportar PDF</p>
             </button>
 
-            {/* ELIMINAR MESAS */}
             <button
               className="glob-profesor-button glob-hover-effect"
               onClick={() => setAbrirEliminar(true)}
@@ -2472,7 +2524,6 @@ const MesasExamen = () => {
         </div>
       </div>
 
-      {/* Modales (lote) */}
       {abrirCrear && (
         <ModalCrearMesas
           open={abrirCrear}
@@ -2527,7 +2578,6 @@ const MesasExamen = () => {
         />
       )}
 
-      {/* Eliminar individual */}
       {abrirEliminarUno && mesaAEliminar?.numero_mesa && (
         <ModalEliminarMesa
           open={abrirEliminarUno}
@@ -2550,7 +2600,6 @@ const MesasExamen = () => {
         />
       )}
 
-      {/* Modal título PDF */}
       {abrirTituloPDF && (
         <ModalTituloPDF
           open={abrirTituloPDF}
@@ -2566,7 +2615,6 @@ const MesasExamen = () => {
         />
       )}
 
-      {/* Toast */}
       {toast && (
         <Toast
           tipo={toast.tipo}

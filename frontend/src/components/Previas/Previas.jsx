@@ -58,6 +58,9 @@ const normalizar = (str = '') =>
 const MAX_CASCADE_ITEMS = 15;
 const ITEM_SIZE = 48;
 
+// Clave para sessionStorage
+const SCROLL_KEY = 'previas_scroll_offset';
+
 const formatearFechaISO = (v) => {
   if (!v || typeof v !== 'string') return '';
   const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -98,7 +101,7 @@ function useIsMobile(breakpoint = 768) {
 /* ========= Modal de confirmación ========= */
 const ConfirmActionModal = ({
   open,
-  mode, // 'eliminar' | 'desinscribir' | 'limpiar'
+  mode,
   item,
   loading,
   error,
@@ -225,7 +228,7 @@ const Previas = () => {
   const [previas, setPrevias] = useState([]);
   const [cargando, setCargando] = useState(false);
 
-  const [tab, setTab] = useState('todos'); // 'todos' | 'inscriptos'
+  const [tab, setTab] = useState('todos');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [animacionActiva, setAnimacionActiva] = useState(false);
   const [preCascada, setPreCascada] = useState(false);
@@ -244,10 +247,9 @@ const Previas = () => {
   const [openSecciones, setOpenSecciones] = useState({
     curso: false,
     division: false,
-    condicion: false, // ✅ NUEVO
+    condicion: false,
   });
 
-  // Modal confirmación (eliminar / desinscribir / limpiar)
   const [modal, setModal] = useState({
     open: false,
     mode: null,
@@ -256,14 +258,12 @@ const Previas = () => {
     error: '',
   });
 
-  // ✅ Modal confirmar copia snapshot
   const [modalCopia, setModalCopia] = useState({
     open: false,
     loading: false,
     error: '',
   });
 
-  // ✅ Modal DAR DE BAJA
   const [modalBaja, setModalBaja] = useState({
     open: false,
     item: null,
@@ -271,7 +271,6 @@ const Previas = () => {
     error: '',
   });
 
-  // Modal INSCRIBIR
   const [modalIns, setModalIns] = useState({
     open: false,
     item: null,
@@ -280,16 +279,13 @@ const Previas = () => {
     error: '',
   });
 
-  // Modal INFO PREVIA
   const [modalInfo, setModalInfo] = useState({
     open: false,
     item: null,
   });
 
-  // Modal de importación
   const [modalImport, setModalImport] = useState(false);
 
-  // ✅ Listas básicas (desde backend) — ahora incluye condiciones
   const [listas, setListas] = useState({
     cursos: [],
     divisiones: [],
@@ -299,9 +295,16 @@ const Previas = () => {
   const listRef = useRef(null);
   const savedScrollOffsetRef = useRef(0);
   const viewportHeightRef = useRef(0);
+
+  // Para restauraciones internas (eliminar, desinscribir, baja, inscribir)
   const restorationRef = useRef(null);
 
-  // Filtros
+  // Para restauración desde editar — persiste entre renders hasta que se use
+  const scrollFromEditRef = useRef(null);
+
+  // Indica que ya leímos el sessionStorage y hay que restaurar cuando los datos estén
+  const pendingEditScrollRef = useRef(false);
+
   const [filtros, setFiltros] = useState(() => {
     const saved = localStorage.getItem('filtros_previas');
     if (saved) {
@@ -311,7 +314,7 @@ const Previas = () => {
           busqueda: parsed.busqueda ?? '',
           cursoSeleccionado: parsed.cursoSeleccionado ?? '',
           divisionSeleccionada: parsed.divisionSeleccionada ?? '',
-          condicionSeleccionada: parsed.condicionSeleccionada ?? '', // ✅ NUEVO
+          condicionSeleccionada: parsed.condicionSeleccionada ?? '',
           filtroActivo: parsed.filtroActivo ?? null,
         };
       } catch {}
@@ -320,7 +323,7 @@ const Previas = () => {
       busqueda: '',
       cursoSeleccionado: '',
       divisionSeleccionada: '',
-      condicionSeleccionada: '', // ✅ NUEVO
+      condicionSeleccionada: '',
       filtroActivo: null,
     };
   });
@@ -329,7 +332,7 @@ const Previas = () => {
     busqueda,
     cursoSeleccionado,
     divisionSeleccionada,
-    condicionSeleccionada, // ✅ NUEVO
+    condicionSeleccionada,
     filtroActivo,
   } = filtros;
 
@@ -339,10 +342,9 @@ const Previas = () => {
     (busquedaDefer && busquedaDefer.trim() !== '') ||
     (cursoSeleccionado && cursoSeleccionado !== '') ||
     (divisionSeleccionada && divisionSeleccionada !== '') ||
-    (condicionSeleccionada && condicionSeleccionada !== '') // ✅ NUEVO
+    (condicionSeleccionada && condicionSeleccionada !== '')
   );
 
-  // Base por pestaña - ORDENADA ALFABÉTICAMENTE
   const basePorTab = useMemo(() => {
     let base = previas;
     if (tab === 'inscriptos') {
@@ -355,7 +357,6 @@ const Previas = () => {
     });
   }, [tab, previas]);
 
-  // Filtrado + búsqueda - MANTENER ORDEN
   const previasFiltradas = useMemo(() => {
     let resultados = basePorTab;
 
@@ -381,7 +382,6 @@ const Previas = () => {
       );
     }
 
-    // ✅ NUEVO: filtro por condición (por NOMBRE)
     if (condicionSeleccionada && condicionSeleccionada !== '') {
       const condNorm = normalizar(condicionSeleccionada);
       resultados = resultados.filter(
@@ -399,7 +399,7 @@ const Previas = () => {
     busquedaDefer,
     cursoSeleccionado,
     divisionSeleccionada,
-    condicionSeleccionada, // ✅ NUEVO
+    condicionSeleccionada,
     filtroActivo,
   ]);
 
@@ -418,7 +418,6 @@ const Previas = () => {
 
   const tablaConDatos = useMemo(() => previas.length > 0, [previas]);
 
-  // ✅ Cantidad inscriptos (para habilitar botón copia)
   const cantidadInscriptos = useMemo(() => {
     return previas.filter((p) => Number(p?.inscripcion ?? 0) === 1).length;
   }, [previas]);
@@ -449,6 +448,16 @@ const Previas = () => {
 
   const mostrarToast = useCallback((mensaje, tipo = 'exito') => {
     setToast({ mostrar: true, tipo, mensaje });
+  }, []);
+
+  /* ================================
+     Helper: aplicar scroll a la lista
+  ================================= */
+  const aplicarScroll = useCallback((offset, itemCount) => {
+    if (!listRef.current) return;
+    const max = Math.max(0, itemCount * ITEM_SIZE - (viewportHeightRef.current || 0));
+    const clamped = Math.min(Math.max(0, offset), max);
+    listRef.current.scrollTo(clamped);
   }, []);
 
   /* ================================
@@ -484,11 +493,23 @@ const Previas = () => {
     }
   }, [mostrarToast]);
 
+  /* ================================
+     Al montar: leer sessionStorage ANTES de cargar datos
+  ================================= */
   useEffect(() => {
+    const stored = sessionStorage.getItem(SCROLL_KEY);
+    if (stored !== null) {
+      const parsed = parseFloat(stored);
+      if (!isNaN(parsed) && parsed > 0) {
+        scrollFromEditRef.current = parsed;
+        pendingEditScrollRef.current = true;
+      }
+      sessionStorage.removeItem(SCROLL_KEY);
+    }
     cargarPrevias();
-  }, [cargarPrevias]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ✅ Cargar listas básicas (cursos, divisiones, condiciones) desde global
   useEffect(() => {
     const fetchListas = async () => {
       try {
@@ -501,7 +522,7 @@ const Previas = () => {
         setListas({
           cursos: json.listas?.cursos ?? [],
           divisiones: json.listas?.divisiones ?? [],
-          condiciones: json.listas?.condiciones ?? [], // ✅ NUEVO
+          condiciones: json.listas?.condiciones ?? [],
         });
       } catch (e) {
         console.error('Error cargando listas:', e);
@@ -524,6 +545,52 @@ const Previas = () => {
   }, [busquedaDefer, triggerCascadaConPreMask]);
 
   /* ================================
+     RESTAURAR SCROLL DESDE EDITAR
+     Se activa cuando cargando pasa a false y hay datos en previasFiltradas.
+     Usamos setTimeout para darle tiempo a react-window a renderizar las filas.
+  ================================= */
+  useEffect(() => {
+    if (!pendingEditScrollRef.current) return;
+    if (cargando) return;
+    if (previasFiltradas.length === 0) return;
+
+    const target = scrollFromEditRef.current;
+    if (target === null) return;
+
+    // Marcar como consumido inmediatamente para no repetir
+    pendingEditScrollRef.current = false;
+    scrollFromEditRef.current = null;
+
+    // Dar tiempo a react-window para pintar las filas virtualizadas
+    const timer = setTimeout(() => {
+      aplicarScroll(target, previasFiltradas.length);
+    }, 80);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargando, previasFiltradas.length]);
+
+  /* ================================
+     RESTAURAR SCROLL INTERNO
+     (eliminar, baja, inscribir, desinscribir)
+  ================================= */
+  useEffect(() => {
+    const pending = restorationRef.current;
+    if (!pending || pending.type !== 'offset') return;
+    if (cargando) return;
+    if (previasFiltradas.length === 0) return;
+
+    const target = pending.value;
+    restorationRef.current = null;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        aplicarScroll(target, previasFiltradas.length);
+      });
+    });
+  }, [previasFiltradas, cargando, aplicarScroll]);
+
+  /* ================================
      Handlers filtros/búsqueda
   ================================= */
   const handleMostrarTodos = useCallback(() => {
@@ -531,7 +598,7 @@ const Previas = () => {
       busqueda: '',
       cursoSeleccionado: '',
       divisionSeleccionada: '',
-      condicionSeleccionada: '', // ✅ NUEVO
+      condicionSeleccionada: '',
       filtroActivo: 'todos',
     });
     triggerCascadaConPreMask();
@@ -589,7 +656,6 @@ const Previas = () => {
     [triggerCascadaConPreMask]
   );
 
-  // ✅ NUEVO: Filtrar por condición
   const handleFiltrarPorCondicion = useCallback(
     (condNombre) => {
       setFiltros((prev) => {
@@ -642,7 +708,6 @@ const Previas = () => {
     });
   }, []);
 
-  // ✅ NUEVO: quitar condición
   const quitarCondicion = useCallback(() => {
     setFiltros((prev) => {
       const next = { ...prev, condicionSeleccionada: '' };
@@ -660,12 +725,11 @@ const Previas = () => {
       busqueda: '',
       cursoSeleccionado: '',
       divisionSeleccionada: '',
-      condicionSeleccionada: '', // ✅ NUEVO
+      condicionSeleccionada: '',
       filtroActivo: null,
     }));
   }, []);
 
-  // Abrir modal acción (eliminar / desinscribir)
   const abrirModalAccion = useCallback(
     (p) => {
       const mode = tab === 'inscriptos' ? 'desinscribir' : 'eliminar';
@@ -678,7 +742,6 @@ const Previas = () => {
     setModal({ open: true, mode: 'limpiar', item: null, loading: false, error: '' });
   }, []);
 
-  // ✅ abrir modal copia
   const abrirModalCopia = useCallback(() => {
     setModalCopia({ open: true, loading: false, error: '' });
   }, []);
@@ -715,7 +778,6 @@ const Previas = () => {
     }
   }, [mostrarToast]);
 
-  // ✅ Abrir modal DAR DE BAJA
   const abrirModalBaja = useCallback((p) => {
     setModalBaja({ open: true, item: p, loading: false, error: '' });
   }, []);
@@ -725,7 +787,6 @@ const Previas = () => {
     setModalBaja({ open: false, item: null, loading: false, error: '' });
   }, [modalBaja.loading]);
 
-  // ✅ Confirmar DAR DE BAJA
   const confirmarDarBaja = useCallback(
     async ({ fecha_baja, motivo_baja }) => {
       try {
@@ -765,7 +826,6 @@ const Previas = () => {
     [modalBaja.item, cargarPrevias, mostrarToast]
   );
 
-  // Confirmar acción (eliminar / desinscribir / limpiar)
   const confirmarAccion = useCallback(async () => {
     if (!modal.mode) return;
     try {
@@ -814,7 +874,6 @@ const Previas = () => {
     setModal({ open: false, mode: null, item: null, loading: false, error: '' });
   }, [modal.loading]);
 
-  // Abrir modal INSCRIBIR
   const abrirModalInscribir = useCallback(
     (p) => {
       const dniActual = String(p?.dni ?? '').trim();
@@ -836,7 +895,6 @@ const Previas = () => {
     [previas]
   );
 
-  // Confirmar INSCRIPCIÓN
   const confirmarInscripcion = useCallback(
     async ({ ids }) => {
       if (!ids || !Array.isArray(ids) || ids.length === 0) return;
@@ -967,24 +1025,14 @@ const Previas = () => {
     savedScrollOffsetRef.current = scrollOffset;
   }, []);
 
-  useEffect(() => {
-    const pending = restorationRef.current;
-    if (!pending || pending.type !== 'offset') return;
-
-    requestAnimationFrame(() => {
-      if (!listRef.current) {
-        restorationRef.current = null;
-        return;
-      }
-      const target = typeof pending.value === 'number' ? pending.value : 0;
-      const itemCount = previasFiltradas.length;
-      const maxOffset = Math.max(0, itemCount * ITEM_SIZE - (viewportHeightRef.current || 0));
-      const clamped = Math.min(Math.max(0, target), maxOffset);
-
-      listRef.current.scrollTo(clamped);
-      restorationRef.current = null;
-    });
-  }, [previasFiltradas, tab, filtroActivo, busquedaDefer, cursoSeleccionado, divisionSeleccionada, condicionSeleccionada]);
+  // Navegar a editar guardando scroll en sessionStorage
+  const handleEditarPrevia = useCallback(
+    (p) => {
+      sessionStorage.setItem(SCROLL_KEY, String(savedScrollOffsetRef.current || 0));
+      navigate(`/previas/editar/${p.id_previa}`);
+    },
+    [navigate]
+  );
 
   /* ================================
      Fila virtualizada (desktop)
@@ -996,7 +1044,6 @@ const Previas = () => {
     const preMask = preCascada && index < MAX_CASCADE_ITEMS;
 
     const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
-
     const mostrarBotonInscribir = estado === 'PENDIENTE' && esCondicionPrevia(p);
 
     return (
@@ -1044,10 +1091,11 @@ const Previas = () => {
               <FaInfoCircle />
             </button>
 
+            {/* Usar handleEditarPrevia para guardar scroll antes de navegar */}
             <button
               className="glob-iconchip is-edit"
               title="Editar"
-              onClick={() => navigate(`/previas/editar/${p.id_previa}`)}
+              onClick={() => handleEditarPrevia(p)}
               aria-label="Editar"
             >
               <FaEdit />
@@ -1253,7 +1301,7 @@ const Previas = () => {
                   </div>
                 </div>
 
-                {/* ✅ CONDICION (NUEVO) */}
+                {/* CONDICION */}
                 <div className="glob-filtros-group">
                   <button
                     type="button"
@@ -1338,7 +1386,7 @@ const Previas = () => {
                 </div>
               </div>
 
-              {/* ✅ CHIPS + Limpiar filtros */}
+              {/* CHIPS */}
               {hayChips && (
                 <div className="glob-chips-container">
                   {busqueda && (
@@ -1373,7 +1421,6 @@ const Previas = () => {
                     </div>
                   )}
 
-                  {/* ✅ NUEVO CHIP: CONDICION */}
                   {condicionSeleccionada && (
                     <div className="glob-chip-mini" title="Filtro activo">
                       <span className="glob-chip-mini-text glob-profesores-desktop">Condición: {condicionSeleccionada}</span>
@@ -1395,7 +1442,7 @@ const Previas = () => {
                 </div>
               )}
 
-              {/* ✅ VACÍAR TABLA */}
+              {/* VACIAR TABLA */}
               <button
                 className="glob-profesor-button glob-hover-effect glob-btn--danger glob-chip-action-fixed"
                 onClick={abrirModalLimpiar}
