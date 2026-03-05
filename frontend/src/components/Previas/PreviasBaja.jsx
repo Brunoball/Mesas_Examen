@@ -10,7 +10,7 @@ import {
   FaTimes,
   FaUserPlus,
   FaTrash,
-  FaCommentDots,
+  FaCheckCircle,
 } from "react-icons/fa";
 import Toast from "../Global/Toast";
 
@@ -30,22 +30,33 @@ const normalizar = (str = "") =>
 
 const fmtFechaAR = (v) => {
   if (!v) return "-";
-  const s = String(v).slice(0, 10); // "YYYY-MM-DD"
+  const s = String(v).slice(0, 10);
   const [y, m, d] = s.split("-");
   if (!y || !m || !d) return s;
   return `${d}/${m}/${y}`;
 };
 
+const ymd = (v) => {
+  if (!v) return "";
+  return String(v).slice(0, 10); // YYYY-MM-DD
+};
+
+const ymdToNum = (s) => {
+  // "YYYY-MM-DD" => number comparable
+  if (!s || typeof s !== "string") return 0;
+  const t = s.replaceAll("-", "");
+  return /^\d{8}$/.test(t) ? Number(t) : 0;
+};
+
 /* =========================================================
-   ✅ MODAL EMBEBIDO (sin archivo aparte)
+   Modal motivo completo
 ========================================================= */
-const MotivoCompletoModal = ({ open, motivo, onClose }) => {
+const MotivoCompletoModal = ({ open, motivo, tipo, onClose }) => {
   const closeRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     closeRef.current?.focus();
-
     const onKeyDown = (e) => {
       if (e.key === "Escape") onClose?.();
     };
@@ -62,24 +73,21 @@ const MotivoCompletoModal = ({ open, motivo, onClose }) => {
         onClick={onClose}
         aria-label="Cerrar modal"
       />
-
       <div className="prevMot_card">
-        {/* ÍCONO */}
         <div className="prevMot_iconWrap">
-          <div className="prevMot_iconCircle">
-            <FaInfoCircle />
+          <div
+            className={`prevMot_iconCircle ${
+              tipo === "aprobado" ? "prevMot_iconCircle--ok" : ""
+            }`}
+          >
+            {tipo === "aprobado" ? <FaCheckCircle /> : <FaInfoCircle />}
           </div>
         </div>
 
-        {/* TÍTULO */}
         <h3 className="prevMot_title">Motivo de la baja</h3>
 
-        {/* CONTENIDO */}
-        <div className="prevMot_box">
-          {motivo || "-"}
-        </div>
+        <div className="prevMot_box">{motivo || "-"}</div>
 
-        {/* ACCIONES */}
         <div className="prevMot_actions">
           <button
             ref={closeRef}
@@ -95,15 +103,21 @@ const MotivoCompletoModal = ({ open, motivo, onClose }) => {
   );
 };
 
-
-
+/* =========================================================
+   PreviasBaja
+========================================================= */
 const PreviasBaja = () => {
   const navigate = useNavigate();
 
   const [previas, setPrevias] = useState([]);
   const [cargando, setCargando] = useState(false);
+
   const [busqueda, setBusqueda] = useState("");
   const [toast, setToast] = useState({ mostrar: false, tipo: "", mensaje: "" });
+
+  // ✅ filtro fechas
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
 
   const [modalAlta, setModalAlta] = useState({
     open: false,
@@ -119,16 +133,20 @@ const PreviasBaja = () => {
     error: "",
   });
 
-  // ✅ Modal motivo completo (embebido)
-  const [modalMotivo, setModalMotivo] = useState({ open: false, motivo: "" });
-  const abrirModalMotivo = useCallback((motivo) => {
-    setModalMotivo({ open: true, motivo: motivo || "" });
-  }, []);
-  const cerrarModalMotivo = useCallback(() => {
-    setModalMotivo({ open: false, motivo: "" });
+  const [modalMotivo, setModalMotivo] = useState({
+    open: false,
+    motivo: "",
+    tipo: "baja",
+  });
+
+  const abrirModalMotivo = useCallback((motivo, tipo) => {
+    setModalMotivo({ open: true, motivo: motivo || "", tipo: tipo || "baja" });
   }, []);
 
-  // ✅ Refs para medir overflow por fila (motivo)
+  const cerrarModalMotivo = useCallback(() => {
+    setModalMotivo({ open: false, motivo: "", tipo: "baja" });
+  }, []);
+
   const motivoRefs = useRef({});
   const [motivosOverflow, setMotivosOverflow] = useState({});
 
@@ -139,22 +157,52 @@ const PreviasBaja = () => {
   const cargarBajas = useCallback(async () => {
     try {
       setCargando(true);
-
       const res = await fetch(
         `${BASE_URL}/api.php?action=previas_baja&ts=${Date.now()}`
       );
       const data = await res.json();
-
       if (!data?.exito) throw new Error(data?.mensaje || "Error desconocido");
 
-      const procesadas = (data.previas || []).map((p) => ({
-        ...p,
-        _alumno: normalizar(p.alumno),
-        _dni: String(p.dni || "").toLowerCase(),
-        _motivo: normalizar(p.motivo_baja),
-      }));
+      const procesadas = (data.previas || []).map((p) => {
+        // ✅ fecha "real" para ordenar/filtrar
+        const fecha_real =
+          p.tipo_baja === "aprobado" ? ymd(p.fecha_nota) : ymd(p.fecha_baja);
+
+        const motivoVisible = p.motivo_baja_display || p.motivo_baja || "";
+
+        return {
+          ...p,
+          motivo_display: motivoVisible,
+          fecha_real, // YYYY-MM-DD
+          _fecha_num: ymdToNum(fecha_real),
+          _alumno: normalizar(p.alumno),
+          _dni: String(p.dni || "").toLowerCase(),
+          _motivo: normalizar(motivoVisible),
+        };
+      });
+
+      // ✅ Orden final seguro en frontend (por si el backend viene raro)
+      procesadas.sort((a, b) => {
+        const fa = a._fecha_num || 0;
+        const fb = b._fecha_num || 0;
+        if (fb !== fa) return fb - fa; // DESC (más reciente arriba)
+        return String(a.alumno || "").localeCompare(String(b.alumno || ""), "es", {
+          sensitivity: "base",
+        });
+      });
 
       setPrevias(procesadas);
+
+      // ✅ Inicializa rango de fechas disponible si el user no tocó nada
+      const fechas = procesadas
+        .map((x) => x.fecha_real)
+        .filter(Boolean)
+        .sort(); // asc
+      const min = fechas[0] || "";
+      const max = fechas[fechas.length - 1] || "";
+
+      setFechaDesde((old) => old || min);
+      setFechaHasta((old) => old || max);
     } catch (e) {
       mostrarToast(e.message || "Error al obtener bajas", "error");
     } finally {
@@ -166,16 +214,52 @@ const PreviasBaja = () => {
     cargarBajas();
   }, [cargarBajas]);
 
+  // ✅ min/max para inputs date (según datos reales)
+  const rangoFechas = useMemo(() => {
+    const fechas = previas
+      .map((p) => p.fecha_real)
+      .filter(Boolean)
+      .sort(); // asc
+    return {
+      min: fechas[0] || "",
+      max: fechas[fechas.length - 1] || "",
+    };
+  }, [previas]);
+
   const bajasFiltradas = useMemo(() => {
     const q = normalizar(busqueda);
-    if (!q) return previas;
 
-    return previas.filter(
-      (p) => p._alumno.includes(q) || p._dni.includes(q) || p._motivo.includes(q)
-    );
-  }, [previas, busqueda]);
+    const desdeNum = ymdToNum(fechaDesde || rangoFechas.min);
+    const hastaNum = ymdToNum(fechaHasta || rangoFechas.max);
 
-  // ✅ medir overflow: si el texto desborda su caja => mostrar botón ⋯
+    const dentroRango = (p) => {
+      if (!p._fecha_num) return true; // si viniera sin fecha, no lo filtramos
+      if (desdeNum && p._fecha_num < desdeNum) return false;
+      if (hastaNum && p._fecha_num > hastaNum) return false;
+      return true;
+    };
+
+    const porTexto = (p) => {
+      if (!q) return true;
+      return p._alumno.includes(q) || p._dni.includes(q) || p._motivo.includes(q);
+    };
+
+    const arr = previas.filter((p) => dentroRango(p) && porTexto(p));
+
+    // ✅ mantener orden: más reciente arriba
+    arr.sort((a, b) => {
+      const fa = a._fecha_num || 0;
+      const fb = b._fecha_num || 0;
+      if (fb !== fa) return fb - fa;
+      return String(a.alumno || "").localeCompare(String(b.alumno || ""), "es", {
+        sensitivity: "base",
+      });
+    });
+
+    return arr;
+  }, [previas, busqueda, fechaDesde, fechaHasta, rangoFechas.min, rangoFechas.max]);
+
+  // Medir overflow del motivo por fila
   useEffect(() => {
     const medir = () => {
       const next = {};
@@ -186,7 +270,6 @@ const PreviasBaja = () => {
       }
       setMotivosOverflow(next);
     };
-
     const t = setTimeout(medir, 0);
     window.addEventListener("resize", medir);
     return () => {
@@ -201,20 +284,20 @@ const PreviasBaja = () => {
   }, []);
 
   const cerrarModalAlta = useCallback(() => {
-    setModalAlta((m) => (m.loading ? m : { open: false, item: null, loading: false, error: "" }));
+    setModalAlta((m) =>
+      m.loading ? m : { open: false, item: null, loading: false, error: "" }
+    );
   }, []);
 
   const confirmarAlta = useCallback(
     async ({ fecha_alta, motivo_alta }) => {
       try {
         setModalAlta((m) => ({ ...m, loading: true, error: "" }));
-
         const payload = {
           id_previa: modalAlta.item?.id_previa,
           fecha_alta,
           motivo_alta,
         };
-
         const res = await fetch(
           `${BASE_URL}/api.php?action=previa_dar_alta&ts=${Date.now()}`,
           {
@@ -223,10 +306,8 @@ const PreviasBaja = () => {
             body: JSON.stringify(payload),
           }
         );
-
         const json = await res.json();
         if (!json?.exito) throw new Error(json?.mensaje || "No se pudo dar de alta");
-
         await cargarBajas();
         setModalAlta({ open: false, item: null, loading: false, error: "" });
         mostrarToast("Previa dada de alta", "exito");
@@ -256,9 +337,7 @@ const PreviasBaja = () => {
     try {
       const id = Number(modalEliminar.item?.id_previa || 0);
       if (!id) throw new Error("ID inválido");
-
       setModalEliminar((m) => ({ ...m, loading: true, error: "" }));
-
       const res = await fetch(
         `${BASE_URL}/api.php?action=previa_eliminar&ts=${Date.now()}`,
         {
@@ -267,10 +346,8 @@ const PreviasBaja = () => {
           body: JSON.stringify({ id_previa: id }),
         }
       );
-
       const json = await res.json();
       if (!json?.exito) throw new Error(json?.mensaje || "No se pudo eliminar");
-
       await cargarBajas();
       setModalEliminar({ open: false, item: null, loading: false, error: "" });
       mostrarToast("Registro eliminado", "exito");
@@ -283,9 +360,15 @@ const PreviasBaja = () => {
     }
   }, [modalEliminar.item, cargarBajas, mostrarToast]);
 
+  const disabledUI = cargando || modalAlta.loading || modalEliminar.loading;
+
+  const limpiarFechas = useCallback(() => {
+    setFechaDesde(rangoFechas.min || "");
+    setFechaHasta(rangoFechas.max || "");
+  }, [rangoFechas.min, rangoFechas.max]);
+
   return (
     <div className="emp-baja-container prev-baja-container">
-      {/* Toast */}
       {toast.mostrar && (
         <Toast
           tipo={toast.tipo}
@@ -295,7 +378,6 @@ const PreviasBaja = () => {
         />
       )}
 
-      {/* Modal Dar Alta */}
       <DarAltaPreviaModal
         open={modalAlta.open}
         item={modalAlta.item}
@@ -305,7 +387,6 @@ const PreviasBaja = () => {
         onConfirm={confirmarAlta}
       />
 
-      {/* Modal Eliminar */}
       <ModalEliminarPreviaBaja
         open={modalEliminar.open}
         item={modalEliminar.item}
@@ -315,10 +396,10 @@ const PreviasBaja = () => {
         onConfirm={confirmarEliminar}
       />
 
-      {/* ✅ Modal Motivo completo (embebido) */}
       <MotivoCompletoModal
         open={modalMotivo.open}
         motivo={modalMotivo.motivo}
+        tipo={modalMotivo.tipo}
         onClose={cerrarModalMotivo}
       />
 
@@ -328,7 +409,6 @@ const PreviasBaja = () => {
           <div className="emp-baja-titulo-container">
             <h2 className="emp-baja-titulo">Previas dadas de baja</h2>
           </div>
-
           <button
             className="emp-baja-nav-btn emp-baja-nav-btn--volver-top"
             onClick={() => navigate("/previas")}
@@ -348,23 +428,78 @@ const PreviasBaja = () => {
           placeholder="Buscar por alumno, DNI o motivo..."
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          disabled={cargando || modalAlta.loading || modalEliminar.loading}
+          disabled={disabledUI}
         />
-
         {busqueda && (
           <button
             type="button"
             className="prev-baja-clear"
             onClick={() => setBusqueda("")}
             title="Limpiar"
-            disabled={cargando || modalAlta.loading || modalEliminar.loading}
+            disabled={disabledUI}
           >
             <FaTimes />
           </button>
         )}
-
         <div className="emp-baja-buscador-icono">
           <FaSearch />
+        </div>
+      </div>
+
+      {/* ✅ Filtro por fechas */}
+      <div className="emp-baja-controles-superiores" style={{ gap: 12 }}>
+        <div className="emp-baja-contador" style={{ display: "flex", alignItems: "center" }}>
+          Mostrando <strong style={{ margin: "0 6px" }}>{bajasFiltradas.length}</strong> previas
+          <FaUsers style={{ marginLeft: 8, opacity: 0.7 }} />
+        </div>
+
+        <div
+          className="prev-baja-fechas"
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
+          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ opacity: 0.85 }}>Desde</span>
+            <input
+              type="date"
+              value={fechaDesde}
+              min={rangoFechas.min}
+              max={rangoFechas.max}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              disabled={disabledUI}
+              style={{ padding: "8px 10px", borderRadius: 10 }}
+            />
+          </label>
+
+          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ opacity: 0.85 }}>Hasta</span>
+            <input
+              type="date"
+              value={fechaHasta}
+              min={rangoFechas.min}
+              max={rangoFechas.max}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              disabled={disabledUI}
+              style={{ padding: "8px 10px", borderRadius: 10 }}
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={limpiarFechas}
+            disabled={disabledUI}
+            className="emp-baja-nav-btn"
+            style={{ padding: "9px 12px" }}
+            title="Restablecer rango completo"
+          >
+            <FaTimes className="ico" />
+            <span>Limpiar fechas</span>
+          </button>
         </div>
       </div>
 
@@ -373,13 +508,6 @@ const PreviasBaja = () => {
         <p className="emp-baja-cargando">Cargando previas dadas de baja...</p>
       ) : (
         <div className="emp-baja-tabla-container">
-          <div className="emp-baja-controles-superiores">
-            <div className="emp-baja-contador">
-              Mostrando <strong>{bajasFiltradas.length}</strong> previas
-              <FaUsers style={{ marginLeft: 8, opacity: 0.7 }} />
-            </div>
-          </div>
-
           <div className="emp-baja-tabla-header-container">
             <div
               className="emp-baja-tabla-header scrolbarheaders"
@@ -409,8 +537,13 @@ const PreviasBaja = () => {
                   <div className="prev-col-dni">{p.dni}</div>
                   <div className="prev-col-alumno">{p.alumno}</div>
 
-                  {/* ✅ MOTIVO: ancho max 350px + ellipsis + botón ⋯ solo si desborda */}
-                  <div className="prev-col-motivo" title={p.motivo_baja || ""}>
+                  {/* MOTIVO */}
+                  <div
+                    className={`prev-col-motivo${
+                      p.tipo_baja === "aprobado" ? " prev-col-motivo--aprobado" : ""
+                    }`}
+                    title={p.motivo_display || ""}
+                  >
                     <div className="prev-motivo-wrap" style={{ maxWidth: 350 }}>
                       <span
                         className="prev-motivo-text"
@@ -418,28 +551,31 @@ const PreviasBaja = () => {
                           if (el) motivoRefs.current[p.id_previa] = el;
                         }}
                       >
-                        {p.motivo_baja || "-"}
+                        {p.motivo_display || "-"}
                       </span>
 
-{motivosOverflow[p.id_previa] && (
-  <button
-    type="button"
-    className="prev-motivo-info"
-    title="Ver motivo completo"
-    aria-label="Ver motivo completo"
-    onClick={() => abrirModalMotivo(p.motivo_baja)}
-  >
-    <FaInfoCircle />
-  </button>
-)}
+                      {motivosOverflow[p.id_previa] && (
+                        <button
+                          type="button"
+                          className="prev-motivo-info"
+                          title="Ver motivo completo"
+                          aria-label="Ver motivo completo"
+                          onClick={() => abrirModalMotivo(p.motivo_display, p.tipo_baja)}
+                        >
+                          <FaInfoCircle />
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  <div className="prev-col-fecha" title={p.fecha_baja || ""}>
-                    {fmtFechaAR(p.fecha_baja)}
+                  {/* FECHA: aprobados fecha_nota, bajas fecha_baja */}
+                  <div className="prev-col-fecha">
+                    {p.tipo_baja === "aprobado"
+                      ? fmtFechaAR(p.fecha_nota)
+                      : fmtFechaAR(p.fecha_baja)}
                   </div>
 
-                  {/* ✅ ACCIONES: alta + eliminar */}
+                  {/* ACCIONES */}
                   <div className="prev-col-acciones">
                     <div className="emp-baja-iconos">
                       <button
@@ -454,7 +590,7 @@ const PreviasBaja = () => {
                       </button>
 
                       <button
-                        className="emp-baja-icono prev-baja-btn-trash "
+                        className="emp-baja-icono prev-baja-btn-trash"
                         title="Eliminar registro"
                         onClick={() => abrirModalEliminar(p)}
                         aria-label="Eliminar registro"

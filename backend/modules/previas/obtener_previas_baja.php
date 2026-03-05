@@ -18,17 +18,60 @@ try {
             p.dni,
             p.alumno,
             p.motivo_baja,
-            p.fecha_baja
+            p.fecha_baja,
+            p.nota,
+            p.fecha_nota,
+
+            -- ✅ Fecha de orden: si hay fecha_baja úsala; sino fecha_nota
+            COALESCE(p.fecha_baja, p.fecha_nota) AS fecha_orden,
+
+            m.materia         AS materia_nombre,
+            c.nombre_curso    AS materia_curso,
+            d.nombre_division AS materia_division
         FROM previas p
+        LEFT JOIN materias m  ON m.id_materia  = p.id_materia
+        LEFT JOIN curso c     ON c.id_curso     = p.materia_id_curso
+        LEFT JOIN division d  ON d.id_division  = p.materia_id_division
         WHERE p.activo = 0
-        ORDER BY p.fecha_baja DESC, p.alumno ASC
+        ORDER BY
+            fecha_orden DESC,
+            p.id_previa DESC
     ";
 
     $stmt = $pdo->query($sql);
-    $previas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $previas = array_map(function ($p) {
+        $tieneNota       = isset($p['nota']) && $p['nota'] !== null && $p['nota'] !== '';
+        $tieneFechaNota  = isset($p['fecha_nota']) && $p['fecha_nota'] !== null && $p['fecha_nota'] !== '';
+
+        $tieneBajaNormal = (isset($p['motivo_baja']) && $p['motivo_baja'] !== null && trim($p['motivo_baja']) !== '')
+                        || (isset($p['fecha_baja'])  && $p['fecha_baja']  !== null && $p['fecha_baja']  !== '');
+
+        // ✅ Si NO hay baja normal, pero hay nota/fecha_nota => se interpreta como "aprobado"
+        if (!$tieneBajaNormal && ($tieneNota || $tieneFechaNota)) {
+            $materia  = $p['materia_nombre'] ?? 'Materia desconocida';
+            $curso    = $p['materia_curso']    ?? '';
+            $division = $p['materia_division'] ?? '';
+            $nota     = $tieneNota ? $p['nota'] : '—';
+
+            $sufijo = '';
+            if ($curso !== '' || $division !== '') {
+                $sufijo = ' DE ' . trim("{$curso} {$division}");
+            }
+
+            $p['motivo_baja_display'] = "APROBÓ {$materia}{$sufijo} — NOTA: {$nota}";
+            $p['tipo_baja'] = 'aprobado';
+        } else {
+            $p['motivo_baja_display'] = $p['motivo_baja'] ?? '';
+            $p['tipo_baja'] = 'baja';
+        }
+
+        return $p;
+    }, $rows);
 
     echo json_encode([
-        'exito' => true,
+        'exito'   => true,
         'previas' => $previas
     ], JSON_UNESCAPED_UNICODE);
 

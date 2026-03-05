@@ -79,11 +79,18 @@ try {
   if ($nota_raw === null || (is_string($nota_raw) && trim($nota_raw) === '')) {
     $limpiar = true;
   } else {
-    $nota_int = (int)$nota_raw;
+    // robusto por si viene "6 ", "06", etc.
+    $nota_int = (int)trim((string)$nota_raw);
     if ($nota_int < 1 || $nota_int > 10) {
       out(false, 'La nota debe estar entre 1 y 10, o vacío para limpiar.', 400);
     }
   }
+
+  // ✅ Regla FINAL (como pediste):
+  // - Si nota >= 7 => activo=0 e inscripcion=0
+  // - Si nota <= 6 => NO TOCAR activo/inscripcion (quedan como estén)
+  // - Si limpiar   => NO TOCAR activo/inscripcion (quedan como estén)
+  $aprobo = (!$limpiar && $nota_int !== null && $nota_int >= 7);
 
   // -------- Fecha nota
   $fecha_nota = null;
@@ -223,8 +230,7 @@ try {
   }
 
   // =========================================================
-  // ✅ BULK REAL: aunque mandes SOLO id_previa,
-  // sacamos el grupo desde la tabla mesas usando id_previa_real
+  // ✅ BULK REAL
   // =========================================================
 
   // 1) DNI real de la previa resuelta
@@ -234,9 +240,6 @@ try {
   $dni_db_digits = only_digits($dni_db);
 
   // 2) Grupo mesa: prioridad
-  //   A) lo que manda el front
-  //   B) mesa_ref si existiera
-  //   C) buscar en mesas por id_previa_real (ESTO ES LO QUE TE FALTABA)
   $grupo_numero = $numero_mesa > 0 ? $numero_mesa : (int)($mesa_ref['numero_mesa'] ?? 0);
   $grupo_fecha  = ($fecha_mesa !== '') ? $fecha_mesa : (string)($mesa_ref['fecha_mesa'] ?? '');
   $grupo_turno  = $id_turno > 0 ? $id_turno : (int)($mesa_ref['id_turno'] ?? 0);
@@ -265,9 +268,6 @@ try {
   if ($grupo_numero > 0 && $dni_db_digits !== '') {
     $dniFieldNorm = sql_norm_dni('p.dni');
 
-    // Armar WHERE del grupo:
-    // - SI tengo fecha/turno válidos -> los uso (evita tocar otra mesa con mismo número en otro día)
-    // - si NO -> caigo a "solo numero_mesa" como pediste
     $whereGrupo = "m.numero_mesa = :num";
     $bind = [
       ':num' => $grupo_numero,
@@ -311,14 +311,25 @@ try {
   $placeholders = implode(',', array_fill(0, count($ids_a_actualizar), '?'));
 
   if ($limpiar) {
+    // ✅ limpiar nota/fecha, NO tocar activo/inscripcion
     $sqlUp = "UPDATE previas SET nota = NULL, fecha_nota = NULL WHERE id_previa IN ($placeholders)";
     $stUp = $pdo->prepare($sqlUp);
     $stUp->execute($ids_a_actualizar);
   } else {
-    $sqlUp = "UPDATE previas SET nota = ?, fecha_nota = ? WHERE id_previa IN ($placeholders)";
-    $stUp = $pdo->prepare($sqlUp);
-    $params = array_merge([$nota_int, $fecha_nota], $ids_a_actualizar);
-    $stUp->execute($params);
+    if ($aprobo) {
+      // ✅ aprobado: recién ahí activo=0 e inscripcion=0
+      $sqlUp = "UPDATE previas SET nota = ?, fecha_nota = ?, activo = 0, inscripcion = 0 WHERE id_previa IN ($placeholders)";
+      $stUp = $pdo->prepare($sqlUp);
+      $params = array_merge([$nota_int, $fecha_nota], $ids_a_actualizar);
+      $stUp->execute($params);
+    } else {
+      // ✅ NO aprobado (<=6): guardar nota/fecha, PERO dejar activo/inscripcion en 1
+      // (esto evita que quede en 0 por algo previo)
+      $sqlUp = "UPDATE previas SET nota = ?, fecha_nota = ?, activo = 1, inscripcion = 1 WHERE id_previa IN ($placeholders)";
+      $stUp = $pdo->prepare($sqlUp);
+      $params = array_merge([$nota_int, $fecha_nota], $ids_a_actualizar);
+      $stUp->execute($params);
+    }
   }
 
   $affected = (int)$stUp->rowCount();
@@ -339,8 +350,17 @@ try {
 
     'nota' => $limpiar ? null : $nota_int,
     'fecha_nota' => $limpiar ? null : $fecha_nota,
+    'aprobo_nota_>=7' => ($limpiar ? null : $aprobo),
+    'estado_aplicado' => $limpiar
+      ? 'sin_cambios_en_estado'
+      : ($aprobo ? 'activo=0,inscripcion=0' : 'activo=1,inscripcion=1'),
+
     'rowCount' => $affected,
-    'mensaje' => $limpiar ? 'Nota eliminada.' : 'Nota guardada.',
+    'mensaje' => $limpiar
+      ? 'Nota eliminada.'
+      : ($aprobo
+          ? 'Nota guardada (>=7). Se marcó como finalizada (activo=0, inscripcion=0).'
+          : 'Nota guardada (<=6). Sigue vigente (activo=1, inscripcion=1).'),
     'aclaracion' => 'rowCount puede ser 0 si ya tenía esos valores (MySQL no cuenta cambios).',
   ]);
 
