@@ -1229,3 +1229,6 @@ input:-webkit-autofill { background-color: transparent !important; }
   background: var(--pro-primary);
   color: #fff;
 }
+.glob-column-nombre{
+ text-align: left;
+}

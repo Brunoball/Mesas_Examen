@@ -1050,7 +1050,7 @@ const Previas = () => {
       <div
         style={{
           ...style,
-          gridTemplateColumns: ' 1.6fr 0.7fr 1fr 1fr 0.5fr 1fr 1fr',
+          gridTemplateColumns: ' 1.5fr 0.7fr 1.3fr .6fr 0.5fr .7fr 1fr',
           animationDelay: willAnimate ? `${index * 0.03}s` : '0s',
           opacity: preMask ? 0 : undefined,
           transform: preMask ? 'translateY(8px)' : undefined,
@@ -1457,7 +1457,7 @@ const Previas = () => {
 
           {!isMobile && (
             <div className="glob-box-table">
-              <div className="glob-header" style={{ gridTemplateColumns: '1.6fr 0.7fr 1fr 1fr 0.5fr 1fr 1fr' }}>
+              <div className="glob-header" style={{ gridTemplateColumns: '1.5fr 0.7fr 1.3fr .6fr 0.5fr .7fr 1fr' }}>
                 <div className="glob-column-header">Alumno</div>
                 <div className="glob-column-header">DNI</div>
                 <div className="glob-column-header">Materia</div>

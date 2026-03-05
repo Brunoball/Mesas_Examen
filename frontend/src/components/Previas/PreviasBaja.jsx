@@ -531,7 +531,7 @@ const PreviasBaja = () => {
           <div className="emp-baja-tabla-header-container">
             <div
               className="emp-baja-tabla-header scrolbarheaders"
-              style={{ gridTemplateColumns: "0.5fr 1.6fr 1.4fr 0.5fr .8fr" }}
+              style={{ gridTemplateColumns: "0.5fr 1.5fr 1.6fr 0.5fr .5fr" }}
             >
               <div className="prev-col-dni">DNI</div>
               <div className="prev-col-alumno">Alumno</div>
@@ -553,7 +553,7 @@ const PreviasBaja = () => {
                   className="emp-baja-fila"
                   key={p.id_previa}
                   style={{
-                    gridTemplateColumns: "0.5fr 1.6fr 1.4fr 0.5fr .8fr",
+                    gridTemplateColumns: "0.5fr 1.5fr 1.6fr 0.5fr .5fr",
                   }}
                 >
                   <div className="prev-col-dni">{p.dni}</div>
