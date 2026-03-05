@@ -1,8 +1,8 @@
+// ✅ REEMPLAZAR COMPLETO
 // src/components/Previas/PreviasBaja.jsx
 import React, { useEffect, useMemo, useCallback, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaInfoCircle } from "react-icons/fa";
-import BASE_URL from "../../config/config";
+import { FaInfoCircle, FaCheckCircle } from "react-icons/fa";
 import {
   FaArrowLeft,
   FaUsers,
@@ -10,8 +10,8 @@ import {
   FaTimes,
   FaUserPlus,
   FaTrash,
-  FaCheckCircle,
 } from "react-icons/fa";
+import BASE_URL from "../../config/config";
 import Toast from "../Global/Toast";
 
 import DarAltaPreviaModal from "./modales/DarAltaPreviaModal";
@@ -21,6 +21,9 @@ import "../Global/roots.css";
 import "../Global/section-ui.css";
 import "../Profesores/ProfesorBaja.css";
 
+/* ======================
+   Helpers
+====================== */
 const normalizar = (str = "") =>
   (str?.toString?.() ?? String(str))
     .toLowerCase()
@@ -72,6 +75,7 @@ const MotivoCompletoModal = ({ open, motivo, tipo, onClose }) => {
         className="prevMot_backdrop"
         onClick={onClose}
         aria-label="Cerrar modal"
+        type="button"
       />
       <div className="prevMot_card">
         <div className="prevMot_iconWrap">
@@ -164,7 +168,6 @@ const PreviasBaja = () => {
       if (!data?.exito) throw new Error(data?.mensaje || "Error desconocido");
 
       const procesadas = (data.previas || []).map((p) => {
-        // ✅ fecha "real" para ordenar/filtrar
         const fecha_real =
           p.tipo_baja === "aprobado" ? ymd(p.fecha_nota) : ymd(p.fecha_baja);
 
@@ -173,7 +176,7 @@ const PreviasBaja = () => {
         return {
           ...p,
           motivo_display: motivoVisible,
-          fecha_real, // YYYY-MM-DD
+          fecha_real,
           _fecha_num: ymdToNum(fecha_real),
           _alumno: normalizar(p.alumno),
           _dni: String(p.dni || "").toLowerCase(),
@@ -181,11 +184,10 @@ const PreviasBaja = () => {
         };
       });
 
-      // ✅ Orden final seguro en frontend (por si el backend viene raro)
       procesadas.sort((a, b) => {
         const fa = a._fecha_num || 0;
         const fb = b._fecha_num || 0;
-        if (fb !== fa) return fb - fa; // DESC (más reciente arriba)
+        if (fb !== fa) return fb - fa;
         return String(a.alumno || "").localeCompare(String(b.alumno || ""), "es", {
           sensitivity: "base",
         });
@@ -193,11 +195,10 @@ const PreviasBaja = () => {
 
       setPrevias(procesadas);
 
-      // ✅ Inicializa rango de fechas disponible si el user no tocó nada
       const fechas = procesadas
         .map((x) => x.fecha_real)
         .filter(Boolean)
-        .sort(); // asc
+        .sort();
       const min = fechas[0] || "";
       const max = fechas[fechas.length - 1] || "";
 
@@ -214,16 +215,9 @@ const PreviasBaja = () => {
     cargarBajas();
   }, [cargarBajas]);
 
-  // ✅ min/max para inputs date (según datos reales)
   const rangoFechas = useMemo(() => {
-    const fechas = previas
-      .map((p) => p.fecha_real)
-      .filter(Boolean)
-      .sort(); // asc
-    return {
-      min: fechas[0] || "",
-      max: fechas[fechas.length - 1] || "",
-    };
+    const fechas = previas.map((p) => p.fecha_real).filter(Boolean).sort();
+    return { min: fechas[0] || "", max: fechas[fechas.length - 1] || "" };
   }, [previas]);
 
   const bajasFiltradas = useMemo(() => {
@@ -233,7 +227,7 @@ const PreviasBaja = () => {
     const hastaNum = ymdToNum(fechaHasta || rangoFechas.max);
 
     const dentroRango = (p) => {
-      if (!p._fecha_num) return true; // si viniera sin fecha, no lo filtramos
+      if (!p._fecha_num) return true;
       if (desdeNum && p._fecha_num < desdeNum) return false;
       if (hastaNum && p._fecha_num > hastaNum) return false;
       return true;
@@ -246,7 +240,6 @@ const PreviasBaja = () => {
 
     const arr = previas.filter((p) => dentroRango(p) && porTexto(p));
 
-    // ✅ mantener orden: más reciente arriba
     arr.sort((a, b) => {
       const fa = a._fecha_num || 0;
       const fb = b._fecha_num || 0;
@@ -259,7 +252,6 @@ const PreviasBaja = () => {
     return arr;
   }, [previas, busqueda, fechaDesde, fechaHasta, rangoFechas.min, rangoFechas.max]);
 
-  // Medir overflow del motivo por fila
   useEffect(() => {
     const medir = () => {
       const next = {};
@@ -277,6 +269,22 @@ const PreviasBaja = () => {
       window.removeEventListener("resize", medir);
     };
   }, [bajasFiltradas]);
+
+  // ===== Abrir datepicker al click en cualquier parte =====
+  const refDesde = useRef(null);
+  const refHasta = useRef(null);
+
+  const openDatePicker = useCallback((ref) => {
+    const el = ref?.current;
+    if (!el || el.disabled) return;
+
+    if (typeof el.showPicker === "function") {
+      el.showPicker();
+    } else {
+      el.focus();
+      el.click();
+    }
+  }, []);
 
   // ===== MODAL ALTA =====
   const abrirModalAlta = useCallback((p) => {
@@ -446,55 +454,67 @@ const PreviasBaja = () => {
         </div>
       </div>
 
-      {/* ✅ Filtro por fechas */}
-      <div className="emp-baja-controles-superiores" style={{ gap: 12 }}>
-        <div className="emp-baja-contador" style={{ display: "flex", alignItems: "center" }}>
-          Mostrando <strong style={{ margin: "0 6px" }}>{bajasFiltradas.length}</strong> previas
+      {/* Controles */}
+      <div className="emp-baja-controles-superiores prev-baja-controles">
+        <div className="emp-baja-contador prev-baja-contador">
+          Mostrando{" "}
+          <strong style={{ margin: "0 6px" }}>{bajasFiltradas.length}</strong>{" "}
+          previas
           <FaUsers style={{ marginLeft: 8, opacity: 0.7 }} />
         </div>
 
-        <div
-          className="prev-baja-fechas"
-          style={{
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            flexWrap: "wrap",
-            justifyContent: "flex-end",
-          }}
-        >
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ opacity: 0.85 }}>Desde</span>
+        <div className="prev-baja-fechas">
+          <div
+            className={`prev-baja-fechaField ${disabledUI ? "is-disabled" : ""}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => openDatePicker(refDesde)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") openDatePicker(refDesde);
+            }}
+            title="Seleccionar fecha desde"
+          >
+            <span className="prev-baja-fechaLabel">Desde</span>
             <input
+              ref={refDesde}
+              className="prev-baja-fechaInput"
               type="date"
               value={fechaDesde}
               min={rangoFechas.min}
               max={rangoFechas.max}
               onChange={(e) => setFechaDesde(e.target.value)}
               disabled={disabledUI}
-              style={{ padding: "8px 10px", borderRadius: 10 }}
             />
-          </label>
+          </div>
 
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ opacity: 0.85 }}>Hasta</span>
+          <div
+            className={`prev-baja-fechaField ${disabledUI ? "is-disabled" : ""}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => openDatePicker(refHasta)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") openDatePicker(refHasta);
+            }}
+            title="Seleccionar fecha hasta"
+          >
+            <span className="prev-baja-fechaLabel">Hasta</span>
             <input
+              ref={refHasta}
+              className="prev-baja-fechaInput"
               type="date"
               value={fechaHasta}
               min={rangoFechas.min}
               max={rangoFechas.max}
               onChange={(e) => setFechaHasta(e.target.value)}
               disabled={disabledUI}
-              style={{ padding: "8px 10px", borderRadius: 10 }}
             />
-          </label>
+          </div>
 
           <button
             type="button"
             onClick={limpiarFechas}
             disabled={disabledUI}
-            className="emp-baja-nav-btn"
-            style={{ padding: "9px 12px" }}
+            className="prev-baja-btn-limpiarFechas"
             title="Restablecer rango completo"
           >
             <FaTimes className="ico" />
@@ -532,15 +552,18 @@ const PreviasBaja = () => {
                 <div
                   className="emp-baja-fila"
                   key={p.id_previa}
-                  style={{ gridTemplateColumns: "0.5fr 1.6fr 1.4fr 0.5fr .8fr" }}
+                  style={{
+                    gridTemplateColumns: "0.5fr 1.6fr 1.4fr 0.5fr .8fr",
+                  }}
                 >
                   <div className="prev-col-dni">{p.dni}</div>
                   <div className="prev-col-alumno">{p.alumno}</div>
 
-                  {/* MOTIVO */}
                   <div
                     className={`prev-col-motivo${
-                      p.tipo_baja === "aprobado" ? " prev-col-motivo--aprobado" : ""
+                      p.tipo_baja === "aprobado"
+                        ? " prev-col-motivo--aprobado"
+                        : ""
                     }`}
                     title={p.motivo_display || ""}
                   >
@@ -560,7 +583,9 @@ const PreviasBaja = () => {
                           className="prev-motivo-info"
                           title="Ver motivo completo"
                           aria-label="Ver motivo completo"
-                          onClick={() => abrirModalMotivo(p.motivo_display, p.tipo_baja)}
+                          onClick={() =>
+                            abrirModalMotivo(p.motivo_display, p.tipo_baja)
+                          }
                         >
                           <FaInfoCircle />
                         </button>
@@ -568,14 +593,12 @@ const PreviasBaja = () => {
                     </div>
                   </div>
 
-                  {/* FECHA: aprobados fecha_nota, bajas fecha_baja */}
                   <div className="prev-col-fecha">
                     {p.tipo_baja === "aprobado"
                       ? fmtFechaAR(p.fecha_nota)
                       : fmtFechaAR(p.fecha_baja)}
                   </div>
 
-                  {/* ACCIONES */}
                   <div className="prev-col-acciones">
                     <div className="emp-baja-iconos">
                       <button
