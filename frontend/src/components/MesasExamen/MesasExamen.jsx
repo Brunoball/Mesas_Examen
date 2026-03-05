@@ -543,7 +543,7 @@ const MesasExamen = () => {
     };
   }, [persistState]);
 
-  // ✅ NUEVO: guardar scroll antes de recargar detalle para no perder posición
+  // ✅ guardar scroll antes de recargar detalle para no perder posición
   const captureScroll = useCallback(() => {
     const el = pdfScrollRef.current;
     if (el) {
@@ -551,18 +551,26 @@ const MesasExamen = () => {
     }
   }, []);
 
+  // ✅ FIX: restoreScroll sin setTimeout inicial ni smooth — posiciona instantáneamente
   const restoreScroll = useCallback(() => {
     const pos = scrollPosRef.current;
     if (!pos) return;
     const tryRestore = (attempts = 0) => {
       const el = pdfScrollRef.current;
       if (el) {
+        // Forzar scroll-behavior: auto para evitar animación
+        el.style.scrollBehavior = "auto";
         el.scrollTop = pos;
+        // Restaurar después de aplicar
+        requestAnimationFrame(() => {
+          el.style.scrollBehavior = "";
+        });
       } else if (attempts < 10) {
-        setTimeout(() => tryRestore(attempts + 1), 50);
+        setTimeout(() => tryRestore(attempts + 1), 16);
       }
     };
-    setTimeout(() => tryRestore(), 80);
+    // Sin setTimeout inicial — ejecutar en el próximo frame
+    requestAnimationFrame(() => tryRestore());
   }, []);
 
   const fetchListas = useCallback(async () => {
@@ -1212,30 +1220,39 @@ const MesasExamen = () => {
     return out;
   }, [mesasDetalle, filasFiltradas, fechaSel, turnoSel]);
 
-  // Restaurar scroll cuando carga inicial termina
+  // ✅ FIX: Restaurar scroll cuando carga inicial termina — sin animación
   useEffect(() => {
     if (cargandoVista || loadingDetalle) return;
 
-    const timer = setTimeout(() => {
+    const frame = requestAnimationFrame(() => {
       const el = pdfScrollRef.current;
       if (!el) return;
       if (!scrollRestoredRef.current && scrollPosRef.current > 0) {
+        // Forzar sin transición
+        el.style.scrollBehavior = "auto";
         el.scrollTop = scrollPosRef.current;
+        requestAnimationFrame(() => {
+          el.style.scrollBehavior = "";
+        });
         scrollRestoredRef.current = true;
       }
-    }, 100);
+    });
 
-    return () => clearTimeout(timer);
+    return () => cancelAnimationFrame(frame);
   }, [cargandoVista, loadingDetalle, mesasDetalleFiltradas.length]);
 
   const restaurarScroll = useCallback(() => {
-    const timer = setTimeout(() => {
+    const frame = requestAnimationFrame(() => {
       const el = pdfScrollRef.current;
       if (el && scrollPosRef.current > 0) {
+        el.style.scrollBehavior = "auto";
         el.scrollTop = scrollPosRef.current;
+        requestAnimationFrame(() => {
+          el.style.scrollBehavior = "";
+        });
       }
-    }, 150);
-    return () => clearTimeout(timer);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const pedirTituloYExportar = useCallback((fnExport) => {
@@ -1766,7 +1783,7 @@ const MesasExamen = () => {
                 </div>
               </div>
             ) : (
-              <div className="pdf-scroll" ref={pdfScrollRef}>
+              <div className="pdf-scroll" ref={pdfScrollRef} style={{scrollBehavior:"auto"}}>
                 {mesasDetalleFiltradas.map((mesa, idxMesa) => {
                   const { dia, mesTxt, anio } = nombreMes(mesa.fecha);
                   const headerTitulo = `MESAS DE EXAMEN ${
@@ -1887,7 +1904,6 @@ const MesasExamen = () => {
                       const rowId = buildRowId(mesa, bloque, a, filaGlobal);
                       const notaUI = getNotaUIValue(rowId);
                       const tienePendiente = Boolean(notasPendientes[rowId]);
-                      // ✅ NUEVO: ¿está en modo edición?
                       const estaEditando = editandoNotas.has(rowId);
 
                       const celdas = [];
@@ -1947,18 +1963,16 @@ const MesasExamen = () => {
                         </td>
                       );
 
-                      // ✅ COLUMNA NOTA — lógica modificada
+                      // ✅ COLUMNA NOTA
                       celdas.push(
                         <td
                           key={`nota-${filaGlobal}`}
                           className="pdf-td-center col-nota"
                           style={{ whiteSpace: "nowrap" }}
                         >
-                          {/* ✅ Caso A: tiene nota de DB y NO está en modo edición → mostrar badge con doble click */}
                           {notaDB != null && !estaEditando ? (
                             <span
                               onDoubleClick={() => {
-                                // ✅ Al entrar en edición, pre-cargar el valor actual
                                 setNotasPendientes((prev) => ({
                                   ...prev,
                                   [rowId]: { value: String(notaDB) },
@@ -1981,7 +1995,6 @@ const MesasExamen = () => {
                               {notaDB}
                             </span>
                           ) : (
-                            /* ✅ Caso B: sin nota DB, o está en modo edición → select */
                             <>
                               <select
                                 value={notaUI}
@@ -2002,13 +2015,12 @@ const MesasExamen = () => {
                                 }}
                                 title={
                                   estaEditando
-                                    ? "Editando nota — doble clic en la nota guardada para editar"
+                                    ? "Editando nota"
                                     : tienePendiente && notaUI !== VALOR_AUSENTE
                                     ? "Nota pendiente de confirmación"
                                     : "Seleccionar nota"
                                 }
                               >
-                                {/* ✅ Opción Ausente siempre primera */}
                                 <option value={VALOR_AUSENTE}>Ausente</option>
                                 {Array.from({ length: 10 }, (_, k) =>
                                   String(k + 1)
@@ -2019,7 +2031,6 @@ const MesasExamen = () => {
                                 ))}
                               </select>
 
-                              {/* ✅ Botones confirmar/cancelar: mostrar si hay un número seleccionado O si está editando */}
                               {(tienePendiente &&
                                 notaUI !== VALOR_AUSENTE) ||
                               estaEditando ? (
@@ -2030,7 +2041,6 @@ const MesasExamen = () => {
                                     gap: 6,
                                   }}
                                 >
-                                  {/* Solo confirmar si cambió algo */}
                                   {tienePendiente && (
                                     <button
                                       type="button"
