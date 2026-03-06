@@ -670,6 +670,6 @@
   transform: none;
   box-shadow: none;
 }
-.prev-col-alumno{
+.prev-col-alumno,.prev-col-motivo{
   justify-self: start;
 }
