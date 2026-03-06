@@ -670,3 +670,6 @@
   transform: none;
   box-shadow: none;
 }
+.prev-col-alumno{
+  justify-self: start;
+}

@@ -531,7 +531,7 @@ const PreviasBaja = () => {
           <div className="emp-baja-tabla-header-container">
             <div
               className="emp-baja-tabla-header scrolbarheaders"
-              style={{ gridTemplateColumns: "0.5fr 1.5fr 1.6fr 0.5fr .5fr" }}
+              style={{ gridTemplateColumns: "0.3fr 1.2fr 1.7fr 0.4fr .4fr" }}
             >
               <div className="prev-col-dni">DNI</div>
               <div className="prev-col-alumno">Alumno</div>
@@ -553,7 +553,7 @@ const PreviasBaja = () => {
                   className="emp-baja-fila"
                   key={p.id_previa}
                   style={{
-                    gridTemplateColumns: "0.5fr 1.5fr 1.6fr 0.5fr .5fr",
+                    gridTemplateColumns: "0.3fr 1.2fr 1.7fr 0.4fr .4fr",
                   }}
                 >
                   <div className="prev-col-dni">{p.dni}</div>
@@ -567,7 +567,7 @@ const PreviasBaja = () => {
                     }`}
                     title={p.motivo_display || ""}
                   >
-                    <div className="prev-motivo-wrap" style={{ maxWidth: 350 }}>
+                    <div className="prev-motivo-wrap" style={{ maxWidth: 550 }}>
                       <span
                         className="prev-motivo-text"
                         ref={(el) => {
