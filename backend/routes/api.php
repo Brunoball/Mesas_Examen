@@ -420,6 +420,12 @@ try {
       ]);
       break;
 
+    case 'mesas_correlativas_bloqueadas':
+      include_module_resolve($MODULES_DIR, [
+        'mesas/obtener_mesas/obtener_correlativas_bloqueadas.php',
+      ]);
+      break;
+
     // ✅ Alias retrocompatible: obtener_info_mesa -> mesas_detalle
     case 'obtener_info_mesa':
       if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {

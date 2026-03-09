@@ -29,22 +29,157 @@ function out(bool $ok, $payload = null, int $code = 200): void {
   exit;
 }
 
-function norm_str($v): string { return trim((string)($v ?? '')); }
+function norm_str($v): string {
+  return trim((string)($v ?? ''));
+}
+
 function only_digits(string $s): string {
   $x = preg_replace('/\D+/', '', $s);
   return $x === null ? '' : $x;
 }
+
 function validar_fecha(string $s): bool {
   if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) return false;
   [$y, $m, $d] = explode('-', $s);
   return checkdate((int)$m, (int)$d, (int)$y);
 }
+
 function sql_norm_dni(string $field): string {
   return "REPLACE(REPLACE(REPLACE(REPLACE($field,'.',''),' ',''),'-',''),',','')";
 }
 
+function curso_division_label($curso, $division): string {
+  $cursoTxt = trim((string)($curso ?? ''));
+  $divTxt   = trim((string)($division ?? ''));
+
+  if ($cursoTxt === '' && $divTxt === '') return '-';
+  if ($cursoTxt !== '' && $divTxt !== '') return $cursoTxt . '° ' . $divTxt;
+  if ($cursoTxt !== '') return $cursoTxt . '°';
+  return $divTxt;
+}
+
+/**
+ * Busca correlativas siguientes bloqueadas para una previa desaprobada.
+ * Regla:
+ * - mismo alumno (mismo DNI)
+ * - mismo grupo de correlativa (materias.correlativa igual)
+ * - la desaprobada debe ser la anterior (menor materia_id_curso / division)
+ * - si nota 1..6 => bloquea la/s siguiente/s
+ */
+function buscar_aviso_correlativa(PDO $pdo, int $idPreviaBase): array {
+  $sqlBase = "
+    SELECT
+      p.id_previa,
+      p.dni,
+      p.alumno,
+      p.id_materia,
+      p.materia_id_curso,
+      p.materia_id_division,
+      p.nota,
+      m.materia,
+      m.correlativa
+    FROM previas p
+    INNER JOIN materias m ON m.id_materia = p.id_materia
+    WHERE p.id_previa = :id_previa
+    LIMIT 1
+  ";
+  $stBase = $pdo->prepare($sqlBase);
+  $stBase->execute([':id_previa' => $idPreviaBase]);
+  $base = $stBase->fetch(PDO::FETCH_ASSOC);
+
+  if (!$base) return [];
+
+  $nota = isset($base['nota']) && $base['nota'] !== null && $base['nota'] !== ''
+    ? (int)$base['nota']
+    : null;
+
+  if ($nota === null || $nota < 1 || $nota > 6) {
+    return [];
+  }
+
+  $correlativa = $base['correlativa'] ?? null;
+  if ($correlativa === null || $correlativa === '') {
+    return [];
+  }
+
+  $cursoBase = (int)($base['materia_id_curso'] ?? 0);
+  $divisionBase = (int)($base['materia_id_division'] ?? 0);
+
+  $sql = "
+    SELECT
+      p2.id_previa,
+      p2.alumno,
+      p2.dni,
+      p2.id_materia,
+      p2.materia_id_curso,
+      p2.materia_id_division,
+      p2.nota,
+      m2.materia,
+      me.numero_mesa,
+      me.fecha_mesa,
+      me.id_turno
+    FROM previas p2
+    INNER JOIN materias m2 ON m2.id_materia = p2.id_materia
+    LEFT JOIN mesas me ON me.id_previa = p2.id_previa
+    WHERE p2.id_previa <> :id_previa
+      AND p2.activo = 1
+      AND p2.dni = :dni
+      AND m2.correlativa = :correlativa
+      AND (
+            p2.materia_id_curso > :curso_base
+         OR (
+              p2.materia_id_curso = :curso_base
+              AND COALESCE(p2.materia_id_division, 0) > :division_base
+            )
+      )
+    ORDER BY
+      p2.materia_id_curso ASC,
+      COALESCE(p2.materia_id_division, 0) ASC,
+      p2.id_previa ASC
+  ";
+
+  $st = $pdo->prepare($sql);
+  $st->execute([
+    ':id_previa' => $idPreviaBase,
+    ':dni' => (string)$base['dni'],
+    ':correlativa' => $correlativa,
+    ':curso_base' => $cursoBase,
+    ':division_base' => $divisionBase,
+  ]);
+
+  $rows = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  $out = [];
+
+  foreach ($rows as $r) {
+    $out[] = [
+      'id_previa_bloqueada' => (int)$r['id_previa'],
+      'alumno' => (string)$base['alumno'],
+      'dni' => (string)$base['dni'],
+      'materia_desaprobada' => (string)$base['materia'],
+      'curso_desaprobado' => curso_division_label(
+        $base['materia_id_curso'] ?? null,
+        $base['materia_id_division'] ?? null
+      ),
+      'materia_bloqueada' => (string)$r['materia'],
+      'curso_bloqueado' => curso_division_label(
+        $r['materia_id_curso'] ?? null,
+        $r['materia_id_division'] ?? null
+      ),
+      'numero_mesa_bloqueada' => isset($r['numero_mesa']) ? (int)$r['numero_mesa'] : null,
+      'fecha_mesa_bloqueada' => $r['fecha_mesa'] ?? null,
+      'id_turno_bloqueado' => isset($r['id_turno']) ? (int)$r['id_turno'] : null,
+      'motivo' => 'Correlativa anterior desaprobada',
+    ];
+  }
+
+  return $out;
+}
+
 try {
-  if (!isset($pdo) || !($pdo instanceof PDO)) out(false, 'Conexión PDO no disponible.', 500);
+  if (!isset($pdo) || !($pdo instanceof PDO)) {
+    out(false, 'Conexión PDO no disponible.', 500);
+  }
+
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
   // -------- Parseo de entrada (JSON o POST)
@@ -79,17 +214,16 @@ try {
   if ($nota_raw === null || (is_string($nota_raw) && trim($nota_raw) === '')) {
     $limpiar = true;
   } else {
-    // robusto por si viene "6 ", "06", etc.
     $nota_int = (int)trim((string)$nota_raw);
     if ($nota_int < 1 || $nota_int > 10) {
       out(false, 'La nota debe estar entre 1 y 10, o vacío para limpiar.', 400);
     }
   }
 
-  // ✅ Regla FINAL (como pediste):
+  // ✅ Regla FINAL:
   // - Si nota >= 7 => activo=0 e inscripcion=0
-  // - Si nota <= 6 => NO TOCAR activo/inscripcion (quedan como estén)
-  // - Si limpiar   => NO TOCAR activo/inscripcion (quedan como estén)
+  // - Si nota <= 6 => activo=1 e inscripcion=1
+  // - Si limpiar   => no tocar activo/inscripcion
   $aprobo = (!$limpiar && $nota_int !== null && $nota_int >= 7);
 
   // -------- Fecha nota
@@ -139,17 +273,33 @@ try {
     $where = [];
     $bind = [];
 
-    if (!empty($ctx['numero_mesa'])) { $where[] = "numero_mesa = :num"; $bind[':num'] = (int)$ctx['numero_mesa']; }
+    if (!empty($ctx['numero_mesa'])) {
+      $where[] = "numero_mesa = :num";
+      $bind[':num'] = (int)$ctx['numero_mesa'];
+    }
 
     if (!empty($ctx['fecha_mesa'])) {
       $f = (string)$ctx['fecha_mesa'];
-      if ($f !== '' && validar_fecha($f)) { $where[] = "fecha_mesa = :f"; $bind[':f'] = $f; }
+      if ($f !== '' && validar_fecha($f)) {
+        $where[] = "fecha_mesa = :f";
+        $bind[':f'] = $f;
+      }
     }
 
-    if (!empty($ctx['id_turno'])) { $where[] = "id_turno = :t"; $bind[':t'] = (int)$ctx['id_turno']; }
+    if (!empty($ctx['id_turno'])) {
+      $where[] = "id_turno = :t";
+      $bind[':t'] = (int)$ctx['id_turno'];
+    }
 
-    if (!empty($ctx['id_catedra'])) { $where[] = "id_catedra = :c"; $bind[':c'] = (int)$ctx['id_catedra']; }
-    if (!empty($ctx['id_docente'])) { $where[] = "id_docente = :d"; $bind[':d'] = (int)$ctx['id_docente']; }
+    if (!empty($ctx['id_catedra'])) {
+      $where[] = "id_catedra = :c";
+      $bind[':c'] = (int)$ctx['id_catedra'];
+    }
+
+    if (!empty($ctx['id_docente'])) {
+      $where[] = "id_docente = :d";
+      $bind[':d'] = (int)$ctx['id_docente'];
+    }
 
     if (count($where) === 0) return [0, 'mesas:sin_datos', null];
 
@@ -205,7 +355,10 @@ try {
           ':dni_digits' => $dni_digits,
           ':id_materia' => $id_materia,
         ];
-        if ($anio > 0) { $where .= " AND p.anio = :anio"; $bind[':anio'] = $anio; }
+        if ($anio > 0) {
+          $where .= " AND p.anio = :anio";
+          $bind[':anio'] = $anio;
+        }
 
         $st = $pdo->prepare("SELECT p.id_previa FROM previas p WHERE $where ORDER BY p.id_previa DESC LIMIT 1");
         $st->execute($bind);
@@ -239,7 +392,7 @@ try {
   $dni_db = (string)($stDni->fetchColumn() ?? '');
   $dni_db_digits = only_digits($dni_db);
 
-  // 2) Grupo mesa: prioridad
+  // 2) Grupo mesa
   $grupo_numero = $numero_mesa > 0 ? $numero_mesa : (int)($mesa_ref['numero_mesa'] ?? 0);
   $grupo_fecha  = ($fecha_mesa !== '') ? $fecha_mesa : (string)($mesa_ref['fecha_mesa'] ?? '');
   $grupo_turno  = $id_turno > 0 ? $id_turno : (int)($mesa_ref['id_turno'] ?? 0);
@@ -311,20 +464,17 @@ try {
   $placeholders = implode(',', array_fill(0, count($ids_a_actualizar), '?'));
 
   if ($limpiar) {
-    // ✅ limpiar nota/fecha, NO tocar activo/inscripcion
+    // limpiar nota/fecha, NO tocar activo/inscripcion
     $sqlUp = "UPDATE previas SET nota = NULL, fecha_nota = NULL WHERE id_previa IN ($placeholders)";
     $stUp = $pdo->prepare($sqlUp);
     $stUp->execute($ids_a_actualizar);
   } else {
     if ($aprobo) {
-      // ✅ aprobado: recién ahí activo=0 e inscripcion=0
       $sqlUp = "UPDATE previas SET nota = ?, fecha_nota = ?, activo = 0, inscripcion = 0 WHERE id_previa IN ($placeholders)";
       $stUp = $pdo->prepare($sqlUp);
       $params = array_merge([$nota_int, $fecha_nota], $ids_a_actualizar);
       $stUp->execute($params);
     } else {
-      // ✅ NO aprobado (<=6): guardar nota/fecha, PERO dejar activo/inscripcion en 1
-      // (esto evita que quede en 0 por algo previo)
       $sqlUp = "UPDATE previas SET nota = ?, fecha_nota = ?, activo = 1, inscripcion = 1 WHERE id_previa IN ($placeholders)";
       $stUp = $pdo->prepare($sqlUp);
       $params = array_merge([$nota_int, $fecha_nota], $ids_a_actualizar);
@@ -333,6 +483,24 @@ try {
   }
 
   $affected = (int)$stUp->rowCount();
+
+  // ✅ Buscar avisos correlativos ANTES del commit final
+  $avisos_correlativa = [];
+  if (!$limpiar && !$aprobo) {
+    foreach ($ids_a_actualizar as $idPreviaActualizada) {
+      $items = buscar_aviso_correlativa($pdo, (int)$idPreviaActualizada);
+      if ($items) {
+        foreach ($items as $it) {
+          $key = (string)($it['id_previa_bloqueada'] ?? 0);
+          if ($key !== '0') {
+            $avisos_correlativa[$key] = $it;
+          }
+        }
+      }
+    }
+    $avisos_correlativa = array_values($avisos_correlativa);
+  }
+
   $pdo->commit();
 
   out(true, [
@@ -361,11 +529,16 @@ try {
       : ($aprobo
           ? 'Nota guardada (>=7). Se marcó como finalizada (activo=0, inscripcion=0).'
           : 'Nota guardada (<=6). Sigue vigente (activo=1, inscripcion=1).'),
+
+    'aviso_correlativa' => $avisos_correlativa,
+
     'aclaracion' => 'rowCount puede ser 0 si ya tenía esos valores (MySQL no cuenta cambios).',
   ]);
 
 } catch (Throwable $e) {
-  if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
+  if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+    $pdo->rollBack();
+  }
   error_log('[agregar_nota] ' . $e->getMessage());
   out(false, 'Error interno: ' . $e->getMessage(), 500);
 }

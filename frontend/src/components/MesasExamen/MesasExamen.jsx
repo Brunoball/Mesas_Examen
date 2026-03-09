@@ -26,6 +26,7 @@ import {
   FaLayerGroup,
   FaUnlink,
   FaCheck,
+  FaExclamationTriangle,
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -40,6 +41,7 @@ import ModalCrearMesas from "./modales/ModalCrearMesas";
 import ModalEliminarMesas from "./modales/ModalEliminarMesas";
 import ModalEliminarMesa from "./modales/ModalEliminarMesa";
 import ModalTituloPDF from "./modales/ModalTituloPDF";
+import ModalAvisoCorrelativa from "./modales/ModalAvisoCorrelativa";
 
 import { generarPDFMesas } from "./modales/GenerarPDF";
 import escudo from "../../imagenes/Escudo.png";
@@ -410,8 +412,6 @@ function buildMesasLogicas({
 
 const STORAGE_KEY = "mesasExamenUI_v1";
 const STORAGE_FLAG_FROM_EDIT = "mesasExamen_from_edit";
-
-// ✅ NUEVO: valor especial para "Ausente"
 const VALOR_AUSENTE = "AUSENTE";
 
 const MesasExamen = () => {
@@ -468,11 +468,12 @@ const MesasExamen = () => {
   const initialStateLoadedRef = useRef(false);
   const scrollRestoredRef = useRef(false);
 
-  // ✅ MODIFICADO: notasPendientes ahora puede tener valor VALOR_AUSENTE o número 1-10
   const [notasPendientes, setNotasPendientes] = useState({});
-
-  // ✅ NUEVO: set de rowIds que están en modo edición (nota ya cargada, doble click)
   const [editandoNotas, setEditandoNotas] = useState(new Set());
+
+  // ✅ correlativas bloqueadas + popup aviso
+  const [bloqueosCorrelativas, setBloqueosCorrelativas] = useState({});
+  const [alertaCorrelativa, setAlertaCorrelativa] = useState(null);
 
   // Restaurar estado
   useEffect(() => {
@@ -543,7 +544,6 @@ const MesasExamen = () => {
     };
   }, [persistState]);
 
-  // ✅ guardar scroll antes de recargar detalle para no perder posición
   const captureScroll = useCallback(() => {
     const el = pdfScrollRef.current;
     if (el) {
@@ -551,17 +551,14 @@ const MesasExamen = () => {
     }
   }, []);
 
-  // ✅ FIX: restoreScroll sin setTimeout inicial ni smooth — posiciona instantáneamente
   const restoreScroll = useCallback(() => {
     const pos = scrollPosRef.current;
     if (!pos) return;
     const tryRestore = (attempts = 0) => {
       const el = pdfScrollRef.current;
       if (el) {
-        // Forzar scroll-behavior: auto para evitar animación
         el.style.scrollBehavior = "auto";
         el.scrollTop = pos;
-        // Restaurar después de aplicar
         requestAnimationFrame(() => {
           el.style.scrollBehavior = "";
         });
@@ -569,7 +566,6 @@ const MesasExamen = () => {
         setTimeout(() => tryRestore(attempts + 1), 16);
       }
     };
-    // Sin setTimeout inicial — ejecutar en el próximo frame
     requestAnimationFrame(() => tryRestore());
   }, []);
 
@@ -599,8 +595,7 @@ const MesasExamen = () => {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const json = await resp.json();
-      if (!json?.exito)
-        throw new Error(json?.mensaje || "Error al listar grupos.");
+      if (!json?.exito) throw new Error(json?.mensaje || "Error al listar grupos.");
 
       const data = Array.isArray(json.data) ? json.data : [];
 
@@ -649,8 +644,9 @@ const MesasExamen = () => {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const json = await resp.json();
-      if (!json?.exito)
+      if (!json?.exito) {
         throw new Error(json?.mensaje || "Error al listar no agrupadas.");
+      }
 
       const data = Array.isArray(json.data) ? json.data : [];
 
@@ -721,7 +717,6 @@ const MesasExamen = () => {
   const loadDetalle = useCallback(
     async ({ preservarScroll = false } = {}) => {
       try {
-        // ✅ Capturar scroll ANTES de recargar si se pide
         if (preservarScroll) {
           captureScroll();
         }
@@ -729,6 +724,7 @@ const MesasExamen = () => {
         setLoadingDetalle(true);
         setMesasDetalle([]);
         setDetalleCache({});
+        setBloqueosCorrelativas({});
 
         const datasetDBLocal = vista === "grupos" ? gruposDB : noAgrupadasDB;
         if (!datasetDBLocal || !datasetDBLocal.length) return;
@@ -797,6 +793,35 @@ const MesasExamen = () => {
           return;
         }
 
+        // ✅ correlativas bloqueadas
+        try {
+          const respBloq = await fetch(
+            `${BASE_URL}/api.php?action=mesas_correlativas_bloqueadas`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ numeros_mesa: numerosOrdenados }),
+              cache: "no-store",
+            }
+          );
+
+          const rawBloq = await respBloq.text();
+          let jsonBloq = null;
+          try {
+            jsonBloq = JSON.parse(rawBloq);
+          } catch {
+            jsonBloq = null;
+          }
+
+          if (respBloq.ok && jsonBloq?.exito) {
+            setBloqueosCorrelativas(jsonBloq.data || {});
+          } else {
+            setBloqueosCorrelativas({});
+          }
+        } catch {
+          setBloqueosCorrelativas({});
+        }
+
         const mesasLogicas = buildMesasLogicas({
           detalle,
           agrupaciones,
@@ -821,10 +846,8 @@ const MesasExamen = () => {
         setDetalleCache(nuevoCache);
 
         setNotasPendientes({});
-        // ✅ Limpiar también el modo edición al recargar
         setEditandoNotas(new Set());
 
-        // ✅ Restaurar scroll luego de que el DOM actualice
         if (preservarScroll) {
           restoreScroll();
         }
@@ -901,9 +924,6 @@ const MesasExamen = () => {
     return (gruposDB?.length || 0) + (noAgrupadasDB?.length || 0) > 0;
   }, [gruposDB, noAgrupadasDB]);
 
-  /* =======================================================
-   *  Exportar Excel
-   * ======================================================= */
   const exportarExcel = useCallback(async () => {
     try {
       if (!filasFiltradas.length) return;
@@ -1220,7 +1240,6 @@ const MesasExamen = () => {
     return out;
   }, [mesasDetalle, filasFiltradas, fechaSel, turnoSel]);
 
-  // ✅ FIX: Restaurar scroll cuando carga inicial termina — sin animación
   useEffect(() => {
     if (cargandoVista || loadingDetalle) return;
 
@@ -1228,7 +1247,6 @@ const MesasExamen = () => {
       const el = pdfScrollRef.current;
       if (!el) return;
       if (!scrollRestoredRef.current && scrollPosRef.current > 0) {
-        // Forzar sin transición
         el.style.scrollBehavior = "auto";
         el.scrollTop = scrollPosRef.current;
         requestAnimationFrame(() => {
@@ -1278,12 +1296,10 @@ const MesasExamen = () => {
     return `${fecha}|${turno}|${mesaKey}|${materia}|${docente}|${alumKey}`;
   }, []);
 
-  // ✅ MODIFICADO: valor por defecto es VALOR_AUSENTE si no hay pendiente
   const getNotaUIValue = useCallback(
     (rowId) => {
       const pend = notasPendientes[rowId];
       if (pend && typeof pend === "object") return String(pend.value ?? "");
-      // Si no hay pendiente, default = VALOR_AUSENTE
       return VALOR_AUSENTE;
     },
     [notasPendientes]
@@ -1296,7 +1312,6 @@ const MesasExamen = () => {
     }));
   }, []);
 
-  // ✅ NUEVO: activar/desactivar modo edición para notas ya cargadas
   const toggleEditandoNota = useCallback((rowId) => {
     setEditandoNotas((prev) => {
       const next = new Set(prev);
@@ -1322,15 +1337,20 @@ const MesasExamen = () => {
     });
   }, []);
 
-  // ✅ MODIFICADO: preserva scroll al guardar nota
+  const abrirAlertaCorrelativa = useCallback((avisos = []) => {
+    if (!Array.isArray(avisos) || !avisos.length) return;
+    setAlertaCorrelativa({
+      items: avisos,
+      createdAt: Date.now(),
+    });
+  }, []);
+
   const confirmarNota = useCallback(
     async ({ rowId, alumno, mesa, bloque }) => {
       const pend = notasPendientes[rowId];
       if (!pend) return;
 
       const raw = String(pend.value ?? "").trim();
-
-      // ✅ Si eligió AUSENTE => limpiar nota
       const limpiar = raw === "" || raw === VALOR_AUSENTE;
 
       let n = null;
@@ -1365,14 +1385,12 @@ const MesasExamen = () => {
       if (!Number.isFinite(numero_mesa) || numero_mesa <= 0) {
         notify({
           tipo: "error",
-          mensaje:
-            "No puedo guardar la nota: falta numero_mesa en el alumno.",
+          mensaje: "No puedo guardar la nota: falta numero_mesa en el alumno.",
         });
         return;
       }
 
       try {
-        // ✅ Capturar scroll ANTES del POST
         captureScroll();
 
         const body = {
@@ -1402,7 +1420,22 @@ const MesasExamen = () => {
           throw new Error(json?.mensaje || "No se pudo guardar la nota.");
         }
 
-        // Limpiar pendiente y modo edición para este rowId
+        const avisosCorrelativa = Array.isArray(json?.data?.aviso_correlativa)
+          ? json.data.aviso_correlativa
+          : [];
+
+        if (avisosCorrelativa.length) {
+          abrirAlertaCorrelativa(avisosCorrelativa);
+
+          const primero = avisosCorrelativa[0];
+          notify({
+            tipo: "warning",
+            mensaje:
+              `${primero.alumno} desaprobó "${primero.materia_desaprobada}" y no podrá rendir ` +
+              `"${primero.materia_bloqueada}" (${primero.curso_bloqueado}).`,
+          });
+        }
+
         setNotasPendientes((prev) => {
           const next = { ...prev };
           delete next[rowId];
@@ -1414,7 +1447,6 @@ const MesasExamen = () => {
           return next;
         });
 
-        // ✅ Actualización optimista instantánea en la tabla
         setMesasDetalle((prev) => {
           if (!Array.isArray(prev) || !prev.length) return prev;
 
@@ -1444,7 +1476,6 @@ const MesasExamen = () => {
           }));
         });
 
-        // ✅ Recarga real con preservación de scroll
         await loadDetalle({ preservarScroll: true });
 
         notify({
@@ -1460,7 +1491,13 @@ const MesasExamen = () => {
         });
       }
     },
-    [notasPendientes, notify, loadDetalle, captureScroll]
+    [
+      notasPendientes,
+      notify,
+      loadDetalle,
+      captureScroll,
+      abrirAlertaCorrelativa,
+    ]
   );
 
   const cancelarNota = useCallback((rowId) => {
@@ -1479,15 +1516,11 @@ const MesasExamen = () => {
     return n;
   }, []);
 
-  /* ======================
-   *  Render
-   * ====================== */
   return (
     <div className="glob-profesor-container">
       <FullScreenLoader visible={creandoMesas} title="Procesando…" />
 
       <div className="glob-profesor-box">
-        {/* Header */}
         <div className="glob-front-row-pro">
           <span className="glob-profesor-title">Mesas de Examen</span>
 
@@ -1625,7 +1658,6 @@ const MesasExamen = () => {
           </div>
         </div>
 
-        {/* Contador + Tabs + Chips */}
         <div className="glob-profesores-list">
           <div className="glob-contenedor-list-items">
             <div className="glob-left-inline">
@@ -1751,7 +1783,6 @@ const MesasExamen = () => {
             </div>
           </div>
 
-          {/* ----- ÚNICA VISTA: DETALLE (como PDF) ----- */}
           <div className="glob-box-table pdf-view">
             {cargandoVista || loadingDetalle ? (
               <div
@@ -1783,7 +1814,11 @@ const MesasExamen = () => {
                 </div>
               </div>
             ) : (
-              <div className="pdf-scroll" ref={pdfScrollRef} style={{scrollBehavior:"auto"}}>
+              <div
+                className="pdf-scroll"
+                ref={pdfScrollRef}
+                style={{ scrollBehavior: "auto" }}
+              >
                 {mesasDetalleFiltradas.map((mesa, idxMesa) => {
                   const { dia, mesTxt, anio } = nombreMes(mesa.fecha);
                   const headerTitulo = `MESAS DE EXAMEN ${
@@ -1905,6 +1940,10 @@ const MesasExamen = () => {
                       const notaUI = getNotaUIValue(rowId);
                       const tienePendiente = Boolean(notasPendientes[rowId]);
                       const estaEditando = editandoNotas.has(rowId);
+                      const bloqueoCorrelativa =
+                        a?.id_previa != null
+                          ? bloqueosCorrelativas[String(a.id_previa)] || null
+                          : null;
 
                       const celdas = [];
 
@@ -1946,14 +1985,49 @@ const MesasExamen = () => {
                           key={`al-${filaGlobal}`}
                           className="pdf-td-left col-estudiante"
                         >
-                          {String(a.alumno || "")}
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 4,
+                            }}
+                          >
+                            <span>{String(a.alumno || "")}</span>
+
+                            {bloqueoCorrelativa && (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  width: "fit-content",
+                                  fontSize: 11,
+                                  fontWeight: 800,
+                                  color: "#b42318",
+                                  background: "rgba(231, 76, 60, 0.14)",
+                                  border: "1px solid rgba(231, 76, 60, 0.25)",
+                                  borderRadius: 999,
+                                  padding: "3px 8px",
+                                }}
+                                title={
+                                  `No puede rendir ${bloqueoCorrelativa.materia_bloqueada} ` +
+                                  `porque desaprobó ${bloqueoCorrelativa.materia_desaprobada}`
+                                }
+                              >
+                                <FaExclamationTriangle />
+                                Correlativa bloqueada
+                              </span>
+                            )}
+                          </div>
                         </td>
                       );
+
                       celdas.push(
                         <td key={`dni-${filaGlobal}`} className="col-dni">
                           {String(a.dni || "")}
                         </td>
                       );
+
                       celdas.push(
                         <td
                           key={`cur-${filaGlobal}`}
@@ -1963,7 +2037,6 @@ const MesasExamen = () => {
                         </td>
                       );
 
-                      // ✅ COLUMNA NOTA
                       celdas.push(
                         <td
                           key={`nota-${filaGlobal}`}
@@ -2004,17 +2077,22 @@ const MesasExamen = () => {
                                 style={{
                                   padding: "6px 8px",
                                   borderRadius: 8,
-                                  border: "1px solid rgba(0,0,0,0.12)",
+                                  border: bloqueoCorrelativa
+                                    ? "1px solid rgba(231, 76, 60, 0.45)"
+                                    : "1px solid rgba(0,0,0,0.12)",
                                   outline: "none",
                                   fontWeight: 700,
                                   width: 90,
-                                  background:
-                                    tienePendiente && notaUI !== VALOR_AUSENTE
-                                      ? "rgba(255, 193, 7, 0.18)"
-                                      : "white",
+                                  background: bloqueoCorrelativa
+                                    ? "rgba(231, 76, 60, 0.08)"
+                                    : tienePendiente && notaUI !== VALOR_AUSENTE
+                                    ? "rgba(255, 193, 7, 0.18)"
+                                    : "white",
                                 }}
                                 title={
-                                  estaEditando
+                                  bloqueoCorrelativa
+                                    ? `Atención: correlativa bloqueada por desaprobación de ${bloqueoCorrelativa.materia_desaprobada}`
+                                    : estaEditando
                                     ? "Editando nota"
                                     : tienePendiente && notaUI !== VALOR_AUSENTE
                                     ? "Nota pendiente de confirmación"
@@ -2126,7 +2204,15 @@ const MesasExamen = () => {
                             isDocenteEnd ? "doc-block-end" : ""
                           } ${isMateriaStart ? "mat-block-start" : ""} ${
                             isMateriaEnd ? "mat-block-end" : ""
-                          }`}
+                          } ${bloqueoCorrelativa ? "row-correlativa-bloqueada" : ""}`}
+                          style={
+                            bloqueoCorrelativa
+                              ? {
+                                  background: "rgba(231, 76, 60, 0.12)",
+                                  boxShadow: "inset 4px 0 0 #e74c3c",
+                                }
+                              : undefined
+                          }
                         >
                           {celdas}
                         </tr>
@@ -2418,7 +2504,6 @@ const MesasExamen = () => {
           </div>
         </div>
 
-        {/* BOTONERA INFERIOR */}
         <div className="glob-down-container">
           <button
             className="glob-profesor-button glob-hover-effect glob-volver-atras"
@@ -2624,6 +2709,16 @@ const MesasExamen = () => {
           }}
         />
       )}
+
+      <ModalAvisoCorrelativa
+        open={
+          Boolean(alertaCorrelativa) &&
+          Array.isArray(alertaCorrelativa?.items) &&
+          alertaCorrelativa.items.length > 0
+        }
+        items={alertaCorrelativa?.items || []}
+        onClose={() => setAlertaCorrelativa(null)}
+      />
 
       {toast && (
         <Toast
