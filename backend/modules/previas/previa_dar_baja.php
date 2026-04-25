@@ -1,4 +1,5 @@
 <?php
+// backend/modules/previas/previa_dar_baja.php
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -25,27 +26,17 @@ try {
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->exec("SET NAMES utf8mb4");
 
-  $raw  = file_get_contents('php://input');
-  $data = json_decode($raw ?: '[]', true);
+  $data = json_decode(file_get_contents('php://input') ?: '[]', true);
   if (!is_array($data)) $data = [];
 
-  $id = isset($data['id_previa']) ? (int)$data['id_previa'] : 0;
-  if ($id <= 0) {
-    respond(400, ['exito' => false, 'mensaje' => 'ID inválido']);
-  }
+  $id = (int)($data['id_previa'] ?? 0);
+  if ($id <= 0) respond(400, ['exito' => false, 'mensaje' => 'ID inválido']);
 
-  // ✅ Nuevo: tipo_motivo
   $tipo = strtoupper(trim((string)($data['tipo_motivo'] ?? '')));
-
-  // ✅ Compatibilidad: si no viene tipo_motivo, tal vez mandan motivo_baja directo
   $motivo_baja_in = trim((string)($data['motivo_baja'] ?? ''));
-  $motivo_otro    = trim((string)($data['motivo_otro'] ?? ''));
-  $fecha_baja_in  = trim((string)($data['fecha_baja'] ?? '')); // YYYY-MM-DD
+  $motivo_otro = trim((string)($data['motivo_otro'] ?? ''));
+  $fecha_baja_in = trim((string)($data['fecha_baja'] ?? ''));
 
-  $motivo_final = '';
-  $fecha_final  = '';
-
-  // Si NO viene tipo_motivo, inferimos por motivo_baja
   if ($tipo === '') {
     $mb = mb_strtoupper($motivo_baja_in);
 
@@ -55,84 +46,120 @@ try {
       $tipo = 'PASE_OTRO_COLEGIO';
     } elseif ($mb !== '') {
       $tipo = 'OTRO';
-      $motivo_otro = $motivo_baja_in; // lo tratamos como texto libre
+      $motivo_otro = $motivo_baja_in;
     }
   }
 
-  // ✅ Lógica EXACTA que pediste
   if ($tipo === 'APROBO_DIA') {
-    // motivo = "APROBÓ"
     $motivo_final = 'APROBÓ';
 
     if ($fecha_baja_in === '' || !is_valid_date_ymd($fecha_baja_in)) {
       respond(400, ['exito' => false, 'mensaje' => 'Falta o es inválida la fecha para APROBÓ EL DÍA']);
     }
+
     $fecha_final = $fecha_baja_in;
 
   } elseif ($tipo === 'PASE_OTRO_COLEGIO') {
     $motivo_final = 'PASE A OTRO COLEGIO';
-    $fecha_final  = date('Y-m-d'); // hoy
+    $fecha_final = date('Y-m-d');
 
   } elseif ($tipo === 'OTRO') {
-    $txt = $motivo_otro !== '' ? $motivo_otro : $motivo_baja_in;
-    $txt = trim((string)$txt);
+    $txt = trim($motivo_otro !== '' ? $motivo_otro : $motivo_baja_in);
 
-    if (mb_strlen($txt) < 1) {
+    if ($txt === '') {
       respond(400, ['exito' => false, 'mensaje' => 'El motivo OTRO es obligatorio']);
     }
 
-    if (mb_strlen($txt) > 255) {
-      $txt = mb_substr($txt, 0, 255);
-    }
-
-    $motivo_final = mb_strtoupper($txt);
-    $fecha_final  = date('Y-m-d'); // hoy
+    $motivo_final = mb_strtoupper(mb_substr($txt, 0, 255));
+    $fecha_final = date('Y-m-d');
 
   } else {
-    // Si sigue vacío / raro, devolvemos detalle para debug
-    respond(400, [
-      'exito' => false,
-      'mensaje' => 'tipo_motivo inválido',
-      'debug' => [
-        'tipo_motivo' => $tipo,
-        'motivo_baja' => $motivo_baja_in,
-        'fecha_baja'  => $fecha_baja_in,
-      ]
-    ]);
+    respond(400, ['exito' => false, 'mensaje' => 'tipo_motivo inválido']);
   }
 
-  // defensivo
-  if (mb_strlen($motivo_final) > 255) {
-    $motivo_final = mb_substr($motivo_final, 0, 255);
+  $pdo->beginTransaction();
+
+  $stmt = $pdo->prepare("SELECT * FROM previas WHERE id_previa = :id LIMIT 1 FOR UPDATE");
+  $stmt->execute([':id' => $id]);
+  $p = $stmt->fetch(PDO::FETCH_ASSOC);
+
+  if (!$p) {
+    $pdo->rollBack();
+    respond(404, ['exito' => false, 'mensaje' => 'No se encontró la previa activa.']);
   }
 
-  $stmt = $pdo->prepare("
-    UPDATE previas
-    SET activo = 0,
-        inscripcion = 0,
-        fecha_baja = :fecha_baja,
-        motivo_baja = :motivo
-    WHERE id_previa = :id
-    LIMIT 1
+  $insert = $pdo->prepare("
+    INSERT INTO previas_historial (
+      dni,
+      alumno,
+      cursando_id_curso,
+      cursando_id_division,
+      id_materia,
+      materia_id_curso,
+      materia_id_division,
+      id_condicion,
+      nota,
+      fecha_nota,
+      inscripcion,
+      activo,
+      anio,
+      fecha_carga,
+      fecha_baja,
+      motivo_baja
+    ) VALUES (
+      :dni,
+      :alumno,
+      :cursando_id_curso,
+      :cursando_id_division,
+      :id_materia,
+      :materia_id_curso,
+      :materia_id_division,
+      :id_condicion,
+      :nota,
+      :fecha_nota,
+      0,
+      0,
+      :anio,
+      :fecha_carga,
+      :fecha_baja,
+      :motivo_baja
+    )
   ");
 
-  $stmt->execute([
-    ':fecha_baja' => $fecha_final, // DATE
-    ':motivo'     => $motivo_final,
-    ':id'         => $id,
+  $insert->execute([
+    ':dni' => $p['dni'],
+    ':alumno' => $p['alumno'],
+    ':cursando_id_curso' => $p['cursando_id_curso'],
+    ':cursando_id_division' => $p['cursando_id_division'],
+    ':id_materia' => $p['id_materia'],
+    ':materia_id_curso' => $p['materia_id_curso'],
+    ':materia_id_division' => $p['materia_id_division'],
+    ':id_condicion' => $p['id_condicion'],
+    ':nota' => $p['nota'],
+    ':fecha_nota' => $p['fecha_nota'],
+    ':anio' => $p['anio'],
+    ':fecha_carga' => $p['fecha_carga'],
+    ':fecha_baja' => $fecha_final,
+    ':motivo_baja' => $motivo_final,
   ]);
 
-  if ($stmt->rowCount() <= 0) {
-    respond(409, ['exito' => false, 'mensaje' => 'No se pudo dar de baja (ya estaba de baja o no existe)']);
-  }
+  $del = $pdo->prepare("DELETE FROM previas WHERE id_previa = :id LIMIT 1");
+  $del->execute([':id' => $id]);
+
+  $pdo->commit();
 
   respond(200, [
     'exito' => true,
+    'mensaje' => 'Previa movida al historial correctamente.',
     'motivo_guardado' => $motivo_final,
     'fecha_baja' => $fecha_final,
   ]);
 
 } catch (Throwable $e) {
+  if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+    $pdo->rollBack();
+  }
+
   respond(500, [
     'exito' => false,
     'mensaje' => $e->getMessage(),

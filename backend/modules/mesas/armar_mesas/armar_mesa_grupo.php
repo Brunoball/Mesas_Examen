@@ -49,6 +49,10 @@
 //   - Ahora se tienen en cuenta TODOS los docentes de cada numero_mesa
 //     (no solo uno). Si ALGUNO de los docentes está bloqueado para un
 //     slot (fecha+turno), esa mesa/grupo NO se agenda en ese slot.
+//
+// *** NUEVO: Priorización de suplentes (id_cargo=2) en 3º técnico ***
+//   - Para las materias técnicas (18,32,132) de 3º año, se selecciona
+//     UNA sola cátedra por materia, priorizando suplentes sobre titulares.
 // -----------------------------------------------------------------------------
 
 
@@ -209,11 +213,13 @@ function normalizarMesasEspecial7PorAlumnoArea(PDO $pdo): void {
  *     las cátedras faltantes de esas materias para el curso=3 y la división
  *     de 3º del alumno, con sus docentes correctos, siempre en el MISMO
  *     numero_mesa exclusivo.
+ *   - AHORA: para cada materia técnica se selecciona UNA sola cátedra,
+ *     priorizando suplentes (id_cargo=2) sobre titulares.
  *
  * Resultado:
  *   - Un alumno de 3º técnico queda con UNA mesa exclusiva que contiene
  *     Dibujo Técnico, Educación Tecnológica y Taller/Laboratorio, con los
- *     docentes que correspondan a su división.
+ *     docentes que correspondan a su división (priorizando suplentes).
  */
 function normalizarMesasTecnicas3PorAlumno(PDO $pdo): void {
   // Buscar filas relevantes (3º + materias 18,32,132)
@@ -381,13 +387,19 @@ function normalizarMesasTecnicas3PorAlumno(PDO $pdo): void {
       AND id_materia IN (18,32,132)
   ");
 
-  // ⚠️ AHORA: TODAS las cátedras/docentes de esa materia en esa división (sin LIMIT 1)
+  // ========== CONSULTA MODIFICADA PARA PRIORIZAR SUPLENTES (id_cargo=2) ==========
+  // AHORA: selecciona UNA sola cátedra por materia, priorizando suplentes sobre titulares
   $stCat = $pdo->prepare("
-    SELECT id_catedra, id_docente
-    FROM catedras
-    WHERE id_materia = :id_mat
-      AND id_curso   = 3
-      AND id_division = :div
+    SELECT c.id_catedra, c.id_docente
+    FROM catedras c
+    LEFT JOIN docentes d ON d.id_docente = c.id_docente
+    WHERE c.id_materia = :id_mat
+      AND c.id_curso   = 3
+      AND c.id_division = :div
+    ORDER BY
+      CASE WHEN COALESCE(d.id_cargo, 0) = 2 THEN 0 ELSE 1 END,
+      c.id_catedra ASC
+    LIMIT 1
   ");
 
   // Verificar si ya existe esa cátedra en la mesa
@@ -420,37 +432,35 @@ function normalizarMesasTecnicas3PorAlumno(PDO $pdo): void {
     $division3    = (int)$info['div_materia'];
 
     foreach ($materiasTrio as $idMat) {
-      // Buscar TODAS las cátedras/docentes de esa materia en 3º y en la división del alumno
+      // Buscar UNA cátedra (la de mayor prioridad: suplente > titular) de esa materia en 3º y en la división del alumno
       $stCat->execute([
         ':id_mat' => $idMat,
         ':div'    => $division3,
       ]);
-      $cats = $stCat->fetchAll(PDO::FETCH_ASSOC);
-      if (!$cats) {
+      $cat = $stCat->fetch(PDO::FETCH_ASSOC);
+      if (!$cat) {
         continue;
       }
 
-      foreach ($cats as $cat) {
-        $idCatedra = (int)$cat['id_catedra'];
-        $idDocente = (int)$cat['id_docente'];
+      $idCatedra = (int)$cat['id_catedra'];
+      $idDocente = (int)$cat['id_docente'];
 
-        // ¿Ya existe esa cátedra en la mesa técnica exclusiva?
-        $stCheck->execute([
-          ':nm'         => $nmRef,
-          ':id_catedra' => $idCatedra,
-        ]);
-        if ($stCheck->fetch()) {
-          continue; // ya está esa materia/docente en la mesa
-        }
-
-        // Insertar fila en `mesas` usando la previa base del alumno
-        $stInsMesa->execute([
-          ':nm'         => $nmRef,
-          ':id_previa'  => $idPreviaBase,
-          ':id_catedra' => $idCatedra,
-          ':id_docente' => $idDocente,
-        ]);
+      // ¿Ya existe esa cátedra en la mesa técnica exclusiva?
+      $stCheck->execute([
+        ':nm'         => $nmRef,
+        ':id_catedra' => $idCatedra,
+      ]);
+      if ($stCheck->fetch()) {
+        continue; // ya está esa materia/docente en la mesa
       }
+
+      // Insertar fila en `mesas` usando la previa base del alumno
+      $stInsMesa->execute([
+        ':nm'         => $nmRef,
+        ':id_previa'  => $idPreviaBase,
+        ':id_catedra' => $idCatedra,
+        ':id_docente' => $idDocente,
+      ]);
     }
   }
 }
@@ -754,6 +764,11 @@ try {
   foreach ($resTec as $nmT) {
     $mesaTec3[(int)$nmT] = true;
   }
+
+  // Helper para determinar si una mesa es especial (7º o 3º técnico)
+  $esMesaEspecial = static function (int $nm) use (&$mesaEspecial7, &$mesaTec3): bool {
+    return !empty($mesaEspecial7[$nm]) || !empty($mesaTec3[$nm]);
+  };
 
   // Prioridad por numero_mesa
   $prioPorNumero = [];
@@ -1079,11 +1094,69 @@ try {
     $f=$bk['f']; $t=$bk['t']; $a=$bk['a']; $numsFijos=$bk['nums'];
     $slotKey="$f|$t";
 
+    // Separar fijos entre especiales y normales
+    $numsFijos = array_values(array_unique($numsFijos));
+
+    $numsFijosEspeciales = [];
+    $numsFijosNormales   = [];
+
+    foreach ($numsFijos as $nmF) {
+      if ($esMesaEspecial($nmF)) {
+        $numsFijosEspeciales[] = $nmF;
+      } else {
+        $numsFijosNormales[] = $nmF;
+      }
+    }
+
+    // Las mesas especiales ya fijadas en este slot SIEMPRE van solas.
+    // Nunca entran al pool de agrupamiento normal.
+    foreach ($numsFijosEspeciales as $nmEsp) {
+      foreach (unionDNIs($dnisPorNumero, [$nmEsp]) as $dni) {
+        $dnisEnSlot[$slotKey][$dni] = true;
+      }
+
+      [$a1,$b1,$c1,$d1] = pad4([$nmEsp]);
+
+      $stDupGroup->execute([
+        ':f'=>$f, ':t'=>$t,
+        ':a'=>$a1, ':b'=>$b1, ':c'=>$c1, ':d'=>$d1
+      ]);
+
+      if ($stDupGroup->fetch()) {
+        $omitidosDup[] = [
+          'fecha'=>$f,'turno'=>$t,
+          'a'=>$a1,'b'=>$b1,'c'=>$c1,'d'=>$d1,
+          'motivo'=>'duplicado(fijo_especial_solo)'
+        ];
+      } else {
+        if ($dryRun) {
+          $creados[] = [
+            'accion'=>'preview',
+            'fecha'=>$f,'turno'=>$t,
+            'a'=>$a1,'b'=>$b1,'c'=>$c1,'d'=>$d1
+          ];
+        } else {
+          $hora = horaSegunTurno($t);
+          $stInsGroup->execute([
+            ':a'=>$a1,':b'=>$b1,':c'=>$c1,':d'=>$d1,
+            ':f'=>$f,':t'=>$t,':h'=>$hora
+          ]);
+          $creados[] = [
+            'accion'=>'creado',
+            'id_mesa_grupos'=>(int)$pdo->lastInsertId(),
+            'fecha'=>$f,'turno'=>$t,
+            'a'=>$a1,'b'=>$b1,'c'=>$c1,'d'=>$d1
+          ];
+          $stDelLeftByMesa->execute([':n'=>$nmEsp]);
+        }
+      }
+    }
+
     // candidatos libres del área válidos para el slot y sin choque con DNIs del slot
     $cands=[];
     foreach (($libresPorArea[$a]??[]) as $nm){
       // NO usar mesas especiales de 7º ni técnicas de 3º como "relleno"
-      if (!empty($mesaEspecial7[$nm]) || !empty($mesaTec3[$nm])) continue;
+      if ($esMesaEspecial($nm)) continue;
 
       // ⚠️ Chequear TODOS los docentes de esa mesa contra el slot
       $docs = $docPorNM[$nm] ?? [];
@@ -1110,8 +1183,8 @@ try {
       $cands[]=$nm;
     }
 
-    // armar grupos SIN choque interno
-    $pool = array_values(array_unique(array_merge($numsFijos, $cands)));
+    // armar grupos SIN choque interno (solo con normales)
+    $pool = array_values(array_unique(array_merge($numsFijosNormales, $cands)));
     $grupos = crearGruposSinChoque($pool, $dnisPorNumero);
 
     // --- intentar subir terna -> cuaterna con candidatos restantes válidos en el slot
@@ -1126,8 +1199,8 @@ try {
     } unset($g);
 
     foreach ($grupos as $g){
-      // sólo crear grupos que contengan al menos un fijo
-      $tieneFijo=false; foreach($g as $nm) if (in_array($nm,$numsFijos,true)) { $tieneFijo=true; break; }
+      // sólo crear grupos que contengan al menos un fijo normal
+      $tieneFijo=false; foreach($g as $nm) if (in_array($nm,$numsFijosNormales,true)) { $tieneFijo=true; break; }
       if (!$tieneFijo) continue;
 
       $tamGrupo = count($g);
@@ -1136,7 +1209,7 @@ try {
       if ($tamGrupo===1) {
         $nm = $g[0];
 
-        if (!empty($mesaEspecial7[$nm]) || !empty($mesaTec3[$nm])) {
+        if ($esMesaEspecial($nm)) {
           // ESPECIAL 7º o 3º técnico: grupo de 1 en mesas_grupos
           foreach (unionDNIs($dnisPorNumero, [$nm]) as $dni) { $dnisEnSlot[$slotKey][$dni]=true; }
 
@@ -1208,10 +1281,10 @@ try {
       }
     }
 
-    // fijos que sigan sueltos -> no_agrupadas (si no son especiales 7º/3º)
-    foreach($numsFijos as $nm){
+    // fijos normales que sigan sueltos -> no_agrupadas (si no son especiales 7º/3º)
+    foreach($numsFijosNormales as $nm){
       if($estaAgrupada($nm,$f,$t)) continue;
-      if (!empty($mesaEspecial7[$nm]) || !empty($mesaTec3[$nm])) continue;
+      if ($esMesaEspecial($nm)) continue;
       $yaSingle = array_filter($singlesNoAgrupadas, fn($x)=>$x['numero_mesa']===$nm && $x['fecha']===$f && $x['turno']===$t);
       if ($yaSingle) continue;
       if ($dryRun) {
@@ -1306,7 +1379,7 @@ try {
       $especiales = [];
       $normales   = [];
       foreach ($nums as $nm) {
-        if (!empty($mesaEspecial7[$nm]) || !empty($mesaTec3[$nm])) {
+        if ($esMesaEspecial($nm)) {
           $especiales[] = $nm;
         } else {
           $normales[] = $nm;
@@ -1559,7 +1632,7 @@ try {
       'deferidos'             => array_keys($deferidos),
       'splits'                => $splitHechos
     ],
-    'nota'=>'Nunca se generan grupos de tamaño 1, salvo las mesas especiales de 7º y las mesas técnicas de 3º (materias 18,32,132 exclusivas por alumno), que se guardan como grupos de 1 en mesas_grupos. Además, cada numero_mesa aparece como mucho una sola vez en mesas_no_agrupadas, y cada numero_mesa queda con un único día/turno asignado. Para 7º se unifica por (alumno+área) y para 3º técnico se unifica por alumno en las 3 materias técnicas, completando automáticamente el trío 18,32,132 con sus docentes según la división del alumno. El rango de fechas de agendado nunca incluye sábados ni domingos. También se respeta SIEMPRE docentes_bloques_no para TODOS los docentes de cada mesa. Ahora, cuando se crea un registro en mesas_grupos o mesas_no_agrupadas, la columna hora se setea automáticamente en 07:30:00 para turno 1 y 13:30:00 para turno 2.'
+    'nota'=>'Nunca se generan grupos de tamaño 1, salvo las mesas especiales de 7º y las mesas técnicas de 3º (materias 18,32,132 exclusivas por alumno), que se guardan como grupos de 1 en mesas_grupos. Además, cada numero_mesa aparece como mucho una sola vez en mesas_no_agrupadas, y cada numero_mesa queda con un único día/turno asignado. Para 7º se unifica por (alumno+área) y para 3º técnico se unifica por alumno en las 3 materias técnicas, completando automáticamente el trío 18,32,132 con sus docentes (priorizando suplentes) según la división del alumno. El rango de fechas de agendado nunca incluye sábados ni domingos. También se respeta SIEMPRE docentes_bloques_no para TODOS los docentes de cada mesa. Ahora, cuando se crea un registro en mesas_grupos o mesas_no_agrupadas, la columna hora se setea automáticamente en 07:30:00 para turno 1 y 13:30:00 para turno 2. Las mesas especiales (7º y 3º técnico) nunca se mezclan con otras mesas en la FASE A, siempre van solas como grupos de 1.'
   ]);
 
 } catch (Throwable $e) {

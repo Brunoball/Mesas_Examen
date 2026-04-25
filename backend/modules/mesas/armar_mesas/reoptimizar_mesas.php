@@ -4,7 +4,7 @@
 // Reoptimiza mesas para maximizar agrupamiento y RESPETAR CORRELATIVIDAD.
 //   - Usa docentes_bloques_no para bloqueos.
 //   - Mantiene lógica de 7° año y 3° técnico especial.
-//   - Nunca deja mesas “perdidas”: siempre están en grupo o en mesas_no_agrupadas.
+//   - Nunca deja mesas "perdidas": siempre están en grupo o en mesas_no_agrupadas.
 //   - CORRELATIVIDAD ESTRICTA:
 //        * Dos materias son correlativas si materias.correlativa es el mismo
 //          número (>0) para ambas.
@@ -13,6 +13,7 @@
 //          que las otras (avanzadas).
 //        * Esa mesa base se marca con prioridad = 1, y el algoritmo favorece
 //          que las prioridad 1 entren en slots tempranos.
+//   - MESAS ESPECIALES (7º y 3º técnico) NO PARTICIPAN EN REOPTIMIZACIÓN.
 // -----------------------------------------------------------------------------
 
 declare(strict_types=1);
@@ -72,6 +73,48 @@ function pad4(array $g): array {
 // hora según turno para INSERTS
 function horaSegunTurno(int $turno): string {
     return $turno === 1 ? '07:30:00' : '13:30:00';
+}
+
+/**
+ * Carga mesas especiales (7º y 3º técnico)
+ *   7º: mesa cuyos cursos son todos 7
+ *   3º técnico: mesas con materias 18,32,132 exclusivas por alumno
+ */
+function cargarMesasEspeciales(PDO $pdo): array {
+    $out = [];
+
+    // 7º: mesa cuyos cursos son todos 7
+    $rows7 = $pdo->query("
+        SELECT m.numero_mesa
+        FROM mesas m
+        INNER JOIN previas p ON p.id_previa = m.id_previa
+        GROUP BY m.numero_mesa
+        HAVING MIN(p.materia_id_curso) = 7
+           AND MAX(p.materia_id_curso) = 7
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($rows7 as $nm) {
+        $out[(int)$nm] = true;
+    }
+
+    // 3º técnico especial
+    $rowsTec = $pdo->query("
+        SELECT m.numero_mesa
+        FROM mesas m
+        INNER JOIN previas p ON p.id_previa = m.id_previa
+        WHERE p.materia_id_curso = 3
+        GROUP BY m.numero_mesa
+        HAVING
+          SUM(CASE WHEN p.id_materia IN (18,32,132) THEN 1 ELSE 0 END) >= 1
+          AND COUNT(DISTINCT p.dni) = 1
+          AND SUM(CASE WHEN p.id_materia NOT IN (18,32,132) THEN 1 ELSE 0 END) = 0
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($rowsTec as $nm) {
+        $out[(int)$nm] = true;
+    }
+
+    return $out;
 }
 
 if (!isset($pdo) || !$pdo instanceof PDO) {
@@ -151,6 +194,11 @@ try {
     foreach ($dnisPorNumero as $nm => $set) {
         $dnisPorNumero[$nm] = array_keys($set);
     }
+
+    // ------------------------------------------------------------------
+    // MESAS ESPECIALES
+    // ------------------------------------------------------------------
+    $mesasEspeciales = cargarMesasEspeciales($pdo);
 
     $unionDNIs = function (array $numeros) use ($dnisPorNumero): array {
         $u = [];
@@ -236,7 +284,7 @@ try {
     };
 
     // ------------------------------------------------------------------
-    // ESTADO DE GRUPOS
+    // ESTADO DE GRUPOS (excluyendo grupos con mesas especiales)
     // ------------------------------------------------------------------
     $stGr = $pdo->prepare("
         SELECT g.id_mesa_grupos,
@@ -264,6 +312,18 @@ try {
             (int)$g['numero_mesa_4']
         ], fn($x) => $x > 0));
 
+        // Excluir grupos que contengan mesas especiales
+        $tieneEspecial = false;
+        foreach ($nums as $nmG) {
+            if (!empty($mesasEspeciales[$nmG])) {
+                $tieneEspecial = true;
+                break;
+            }
+        }
+        if ($tieneEspecial) {
+            continue; // este grupo no participa en reoptimización con otras mesas
+        }
+
         if (!isset($bucket[$key])) {
             $bucket[$key] = [
                 'id_g'  => $g['id_mesa_grupos'],
@@ -282,7 +342,7 @@ try {
     unset($b);
 
     // ------------------------------------------------------------------
-    // MESAS NO AGRUPADAS
+    // MESAS NO AGRUPADAS (excluyendo mesas especiales)
     // ------------------------------------------------------------------
     $sqlNo = "
         SELECT
@@ -512,21 +572,8 @@ try {
     // ------------------------------------------------------------------
     // Helpers para mover mesas rompiendo grupo si hace falta (para correlatividad)
     // ------------------------------------------------------------------
-    $esEspecial = function(int $nm) use ($pdo): bool {
-        $sql="
-          SELECT p.materia_id_curso, p.id_materia
-          FROM mesas m INNER JOIN previas p ON p.id_previa=m.id_previa
-          WHERE m.numero_mesa=:nm
-          LIMIT 1";
-        $st=$pdo->prepare($sql);
-        $st->execute([':nm'=>$nm]);
-        $r=$st->fetch(PDO::FETCH_ASSOC);
-        if(!$r) return false;
-        $c=(int)$r['materia_id_curso'];
-        $idmat=(int)$r['id_materia'];
-        if ($c===7) return true;
-        if ($c===3 && in_array($idmat,[18,32,132],true)) return true;
-        return false;
+    $esEspecial = function(int $nm) use ($mesasEspeciales): bool {
+        return !empty($mesasEspeciales[$nm]);
     };
 
     $sacarDeGrupo = function(int $nm) use ($findGrupoDeNM,$pdo,$esEspecial,$stInsLeft) {
@@ -598,6 +645,12 @@ try {
 
         foreach ($noAgr as $row) {
             $nm   = (int)$row['numero_mesa'];
+            
+            // Saltar mesas especiales
+            if (!empty($mesasEspeciales[$nm])) {
+                continue;
+            }
+            
             $area = (int)$row['id_area'];
             $doc  = (int)$row['id_docente'];
 
@@ -660,12 +713,16 @@ try {
                 continue;
             }
 
-            // 2) formar grupo nuevo
+            // 2) formar grupo nuevo (solo con mesas no especiales)
             $pool = [$nm];
             foreach ($noAgr as $row2) {
                 if ((int)$row2['numero_mesa'] === $nm) continue;
-                if ((int)$row2['id_area'] !== $area) continue;
                 $nm2 = (int)$row2['numero_mesa'];
+                
+                // Saltar mesas especiales
+                if (!empty($mesasEspeciales[$nm2])) continue;
+                
+                if ((int)$row2['id_area'] !== $area) continue;
                 $d1  = $dnisPorNumero[$nm] ?? [];
                 $d2  = $dnisPorNumero[$nm2] ?? [];
                 $h   = array_flip($d1);
@@ -826,6 +883,10 @@ try {
 
         foreach ($sinSlot as $rowSS) {
             $nm    = (int)$rowSS['numero_mesa'];
+            
+            // Saltar mesas especiales
+            if (!empty($mesasEspeciales[$nm])) continue;
+            
             $area  = (int)$rowSS['id_area'];
             if ($nm <= 0) continue;
 
@@ -981,7 +1042,7 @@ try {
     }
 
     // ------------------------------------------------------------------
-    // AGRUPAR NO AGRUPADAS MISMO DÍA/TURNO/ÁREA
+    // AGRUPAR NO AGRUPADAS MISMO DÍA/TURNO/ÁREA (excluyendo especiales)
     // ------------------------------------------------------------------
     if (!$dryRun) {
         $sqlSinglesSlot = "
@@ -1002,8 +1063,12 @@ try {
 
         $slotsSingles = [];
         foreach ($rowsSingles as $r) {
+            $nm = (int)$r['numero_mesa'];
+            
+            // Saltar mesas especiales
+            if (!empty($mesasEspeciales[$nm])) continue;
+            
             $key = $r['fecha_mesa'] . '|' . $r['id_turno'] . '|' . $r['id_area'];
-            $nm  = (int)$r['numero_mesa'];
             if ($nm <= 0) continue;
             if (!isset($slotsSingles[$key])) {
                 $slotsSingles[$key] = [
@@ -1236,7 +1301,8 @@ try {
         ],
         'nota' =>
           'Correlatividad aplicada usando materias.correlativa: para cada alumno y cada valor de correlativa, ' .
-          'la mesa base (menor materia_id_curso) queda cronológicamente antes que las avanzadas.'
+          'la mesa base (menor materia_id_curso) queda cronológicamente antes que las avanzadas. ' .
+          'Las mesas especiales (7º y 3º técnico) NO participan en la reoptimización.'
     ]);
 
 } catch (Throwable $e) {

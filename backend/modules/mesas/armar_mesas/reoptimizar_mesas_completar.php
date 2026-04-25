@@ -27,6 +27,11 @@
 //     mesa single para formar un grupo nuevo (2 mesas), dejando el original
 //     con 3, siempre respetando TODAS las restricciones.
 //
+//  4) PROHIBIDO: las mesas especiales (7º y 3º técnico) NO se tocan:
+//     - no se suman a grupos,
+//     - no se mueven a otros slots,
+//     - no se usan como donantes.
+//
 // NO se crean mesas nuevas, solo se reubican mesas y se crean nuevos grupos.
 // -----------------------------------------------------------------------------
 
@@ -41,6 +46,11 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
 require_once __DIR__ . '/../../../config/db.php';
+
+// ---------------- Helper para obtener hora según turno ----------------
+function horaSegunTurno(int $turno): string {
+    return $turno === 1 ? '08:00:00' : '13:30:00';
+}
 
 // ---------------- Utils ----------------
 function respondJSON(bool $ok, $payload = null, int $status = 200): void {
@@ -86,7 +96,7 @@ function removerMesaDeTodosLosGrupos(PDO $pdo, int $nm, ?int $exceptId = null): 
 }
 
 /**
- * ✅ “Guardrail” de seguridad: si quedan duplicados en mesas_grupos, abortamos.
+ * ✅ "Guardrail" de seguridad: si quedan duplicados en mesas_grupos, abortamos.
  * Devuelve array de duplicados: [ ['nm'=>123,'cant'=>2], ... ]
  */
 function detectarDuplicadosEnGrupos(PDO $pdo): array {
@@ -207,11 +217,54 @@ function cargarInfoMesas(PDO $pdo): array {
 }
 
 /**
+ * Carga mesas especiales (7º y 3º técnico)
+ *   7º: mesa cuyos cursos son todos 7
+ *   3º técnico: mesas con materias 18,32,132 exclusivas por alumno
+ */
+function cargarMesasEspeciales(PDO $pdo): array {
+    $out = [];
+
+    // 7º: mesa cuyos cursos son todos 7
+    $rows7 = $pdo->query("
+        SELECT m.numero_mesa
+        FROM mesas m
+        INNER JOIN previas p ON p.id_previa = m.id_previa
+        GROUP BY m.numero_mesa
+        HAVING MIN(p.materia_id_curso) = 7
+           AND MAX(p.materia_id_curso) = 7
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($rows7 as $nm) {
+        $out[(int)$nm] = true;
+    }
+
+    // 3º técnico especial: misma definición que ya usás en armar_mesa_grupo.php
+    $rowsTec = $pdo->query("
+        SELECT m.numero_mesa
+        FROM mesas m
+        INNER JOIN previas p ON p.id_previa = m.id_previa
+        WHERE p.materia_id_curso = 3
+        GROUP BY m.numero_mesa
+        HAVING
+          SUM(CASE WHEN p.id_materia IN (18,32,132) THEN 1 ELSE 0 END) >= 1
+          AND COUNT(DISTINCT p.dni) = 1
+          AND SUM(CASE WHEN p.id_materia NOT IN (18,32,132) THEN 1 ELSE 0 END) = 0
+    ")->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($rowsTec as $nm) {
+        $out[(int)$nm] = true;
+    }
+
+    return $out;
+}
+
+/**
  * Devuelve:
  *   - grupos[idx] = [
  *       'id'      => id_mesa_grupos,
  *       'fecha'   => fecha_mesa,
  *       'turno'   => id_turno,
+ *       'hora'    => hora,
  *       'area'    => id_area,
  *       'mesas'   => [n1, n2, ...],
  *     ]
@@ -222,6 +275,7 @@ function cargarGrupos(PDO $pdo): array {
             g.id_mesa_grupos,
             g.fecha_mesa,
             g.id_turno,
+            g.hora,
             g.numero_mesa_1,
             g.numero_mesa_2,
             g.numero_mesa_3,
@@ -241,6 +295,7 @@ function cargarGrupos(PDO $pdo): array {
             g.id_mesa_grupos,
             g.fecha_mesa,
             g.id_turno,
+            g.hora,
             g.numero_mesa_1,
             g.numero_mesa_2,
             g.numero_mesa_3,
@@ -263,6 +318,7 @@ function cargarGrupos(PDO $pdo): array {
             'id'    => (int)$r['id_mesa_grupos'],
             'fecha' => $r['fecha_mesa'],
             'turno' => (int)$r['id_turno'],
+            'hora'  => $r['hora'] ?? horaSegunTurno((int)$r['id_turno']),
             'area'  => (int)$r['id_area'],
             'mesas' => $mesas,
         ];
@@ -491,6 +547,17 @@ try {
 
     [$dnisPorMesa, $areaPorMesa, $docsPorMesa] = cargarInfoMesas($pdo);
 
+    // Cargar mesas especiales
+    $mesasEspeciales = cargarMesasEspeciales($pdo);
+
+    // Helper para detectar si un grupo contiene alguna mesa especial
+    $grupoTieneEspecial = function(array $mesas) use ($mesasEspeciales): bool {
+        foreach ($mesas as $nm) {
+            if (!empty($mesasEspeciales[(int)$nm])) return true;
+        }
+        return false;
+    };
+
     [$slotIndex, $horarioAlumno] = buildSlotsYHorario($pdo);
 
     $correlRestricciones = buildCorrelRestricciones($pdo, $slotIndex);
@@ -537,7 +604,7 @@ try {
     }
 
     $stGetGrupo = $pdo->prepare("
-        SELECT numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4
+        SELECT numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4, hora
         FROM mesas_grupos
         WHERE id_mesa_grupos = :id
         LIMIT 1
@@ -563,11 +630,12 @@ try {
         WHERE numero_mesa = :n
     ");
 
+    // ✅ FIX: Incluir columna hora
     $stInsGrupo = $pdo->prepare("
         INSERT INTO mesas_grupos
-            (numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4, fecha_mesa, id_turno)
+            (numero_mesa_1, numero_mesa_2, numero_mesa_3, numero_mesa_4, fecha_mesa, id_turno, hora)
         VALUES
-            (:n1, :n2, :n3, :n4, :f, :t)
+            (:n1, :n2, :n3, :n4, :f, :t, :h)
     ");
 
     if (!$dryRun) {
@@ -589,6 +657,19 @@ try {
             foreach ($idxSingles as $iSingle) {
                 $s = $singles[$iSingle];
                 $nmSingle = $s['numero_mesa'];
+                
+                // No tocar mesas especiales
+                if (!empty($mesasEspeciales[$nmSingle])) {
+                    $pendientes[$nmSingle] = [
+                        'numero_mesa' => $nmSingle,
+                        'fecha'       => $fecha,
+                        'turno'       => $turno,
+                        'area'        => $area,
+                        'motivo'      => 'mesa_especial_no_tocar',
+                    ];
+                    continue;
+                }
+                
                 $pendientes[$nmSingle] = [
                     'numero_mesa' => $nmSingle,
                     'fecha'       => $fecha,
@@ -615,6 +696,18 @@ try {
             $s = $singles[$iSingle];
             $nmSingle = $s['numero_mesa'];
 
+            // No tocar mesas especiales
+            if (!empty($mesasEspeciales[$nmSingle])) {
+                $pendientes[$nmSingle] = [
+                    'numero_mesa' => $nmSingle,
+                    'fecha'       => $s['fecha'],
+                    'turno'       => (int)$s['turno'],
+                    'area'        => (int)$s['area'],
+                    'motivo'      => 'mesa_especial_no_tocar',
+                ];
+                continue;
+            }
+
             $areaMesa = $areaPorMesa[$nmSingle] ?? null;
             if ($areaMesa === null || $areaMesa !== $area) {
                 $pendientes[$nmSingle] = [
@@ -636,6 +729,12 @@ try {
                 $g = $grupos[$idxG];
 
                 $mesasG = $g['mesas'];
+                
+                // Si el grupo tiene mesas especiales, no lo usamos
+                if ($grupoTieneEspecial($mesasG)) {
+                    continue;
+                }
+                
                 $sizeG  = count($mesasG);
                 if ($sizeG >= 4) continue;
 
@@ -779,6 +878,11 @@ try {
     // -----------------------------------------------------------------
     if (!empty($pendientes)) {
         foreach ($pendientes as $nmSingle => $info) {
+            // No tocar mesas especiales
+            if (!empty($mesasEspeciales[$nmSingle])) {
+                continue;
+            }
+            
             $fechaOriginal = $info['fecha'];
             $turnoOriginal = (int)$info['turno'];
             $areaMesa      = $areaPorMesa[$nmSingle] ?? null;
@@ -807,6 +911,12 @@ try {
                 $g = $grupos[$idxG];
 
                 $mesasG = $g['mesas'];
+                
+                // Si el grupo tiene mesas especiales, no lo usamos
+                if ($grupoTieneEspecial($mesasG)) {
+                    continue;
+                }
+                
                 $sizeG  = count($mesasG);
                 if ($sizeG >= 4) continue;
 
@@ -958,6 +1068,11 @@ try {
     // -----------------------------------------------------------------
     if (!empty($pendientes)) {
         foreach ($pendientes as $nmSingle => $info) {
+            // No tocar mesas especiales
+            if (!empty($mesasEspeciales[$nmSingle])) {
+                continue;
+            }
+            
             $fechaSingle = $info['fecha'];
             $turnoSingle = (int)$info['turno'];
             $areaMesa    = $areaPorMesa[$nmSingle] ?? null;
@@ -983,11 +1098,22 @@ try {
             foreach ($idxGruposArea as $idxG) {
                 $g = $grupos[$idxG];
                 $mesasG = $g['mesas'];
+                
+                // Si el grupo tiene mesas especiales, no lo usamos
+                if ($grupoTieneEspecial($mesasG)) {
+                    continue;
+                }
+                
                 $sizeG  = count($mesasG);
 
                 if ($sizeG !== 4) continue;
 
                 foreach ($mesasG as $candMesa) {
+                    // La mesa donante no puede ser especial
+                    if (!empty($mesasEspeciales[$candMesa])) {
+                        continue;
+                    }
+                    
                     $dnisDonor = $dnisPorMesa[$candMesa] ?? [];
 
                     if (!empty(array_intersect($dnisDonor, $dnisSingle))) {
@@ -1086,6 +1212,7 @@ try {
                     ':n' => $nmDonor,
                 ]);
 
+                // ✅ FIX: Incluir hora en el nuevo grupo
                 $stInsGrupo->execute([
                     ':n1' => $nmSingle,
                     ':n2' => $nmDonor,
@@ -1093,6 +1220,7 @@ try {
                     ':n4' => 0,
                     ':f'  => $fechaSingle,
                     ':t'  => $turnoSingle,
+                    ':h'  => horaSegunTurno($turnoSingle),
                 ]);
                 $nuevoGrupoId = (int)$pdo->lastInsertId();
 
@@ -1161,7 +1289,8 @@ try {
         'nota' => 'Reoptimización avanzada: primero agrupa singles en el mismo día/turno, ' .
                   'luego los reubica en otros slots, y finalmente usa grupos de 4 como donantes ' .
                   'para formar grupos nuevos 2+3, respetando DNIs, bloques docentes, horarios y ' .
-                  'correlatividad (base antes que avanzadas).'
+                  'correlatividad (base antes que avanzadas). Las mesas especiales (7º y 3º técnico) ' .
+                  'NO se tocan en ningún paso.'
     ]);
 
 } catch (Throwable $e) {
@@ -1169,4 +1298,4 @@ try {
         $pdo->rollBack();
     }
     respondJSON(false, 'Error en el servidor: ' . $e->getMessage(), 500);
-}
+} 

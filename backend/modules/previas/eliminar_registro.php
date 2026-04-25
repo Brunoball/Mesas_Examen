@@ -1,74 +1,109 @@
 <?php
 // backend/modules/previas/eliminar_registro.php
-require_once __DIR__ . '/../../config/db.php';
 header('Content-Type: application/json; charset=utf-8');
+
+require_once __DIR__ . '/../../config/db.php';
 
 try {
     if (!($pdo instanceof PDO)) {
         throw new RuntimeException('Conexión PDO no disponible.');
     }
+
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->exec("SET NAMES utf8mb4");
 
-    // acepto JSON
     $raw = file_get_contents('php://input');
-    $in  = json_decode($raw, true);
-    $id  = isset($in['id_previa']) ? (int)$in['id_previa'] : 0;
+    $in = json_decode($raw ?: '[]', true);
+    if (!is_array($in)) $in = [];
+
+    $id = (int)($in['id_previa'] ?? $_POST['id_previa'] ?? $_GET['id_previa'] ?? 0);
 
     if ($id <= 0) {
         http_response_code(400);
         echo json_encode([
-            'exito'   => false,
+            'exito' => false,
             'mensaje' => 'ID inválido'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // ¿existe?
-    $stmt = $pdo->prepare("SELECT id_previa FROM previas WHERE id_previa = :id");
+    $pdo->beginTransaction();
+
+    // 1) Intentar eliminar de previas activas
+    $stmt = $pdo->prepare("SELECT id_previa FROM previas WHERE id_previa = :id LIMIT 1");
     $stmt->execute([':id' => $id]);
-    if (!$stmt->fetchColumn()) {
+    $existeEnPrevias = (bool)$stmt->fetchColumn();
+
+    if ($existeEnPrevias) {
+        $del = $pdo->prepare("DELETE FROM previas WHERE id_previa = :id LIMIT 1");
+        $del->execute([':id' => $id]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'exito' => true,
+            'mensaje' => 'Registro eliminado correctamente.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    // 2) Si no está en previas, intentar eliminar del historial
+    $stmt = $pdo->prepare("SELECT id_previa FROM previas_historial WHERE id_previa = :id LIMIT 1");
+    $stmt->execute([':id' => $id]);
+    $existeEnHistorial = (bool)$stmt->fetchColumn();
+
+    if (!$existeEnHistorial) {
+        $pdo->rollBack();
         http_response_code(404);
         echo json_encode([
-            'exito'   => false,
+            'exito' => false,
             'mensaje' => 'Registro no encontrado'
-        ]);
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // eliminar
-    $del = $pdo->prepare("DELETE FROM previas WHERE id_previa = :id");
-    $del->execute([':id' => $id]);
+    $delHist = $pdo->prepare("DELETE FROM previas_historial WHERE id_previa = :id LIMIT 1");
+    $delHist->execute([':id' => $id]);
 
-    echo json_encode(['exito' => true]);
+    $pdo->commit();
+
+    echo json_encode([
+        'exito' => true,
+        'mensaje' => 'Registro eliminado correctamente.'
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (PDOException $e) {
-    // Manejo específico de errores de base de datos
-    $sqlState   = $e->getCode();          // por ej. '23000'
-    $errorInfo  = $e->errorInfo ?? [];
-    $driverCode = $errorInfo[1] ?? null;  // por ej. 1451 en MySQL
-
-    // Error de integridad referencial: la previa está usada en mesas
-    if ($sqlState === '23000' && (int)$driverCode === 1451) {
-        http_response_code(409); // conflicto
-        echo json_encode([
-            'exito'   => false,
-            'mensaje' => 'No se puede eliminar el alumno porque está registrado en una mesa de examen. '
-        ]);
-    } else {
-        // Otros errores de base de datos
-        http_response_code(500);
-        echo json_encode([
-            'exito'   => false,
-            'mensaje' => 'Error al eliminar la previa. Intentalo de nuevo más tarde.'
-        ]);
+    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+        $pdo->rollBack();
     }
 
-} catch (Throwable $e) {
-    // Errores generales de PHP
+    $sqlState = $e->getCode();
+    $errorInfo = $e->errorInfo ?? [];
+    $driverCode = (int)($errorInfo[1] ?? 0);
+
+    if ($sqlState === '23000' && $driverCode === 1451) {
+        http_response_code(409);
+        echo json_encode([
+            'exito' => false,
+            'mensaje' => 'No se puede eliminar el alumno porque está registrado en una mesa de examen.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     http_response_code(500);
     echo json_encode([
-        'exito'   => false,
+        'exito' => false,
+        'mensaje' => 'Error al eliminar la previa. Intentalo de nuevo más tarde.'
+    ], JSON_UNESCAPED_UNICODE);
+
+} catch (Throwable $e) {
+    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
+    http_response_code(500);
+    echo json_encode([
+        'exito' => false,
         'mensaje' => 'Ocurrió un error inesperado al eliminar la previa.'
-    ]);
+    ], JSON_UNESCAPED_UNICODE);
 }

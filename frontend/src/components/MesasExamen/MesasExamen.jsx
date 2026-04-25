@@ -132,10 +132,10 @@ const diaSemana = (iso) => {
     "DOMINGO",
     "LUNES",
     "MARTES",
-    "MIERCOLES",
+    "MIÉRCOLES",
     "JUEVES",
     "VIERNES",
-    "SABADO",
+    "SÁBADO",
   ];
   const d = new Date(`${iso || ""}T00:00:00`);
   return Number.isNaN(d.getTime()) ? "" : dias[d.getDay()] || "";

@@ -6,6 +6,7 @@
 // - Crea mesas incluso si no encuentra cátedra exacta (usa cátedra por defecto)
 // - Maneja casos donde no hay docente asignado
 // - Log más detallado para debugging
+// - PRIORIZA DOCENTES SUPLENTES (id_cargo=2) sobre titulares
 // ----------------------------------------------------------------------------- 
 
 declare(strict_types=1);
@@ -199,19 +200,54 @@ try {
   // Sentencias varias
   $stExisteMesa = $pdo->prepare("SELECT 1 FROM mesas WHERE id_previa=:idp LIMIT 1");
 
+  // ========== CONSULTAS MODIFICADAS PARA PRIORIZAR SUPLENTES (id_cargo=2) ==========
+  
+  // Consulta 1: Búsqueda por curso y división específicos (prioriza suplentes)
   $stBuscaCatedra = $pdo->prepare("
-    SELECT id_catedra, id_docente
-    FROM catedras
-    WHERE id_materia=:idm AND id_curso=:ic AND id_division=:idv
+    SELECT c.id_catedra, c.id_docente
+    FROM catedras c
+    LEFT JOIN docentes d ON d.id_docente = c.id_docente
+    WHERE c.id_materia = :idm
+      AND c.id_curso   = :ic
+      AND c.id_division = :idv
+    ORDER BY
+      CASE WHEN COALESCE(d.id_cargo, 0) = 2 THEN 0 ELSE 1 END,
+      c.id_catedra ASC
     LIMIT 1
   ");
 
-  // NUEVO: Buscar cualquier cátedra de la materia como fallback
+  // Consulta 2: Búsqueda por materia solamente (fallback, prioriza suplentes)
   $stBuscaCatedraFallback = $pdo->prepare("
-    SELECT id_catedra, id_docente
-    FROM catedras
-    WHERE id_materia=:idm
+    SELECT c.id_catedra, c.id_docente
+    FROM catedras c
+    LEFT JOIN docentes d ON d.id_docente = c.id_docente
+    WHERE c.id_materia = :idm
+    ORDER BY
+      CASE WHEN COALESCE(d.id_cargo, 0) = 2 THEN 0 ELSE 1 END,
+      c.id_catedra ASC
     LIMIT 1
+  ");
+
+  // Consulta 3: Para 7º año - trae UNA cátedra por materia (la de mayor prioridad: suplente > titular)
+  $stCatedras7 = $pdo->prepare("
+    SELECT c.id_catedra, c.id_docente
+    FROM catedras c
+    LEFT JOIN docentes d ON d.id_docente = c.id_docente
+    WHERE c.id_curso = 7
+      AND c.id_division = :div
+      AND c.id_catedra = (
+        SELECT c2.id_catedra
+        FROM catedras c2
+        LEFT JOIN docentes d2 ON d2.id_docente = c2.id_docente
+        WHERE c2.id_curso = c.id_curso
+          AND c2.id_division = c.id_division
+          AND c2.id_materia = c.id_materia
+        ORDER BY
+          CASE WHEN COALESCE(d2.id_cargo, 0) = 2 THEN 0 ELSE 1 END,
+          c2.id_catedra ASC
+        LIMIT 1
+      )
+    ORDER BY c.id_catedra ASC
   ");
 
   $stNumeroExistente = $pdo->prepare("
@@ -221,13 +257,6 @@ try {
     WHERE c.id_materia=:idm AND m.id_docente=:idd
     ORDER BY m.numero_mesa ASC
     LIMIT 1
-  ");
-
-  // NUEVO: todas las cátedras de 7º para una división dada
-  $stCatedras7 = $pdo->prepare("
-    SELECT id_catedra, id_docente
-    FROM catedras
-    WHERE id_curso = 7 AND id_division = :div
   ");
 
   // NUEVO: existencia exacta de mesa por numero_mesa + cátedra + previa
@@ -325,7 +354,7 @@ try {
       $cursando_curso      = isset($p['cursando_id_curso']) ? (int)$p['cursando_id_curso'] : $materia_id_curso;
       $cursando_division   = isset($p['cursando_id_division']) ? (int)$p['cursando_id_division'] : $materia_id_division;
 
-      // cátedra/docente: primero intentamos por curso/división de la materia
+      // cátedra/docente: primero intentamos por curso/división de la materia (prioriza suplentes)
       $stBuscaCatedra->execute([
         ':idm'=>$id_materia,
         ':ic'=>$materia_id_curso,
@@ -334,7 +363,7 @@ try {
       $cat = $stBuscaCatedra->fetch(PDO::FETCH_ASSOC);
 
       if (!$cat) {
-        // FALLBACK: intentar por curso/división donde el alumno está cursando
+        // FALLBACK: intentar por curso/división donde el alumno está cursando (prioriza suplentes)
         $stBuscaCatedra->execute([
           ':idm'=>$id_materia,
           ':ic'=>$cursando_curso,
@@ -343,7 +372,7 @@ try {
         $cat = $stBuscaCatedra->fetch(PDO::FETCH_ASSOC);
       }
 
-      // NUEVO: FALLBACK CRÍTICO - Si no encuentra cátedra específica, buscar CUALQUIER cátedra de la materia
+      // NUEVO: FALLBACK CRÍTICO - Si no encuentra cátedra específica, buscar CUALQUIER cátedra de la materia (prioriza suplentes)
       if (!$cat) {
         $stBuscaCatedraFallback->execute([':idm'=>$id_materia]);
         $cat = $stBuscaCatedraFallback->fetch(PDO::FETCH_ASSOC);
@@ -386,11 +415,17 @@ try {
 
       // obtener (o calcular) numero base
       if (!isset($cacheNumeroPorMD[$claveBase])) {
-        $stNumeroExistente->execute([':idm'=>$id_materia, ':idd'=>$id_docente]);
-        $row = $stNumeroExistente->fetch(PDO::FETCH_ASSOC);
-        $cacheNumeroPorMD[$claveBase] = $row && isset($row['numero_mesa'])
-          ? (int)$row['numero_mesa']
-          : ++$siguienteNumero;
+        if ($esCurso7) {
+          // 7º SIEMPRE debe tener un numero_mesa exclusivo por alumno+división.
+          // Nunca reutilizar uno existente por materia/docente.
+          $cacheNumeroPorMD[$claveBase] = ++$siguienteNumero;
+        } else {
+          $stNumeroExistente->execute([':idm'=>$id_materia, ':idd'=>$id_docente]);
+          $row = $stNumeroExistente->fetch(PDO::FETCH_ASSOC);
+          $cacheNumeroPorMD[$claveBase] = $row && isset($row['numero_mesa'])
+            ? (int)$row['numero_mesa']
+            : ++$siguienteNumero;
+        }
       }
       $nmCandidato = $cacheNumeroPorMD[$claveBase];
 
@@ -462,7 +497,7 @@ try {
       $idp7  = $infoSeptimo['id_previa'];
       $dni7  = $infoSeptimo['dni'];
 
-      // Obtener TODAS las cátedras (materias+docentes) de 7º de esa división
+      // Obtener UNA cátedra por materia de 7º (la de mayor prioridad: suplente > titular)
       $stCatedras7->execute([':div' => $div7]);
       $rows7 = $stCatedras7->fetchAll(PDO::FETCH_ASSOC);
 
@@ -620,9 +655,9 @@ try {
     ],
     'nota'=>'Se tomaron TODAS las previas con inscripcion=1 e id_condicion=3. 
 Las materias sin fila en `materias` entran igual (sin correlatividad) gracias al LEFT JOIN.
-La búsqueda de cátedra ahora intenta primero por curso/división de la materia y, si no existe, por curso/división de cursado del alumno.
-FALLBACK CRÍTICO: Si no encuentra cátedra específica, usa cualquier cátedra de la materia o valores por defecto.
-El resto de las reglas (correlatividad, 7º año, límite de slots por docente, fines de semana, etc.) se mantienen.'
+La búsqueda de cátedra ahora PRIORIZA DOCENTES SUPLENTES (id_cargo=2) sobre titulares.
+Para 7º año, se selecciona UNA cátedra por materia (la de mayor prioridad: suplente > titular).
+El resto de las reglas (correlatividad, límite de slots por docente, fines de semana, etc.) se mantienen.'
   ]);
 
 } catch (Throwable $e) {

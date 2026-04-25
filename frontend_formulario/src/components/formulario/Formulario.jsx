@@ -43,6 +43,7 @@ const useVentanaInscripcion = (pollMs = 10000) => {
         { cache: "no-store" }
       );
       const json = await resp.json();
+
       if (!json.exito) {
         setError(json.mensaje || "No se pudo obtener la configuración.");
         setData((old) => (old ? { ...old, abierta: false } : null));
@@ -69,6 +70,7 @@ const useVentanaInscripcion = (pollMs = 10000) => {
     const onVis = () => {
       if (document.visibilityState === "visible") fetchVentana();
     };
+
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [fetchVentana]);
@@ -82,7 +84,10 @@ const useVentanaInscripcion = (pollMs = 10000) => {
         window.dispatchEvent(ev);
       }
     }
-    if (data?.abierta !== undefined) prevAbiertaRef.current = data.abierta;
+
+    if (data?.abierta !== undefined) {
+      prevAbiertaRef.current = data.abierta;
+    }
   }, [data]);
 
   return { cargando, error, data, refetch: fetchVentana };
@@ -92,6 +97,7 @@ const useVentanaInscripcion = (pollMs = 10000) => {
 const InscripcionCerrada = ({ cfg }) => {
   const titulo = cfg?.titulo || "Mesas de Examen";
   const msg = cfg?.mensaje_cerrado || "Inscripción cerrada / fuera de término.";
+
   return (
     <div className="auth-page">
       <div className="auth-card">
@@ -101,6 +107,7 @@ const InscripcionCerrada = ({ cfg }) => {
               <h1 className="hero-title">{titulo}</h1>
               <p className="hero-sub">Inscripción en línea</p>
             </div>
+
             <img
               src={escudo}
               alt="Escudo IPET 50"
@@ -146,84 +153,282 @@ const ResumenAlumno = ({
 }) => {
   // Materias inscribibles (cond=3)
   const materiasCond3 = data?.alumno?.materias ?? [];
+
   // Materias "Tercera materia" (cond=5) — solo visualización
   const materiasCond5 = data?.alumno?.materias_cond5 ?? [];
-  // Materias "pendientes" (cond=6) — solo visualización (gris, no inscribibles)
+
+  // Materias "pendientes" (cond=6) — solo visualización
   const materiasCond6 = data?.alumno?.materias_cond6 ?? [];
 
-  // ⬇️ Por defecto TODAS DESELECCIONADAS
-  // CORRECCIÓN: Usar una clave única que combine id_materia + curso + división
+  // Grupos correlativos detectados en el backend
+  const correlativas = data?.alumno?.correlativas ?? [];
+
+  // Todas empiezan deseleccionadas
   const [seleccion, setSeleccion] = useState(() => new Set());
 
-  // Si cambian las materias (por otro alumno o refresh), limpiamos selección
   useEffect(() => {
     setSeleccion(new Set());
   }, [materiasCond3.length]);
 
   useEffect(() => {
     const handler = (e) => {
-      if (e?.detail?.abierta === false) onVentanaCerro?.();
+      if (e?.detail?.abierta === false) {
+        onVentanaCerro?.();
+      }
     };
+
     window.addEventListener("ventana:cambio", handler);
     return () => window.removeEventListener("ventana:cambio", handler);
   }, [onVentanaCerro]);
 
-  // Generar clave única para cada materia que incluya curso y división
+  // Generar clave única para cada materia
   const generarClaveUnica = (materia) => {
+    if (materia?.clave_unica) return materia.clave_unica;
     return `${materia.id_materia}_${materia.curso_id}_${materia.division_id}`;
   };
 
-  // Toggle por clave única
-  const toggle = (claveUnica, disabled) => {
-    if (disabled) return;
-    setSeleccion((prev) => {
-      const next = new Set(prev);
-      next.has(claveUnica) ? next.delete(claveUnica) : next.add(claveUnica);
-      return next;
+  const mapaMateriasPorClave = useMemo(() => {
+    const map = new Map();
+
+    materiasCond3.forEach((m) => {
+      map.set(generarClaveUnica(m), m);
+    });
+
+    return map;
+  }, [materiasCond3]);
+
+  /* =========================================================
+     ORDEN CORRECTO:
+     Primero menor año/curso arriba.
+     Ejemplo:
+     MATEMÁTICA 5° arriba
+     ANÁLISIS MATEMÁTICO 6° abajo
+     ========================================================= */
+  const obtenerNumeroCurso = (materia) => {
+    const directo = Number(materia?.curso_id);
+
+    if (!Number.isNaN(directo) && directo > 0) {
+      return directo;
+    }
+
+    const desdeTexto = String(materia?.curso || "").match(/\d+/);
+    return desdeTexto ? Number(desdeTexto[0]) : 999;
+  };
+
+  const obtenerNumeroDivision = (materia) => {
+    const directo = Number(materia?.division_id);
+
+    if (!Number.isNaN(directo) && directo > 0) {
+      return directo;
+    }
+
+    return 999;
+  };
+
+  const ordenarMateriasPorAnio = (lista) => {
+    return [...lista].sort((a, b) => {
+      const cursoA = obtenerNumeroCurso(a);
+      const cursoB = obtenerNumeroCurso(b);
+
+      if (cursoA !== cursoB) {
+        return cursoA - cursoB;
+      }
+
+      const divisionA = obtenerNumeroDivision(a);
+      const divisionB = obtenerNumeroDivision(b);
+
+      if (divisionA !== divisionB) {
+        return divisionA - divisionB;
+      }
+
+      return String(a.materia || "").localeCompare(
+        String(b.materia || ""),
+        "es",
+        {
+          sensitivity: "base",
+        }
+      );
     });
   };
 
   const materiasOrdenadas = useMemo(
-    () =>
-      [...materiasCond3].sort((a, b) =>
-        a.materia.localeCompare(b.materia, "es", { sensitivity: "base" })
-      ),
+    () => ordenarMateriasPorAnio(materiasCond3),
     [materiasCond3]
   );
 
   const materias5Ordenadas = useMemo(
-    () =>
-      [...materiasCond5].sort((a, b) =>
-        a.materia.localeCompare(b.materia, "es", { sensitivity: "base" })
-      ),
+    () => ordenarMateriasPorAnio(materiasCond5),
     [materiasCond5]
   );
 
   const materias6Ordenadas = useMemo(
-    () =>
-      [...materiasCond6].sort((a, b) =>
-        a.materia.localeCompare(b.materia, "es", { sensitivity: "base" })
-      ),
+    () => ordenarMateriasPorAnio(materiasCond6),
     [materiasCond6]
   );
 
+  /*
+    NUEVO:
+    El cartel amarillo solo aparece si hay correlativas
+    y al menos una de esas materias NO está inscripta.
+    Si todas ya están INSCRIPTO, se oculta.
+  */
+  const mostrarAvisoCorrelativas = useMemo(() => {
+    if (!Array.isArray(correlativas) || correlativas.length === 0) {
+      return false;
+    }
+
+    return correlativas.some((grupo) => {
+      const materiasGrupo = Array.isArray(grupo?.materias)
+        ? grupo.materias
+        : [];
+
+      return materiasGrupo.some((m) => !Number(m?.inscripcion));
+    });
+  }, [correlativas]);
+
+  const materiaEstaDisponiblePorCorrelativa = useCallback(
+    (materia, seleccionActual = seleccion) => {
+      const anteriores = Array.isArray(materia?.correlativas_anteriores)
+        ? materia.correlativas_anteriores
+        : [];
+
+      if (anteriores.length === 0) {
+        return true;
+      }
+
+      // La posterior solo se habilita si todas las anteriores están seleccionadas
+      // o ya estaban inscriptas.
+      return anteriores.every((claveAnterior) => {
+        const anterior = mapaMateriasPorClave.get(claveAnterior);
+
+        if (!anterior) return false;
+
+        const anteriorYaInscripta = !!Number(anterior.inscripcion);
+        const anteriorSeleccionada = seleccionActual.has(claveAnterior);
+
+        return anteriorYaInscripta || anteriorSeleccionada;
+      });
+    },
+    [seleccion, mapaMateriasPorClave]
+  );
+
+  const obtenerMensajeBloqueoCorrelativa = (materia) => {
+    const anteriores = Array.isArray(materia?.correlativas_anteriores)
+      ? materia.correlativas_anteriores
+      : [];
+
+    if (anteriores.length === 0) return "";
+
+    const nombresPendientes = anteriores
+      .map((clave) => mapaMateriasPorClave.get(clave))
+      .filter(
+        (m) =>
+          m &&
+          !Number(m.inscripcion) &&
+          !seleccion.has(generarClaveUnica(m))
+      )
+      .map((m) => m.materia);
+
+    if (nombresPendientes.length === 0) return "";
+
+    return `Primero seleccioná: ${nombresPendientes.join(", ")}`;
+  };
+
+  const quitarPosterioresDependientes = useCallback(
+    (claveQuitada, seleccionBase) => {
+      const next = new Set(seleccionBase);
+
+      let huboCambios = true;
+
+      while (huboCambios) {
+        huboCambios = false;
+
+        materiasCond3.forEach((m) => {
+          const claveM = generarClaveUnica(m);
+
+          if (!next.has(claveM)) return;
+
+          const disponible = materiaEstaDisponiblePorCorrelativa(m, next);
+
+          if (!disponible) {
+            next.delete(claveM);
+            huboCambios = true;
+          }
+        });
+      }
+
+      next.delete(claveQuitada);
+
+      return next;
+    },
+    [materiasCond3, materiaEstaDisponiblePorCorrelativa]
+  );
+
+  const toggle = (materia, disabled) => {
+    if (disabled) return;
+
+    const claveUnica = generarClaveUnica(materia);
+
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(claveUnica)) {
+        next.delete(claveUnica);
+
+        // Si saco la anterior, saco automáticamente las posteriores
+        // que dependían de esa selección.
+        return quitarPosterioresDependientes(claveUnica, next);
+      }
+
+      // Si intenta seleccionar una posterior sin la anterior, no dejamos.
+      if (!materiaEstaDisponiblePorCorrelativa(materia, next)) {
+        return next;
+      }
+
+      next.add(claveUnica);
+      return next;
+    });
+  };
+
   const handleConfirm = () => {
-    // CORRECCIÓN: Filtrar usando la misma clave única que en el map
     const elegidas = materiasOrdenadas.filter((m) => {
       const claveUnica = generarClaveUnica(m);
       return !Number(m.inscripcion) && seleccion.has(claveUnica);
     });
 
-    // CORRECCIÓN CRÍTICA: Enviar información completa al backend para identificar única
+    // Seguridad extra en frontend:
+    // si por cualquier motivo quedó seleccionada una posterior sin anterior, bloqueamos.
+    const invalida = elegidas.find((m) => {
+      const anteriores = Array.isArray(m?.correlativas_anteriores)
+        ? m.correlativas_anteriores
+        : [];
+
+      if (anteriores.length === 0) return false;
+
+      return !anteriores.every((claveAnterior) => {
+        const anterior = mapaMateriasPorClave.get(claveAnterior);
+
+        if (!anterior) return false;
+
+        return !!Number(anterior.inscripcion) || seleccion.has(claveAnterior);
+      });
+    });
+
+    if (invalida) {
+      alert(
+        `No podés inscribirte solo en "${invalida.materia}". Primero tenés que seleccionar la correlativa anterior.`
+      );
+      return;
+    }
+
     onConfirmar({
       dni: data.alumno.dni,
       gmail: data.gmail ?? "",
       nombre_alumno: data.alumno?.nombre ?? "",
-      // Enviar array de objetos con toda la información necesaria
       materias: elegidas.map((m) => ({
         id_materia: m.id_materia,
         curso_id: m.curso_id,
-        division_id: m.division_id
+        division_id: m.division_id,
       })),
       materias_nombres: elegidas.map((m) => m.materia || ""),
     });
@@ -232,18 +437,18 @@ const ResumenAlumno = ({
   const a = data.alumno;
   const abierta = !!ventana?.abierta;
 
-  // Accesibilidad: permitir Enter/Espacio para activar la tarjeta
-  const handleKeyToggle = (e, claveUnica, disabled) => {
+  const handleKeyToggle = (e, materia, disabled) => {
     if (disabled) return;
+
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      toggle(claveUnica, false);
+      toggle(materia, false);
     }
   };
 
   return (
     <div className="auth-card">
-      {/* Caja izquierda (datos) + VOLVER abajo (desktop) */}
+      {/* Caja izquierda */}
       <aside className="auth-hero">
         <div className="hero-scroll">
           <div className="hero-inner">
@@ -276,6 +481,7 @@ const ResumenAlumno = ({
                     readOnly
                   />
                 </label>
+
                 <label className="hf-field">
                   <span className="hf-label">Curso</span>
                   <input
@@ -284,6 +490,7 @@ const ResumenAlumno = ({
                     readOnly
                   />
                 </label>
+
                 <label className="hf-field">
                   <span className="hf-label">División</span>
                   <input
@@ -308,7 +515,6 @@ const ResumenAlumno = ({
               </div>
             </div>
 
-            {/* VOLVER — solo desktop */}
             <div className="actions-left only-desktop">
               <button
                 type="button"
@@ -322,18 +528,17 @@ const ResumenAlumno = ({
         </div>
       </aside>
 
-      {/* Caja derecha (materias) + CONFIRMAR abajo (desktop) */}
+      {/* Caja derecha */}
       <section className="auth-body">
         <header className="auth-header">
           <h2 className="auth-title">Materias pendientes de rendir</h2>
           <p className="auth-sub">
             Estas son tus materias previas (adeudadas).
           </p>
+
           {ventana && (
             <div
-              className={`ventana-pill ${
-                abierta ? "is-open" : "is-closed"
-              }`}
+              className={`ventana-pill ${abierta ? "is-open" : "is-closed"}`}
             >
               {abierta ? (
                 <>
@@ -345,76 +550,145 @@ const ResumenAlumno = ({
                 </>
               ) : (
                 <>
-                  Inscripción cerrada (desde{" "}
-                  {fmtFechaHoraES(ventana.inicio)} hasta{" "}
-                  {fmtFechaHoraES(ventana.fin)}).
+                  Inscripción cerrada (desde {fmtFechaHoraES(ventana.inicio)}{" "}
+                  hasta {fmtFechaHoraES(ventana.fin)}).
                 </>
               )}
             </div>
           )}
+
+          {mostrarAvisoCorrelativas && (
+            <div
+              style={{
+                marginTop: "10px",
+                padding: "10px",
+                borderRadius: "8px",
+                background: "#fef3c7",
+                color: "#92400e",
+                fontSize: "14px",
+                fontWeight: "500",
+                border: "1px solid #facc15",
+              }}
+            >
+              Materias correlativas: primero seleccioná la anterior para poder
+              inscribirte a la posterior.
+            </div>
+          )}
         </header>
 
-        {/* Grid cond=3 (inscribibles) */}
+        {/* Grid cond=3 */}
         <div className="materias-scroll">
           <div className="materias-grid">
             {materiasOrdenadas.map((m) => {
-              // CORRECCIÓN: Clave única que combina id_materia + curso_id + division_id
               const claveUnica = generarClaveUnica(m);
               const yaInscripto = !!Number(m.inscripcion);
               const selected = seleccion.has(claveUnica);
-              const disabled = yaInscripto || !abierta;
+
+              const bloqueadaPorCorrelativa =
+                !yaInscripto && !materiaEstaDisponiblePorCorrelativa(m);
+
+              const disabled =
+                yaInscripto || !abierta || bloqueadaPorCorrelativa;
+
               const classes = [
                 "materia-card",
                 yaInscripto ? "inscripto" : selected ? "selected" : "",
-                !abierta ? "disabled" : "",
+                !abierta || bloqueadaPorCorrelativa ? "disabled" : "",
+                m.es_correlativa ? "es-correlativa" : "",
                 "clickable",
               ]
                 .join(" ")
                 .trim();
 
+              const mensajeBloqueo = obtenerMensajeBloqueoCorrelativa(m);
+
               const title = yaInscripto
                 ? "Ya estás inscripto en esta materia"
                 : !abierta
                 ? "La inscripción está cerrada"
+                : bloqueadaPorCorrelativa
+                ? mensajeBloqueo ||
+                  "Primero seleccioná la correlativa anterior"
                 : "Click para seleccionar/deseleccionar";
 
               return (
                 <div
-                  key={claveUnica} // CORRECCIÓN: Usar clave única como key
+                  key={claveUnica}
                   className={classes}
                   title={title}
                   role="button"
                   tabIndex={disabled ? -1 : 0}
                   aria-pressed={selected}
-                  onClick={() => !disabled && toggle(claveUnica, false)}
-                  onKeyDown={(e) => handleKeyToggle(e, claveUnica, disabled)}
+                  onClick={() => !disabled && toggle(m, false)}
+                  onKeyDown={(e) => handleKeyToggle(e, m, disabled)}
+                  style={
+                    bloqueadaPorCorrelativa
+                      ? {
+                          opacity: 0.55,
+                          cursor: "not-allowed",
+                        }
+                      : undefined
+                  }
                 >
                   <span className="nombre">
                     {m.materia}
+
                     {yaInscripto && (
                       <span className="badge-inscripto">INSCRIPTO</span>
                     )}
+
+                    {m.es_correlativa && !yaInscripto && (
+                      <span
+                        style={{
+                          display: "inline-block",
+                          marginLeft: "8px",
+                          padding: "2px 7px",
+                          borderRadius: "999px",
+                          background: "#fef3c7",
+                          color: "#92400e",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                        }}
+                      >
+                        CORRELATIVA
+                      </span>
+                    )}
                   </span>
+
                   <small className="sub">
                     {`(Curso ${m.curso} • Div. ${m.division})`}
                   </small>
+
+                  {bloqueadaPorCorrelativa && (
+                    <small
+                      style={{
+                        display: "block",
+                        marginTop: "6px",
+                        color: "#92400e",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {mensajeBloqueo || "Primero seleccioná la anterior"}
+                    </small>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Bloque adicional: Materias pendientes (cond=6) - SOLO VISUALIZACIÓN - SIN CHECKBOX */}
+        {/* Materias pendientes cond=6 */}
         {materias6Ordenadas.length > 0 && (
           <div className="materias-pendientes-section">
             <h3 className="auth-title">Materias pendientes</h3>
             <p className="auth-sub">
               Solo visualización (no se puede inscribir en estas).
             </p>
+
             <div className="materias-grid">
               {materias6Ordenadas.map((m) => (
                 <div
-                  key={`c6-${generarClaveUnica(m)}`} // CORRECCIÓN: Usar clave única
+                  key={`c6-${generarClaveUnica(m)}`}
                   className="materia-card disabled only-visual"
                   title="Materia pendiente (no inscribible en esta instancia)"
                 >
@@ -428,17 +702,18 @@ const ResumenAlumno = ({
           </div>
         )}
 
-        {/* Bloque adicional: Tercera materia (cond=5) - SOLO VISUALIZACIÓN */}
+        {/* Tercera materia cond=5 */}
         {materias5Ordenadas.length > 0 && (
           <div className="tercera-materia-section">
             <h3 className="auth-title">Tercera materia</h3>
             <p className="auth-sub">
               Solo visualización (no se puede inscribir en estas).
             </p>
+
             <div className="materias-grid">
               {materias5Ordenadas.map((m) => (
                 <div
-                  key={`c5-${generarClaveUnica(m)}`} // CORRECCIÓN: Usar clave única
+                  key={`c5-${generarClaveUnica(m)}`}
                   className="materia-card disabled only-visual"
                   title="Tercera materia: solo visualización"
                 >
@@ -452,7 +727,6 @@ const ResumenAlumno = ({
           </div>
         )}
 
-        {/* CONFIRMAR — solo desktop */}
         <div className="actions-right only-desktop">
           <button
             type="button"
@@ -466,11 +740,11 @@ const ResumenAlumno = ({
         </div>
       </section>
 
-      {/* Barra fija SOLO para móviles (resumen) */}
       <nav className="nav-bar only-mobile">
         <button type="button" className="btn-light" onClick={onVolver}>
           Volver
         </button>
+
         <button
           type="button"
           className="btn-primary"
@@ -485,7 +759,7 @@ const ResumenAlumno = ({
   );
 };
 
-/* ============== Formulario principal (login) ============== */
+/* ============== Formulario principal ============== */
 const Formulario = () => {
   const {
     cargando: cargandoVentana,
@@ -498,12 +772,11 @@ const Formulario = () => {
   const [dni, setDni] = useState("");
   const [remember, setRemember] = useState(false);
 
-  // Toast reforzado: si hay uno visible, se reemplaza instantáneamente por el nuevo
   const [toast, setToast] = useState(null);
 
-  // Forzar remount del Toast para cortar animaciones y mostrar el nuevo sin delay
   const showToastReplace = useCallback((tipo, mensaje, duracion = 3800) => {
     setToast(null);
+
     setTimeout(() => {
       setToast({ tipo, mensaje, duracion, key: Date.now() });
     }, 0);
@@ -523,6 +796,7 @@ const Formulario = () => {
         showToastReplace("exito", "La inscripción se abrió.");
       }
     };
+
     window.addEventListener("ventana:cambio", handler);
     return () => window.removeEventListener("ventana:cambio", handler);
   }, [showToastReplace, ventana?.mensaje_cerrado]);
@@ -531,15 +805,19 @@ const Formulario = () => {
     (v) => /^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(v.trim()),
     []
   );
+
   const isValidDni = useCallback((v) => /^[0-9]{7,9}$/.test(v), []);
 
   useEffect(() => {
     try {
       const savedRemember = localStorage.getItem(LS.REMEMBER) === "1";
+
       if (savedRemember) {
         const savedGmail = localStorage.getItem(LS.GMAIL) || "";
         const savedDni = localStorage.getItem(LS.DNI) || "";
+
         setRemember(true);
+
         if (savedGmail) setGmail(savedGmail);
         if (savedDni) setDni(savedDni);
       }
@@ -547,22 +825,25 @@ const Formulario = () => {
   }, []);
 
   useEffect(() => {
-    if (remember)
+    if (remember) {
       try {
         localStorage.setItem(LS.GMAIL, gmail || "");
       } catch {}
+    }
   }, [gmail, remember]);
 
   useEffect(() => {
-    if (remember)
+    if (remember) {
       try {
         localStorage.setItem(LS.DNI, dni || "");
       } catch {}
+    }
   }, [dni, remember]);
 
   const onToggleRemember = (e) => {
     const checked = e.target.checked;
     setRemember(checked);
+
     try {
       if (checked) {
         localStorage.setItem(LS.REMEMBER, "1");
@@ -587,10 +868,12 @@ const Formulario = () => {
       );
       return;
     }
+
     if (!isValidGmail(gmail)) {
       showToastReplace("error", "Ingresá un Gmail válido (@gmail.com).");
       return;
     }
+
     if (!isValidDni(dni)) {
       showToastReplace("error", "Ingresá un DNI válido (7 a 9 dígitos).");
       return;
@@ -598,6 +881,7 @@ const Formulario = () => {
 
     try {
       setCargando(true);
+
       const resp = await fetch(
         `${BASE_URL}/api.php?action=form_buscar_previas`,
         {
@@ -606,10 +890,10 @@ const Formulario = () => {
           body: JSON.stringify({ gmail: gmail.trim(), dni }),
         }
       );
+
       const json = await resp.json();
 
       if (!json.exito) {
-        // —— Ajuste de duración a 3s SOLO para el caso "no se encontraron previas/materias previas"
         const mensajeServidor =
           typeof json.mensaje === "string" ? json.mensaje.trim() : "";
         const mensajeFallback = "No se encontraron previas para el DNI.";
@@ -627,12 +911,14 @@ const Formulario = () => {
         );
         return;
       }
+
       if (json.ya_inscripto) {
         showToastReplace(
           "advertencia",
-          `El alumno ya fue inscrito en todas las materias adeudadas.`
+          "El alumno ya fue inscrito en todas las materias adeudadas."
         );
       }
+
       setDataAlumno({ ...json, gmail: gmail.trim() });
     } catch (err) {
       showToastReplace("error", "Error consultando el servidor.");
@@ -641,7 +927,6 @@ const Formulario = () => {
     }
   };
 
-  // Envío de confirmación
   const confirmarInscripcion = async ({
     dni,
     materias,
@@ -655,6 +940,7 @@ const Formulario = () => {
     }
 
     await refetchVentana();
+
     if (ventana && !ventana.abierta) {
       showToastReplace(
         "advertencia",
@@ -664,29 +950,28 @@ const Formulario = () => {
     }
 
     try {
-      // CORRECCIÓN CRÍTICA: Enviar estructura completa al backend
       const resp = await fetch(
         `${BASE_URL}/api.php?action=form_registrar_inscripcion`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            dni, 
-            materias: materias // Ahora es array de objetos, no solo IDs
+          body: JSON.stringify({
+            dni,
+            materias,
           }),
         }
       );
+
       const json = await resp.json();
 
       if (!json.exito) {
         showToastReplace(
           "error",
-          json?.mensaje || `No se pudo registrar la inscripción.`
+          json?.mensaje || "No se pudo registrar la inscripción."
         );
         return;
       }
 
-      // Duración específica: si insertó 1 materia => 3000ms; si más, usamos 3800ms (por defecto)
       const insertados = Number(json.insertados || 0);
       const duracionExito = insertados === 1 ? 3000 : 3800;
 
@@ -696,10 +981,9 @@ const Formulario = () => {
         duracionExito
       );
 
-      // E-mail de confirmación (no bloqueante)
       try {
         await fetch(
-          `https://inscripcion.ipet50.edu.ar/mails/confirm_inscripcion.php`,
+          "https://inscripcion.ipet50.edu.ar/mails/confirm_inscripcion.php",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -716,6 +1000,7 @@ const Formulario = () => {
       }
 
       setDataAlumno(null);
+
       if (!remember) {
         setDni("");
         setGmail("");
@@ -725,7 +1010,6 @@ const Formulario = () => {
     }
   };
 
-  /* ==== Estados de carga/error/closed ==== */
   if (cargandoVentana) {
     return (
       <div className="auth-page">
@@ -751,14 +1035,13 @@ const Formulario = () => {
     return <InscripcionCerrada cfg={ventana} />;
   }
 
-  /* ==== Ventana abierta: render normal ==== */
   const isLoginScreen = !dataAlumno;
 
   return (
     <div className={`auth-page ${isLoginScreen ? "is-login-screen" : ""}`}>
       {toast && (
         <Toast
-          key={toast.key /* fuerza remount para cortar el anterior */}
+          key={toast.key}
           tipo={toast.tipo}
           mensaje={toast.mensaje}
           duracion={toast.duracion}
@@ -788,6 +1071,7 @@ const Formulario = () => {
                   Ingresá tu Gmail y DNI para consultar e inscribirte.
                 </p>
               </div>
+
               <img
                 src={escudo}
                 alt="Escudo IPET 50"
@@ -805,6 +1089,21 @@ const Formulario = () => {
                   {fmtFechaHoraES(ventana?.fin)}
                 </strong>
                 .
+              </p>
+
+              <p
+                style={{
+                  marginTop: "10px",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  background: "#fee2e2",
+                  color: "#991b1b",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                }}
+              >
+                Si sos egresado, acercate a secretaría para realizar la
+                inscripción.
               </p>
             </header>
 
@@ -838,9 +1137,7 @@ const Formulario = () => {
                   inputMode="numeric"
                   placeholder="Solo números"
                   value={dni}
-                  onChange={(e) =>
-                    setDni(e.target.value.replace(/\D+/g, ""))
-                  }
+                  onChange={(e) => setDni(e.target.value.replace(/\D+/g, ""))}
                   required
                   autoComplete="off"
                 />
@@ -857,7 +1154,6 @@ const Formulario = () => {
                 </label>
               </div>
 
-              {/* Botón solo escritorio */}
               <button
                 type="submit"
                 className="btn-cta only-desktop"
@@ -868,7 +1164,6 @@ const Formulario = () => {
             </form>
           </section>
 
-          {/* Barra fija SOLO para móviles en pantalla de inicio */}
           <nav className="nav-login-mobile only-mobile">
             <button
               type="submit"
