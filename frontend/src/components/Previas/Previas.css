@@ -379,6 +379,9 @@ input:-webkit-autofill { background-color: transparent !important; }
    MOBILE — tarjetas + navbar fija
    ========================================================= */
 @media (max-width: 768px) {
+  .glob-chip-action-fixed{
+    margin: 0 !important;
+  }
   .prev-box { background: var(--gradient-accent); }
 
   html, body {
@@ -1050,4 +1053,20 @@ input:-webkit-autofill { background-color: transparent !important; }
 .glob-chip-action-fixed p{
   margin: 0;
   font-size: .85rem;
+}
+@media (max-width: 768px) {
+  .prev-card-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  .prev-card-actions .glob-iconchip {
+    width: 100%;
+    min-width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+  }
 }

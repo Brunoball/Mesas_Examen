@@ -750,7 +750,7 @@ input:-webkit-autofill { background-color: transparent !important; }
   .glob-volver-atras:active { transform: scale(.98); }
   .glob-volver-atras:hover { background: linear-gradient(135deg, var(--pro-red-100) 0%, var(--pro-red-50) 100%); border-color: var(--pro-red-300); }
 
-  .glob-botones-container { flex:1 1 auto; display:flex; justify-content:flex-end; align-items:center; gap:10px; }
+  .glob-botones-container { flex:1 1 auto; display:flex; justify-content:flex-end; align-items:center; gap:8px; }
   .glob-botones-container .glob-profesor-button { 
     height:44px; width:44px; min-width:44px; padding:0; border-radius:12px; 
     display:grid; place-items:center; border:1.5px solid var(--pro-red-200); 
@@ -1231,4 +1231,202 @@ input:-webkit-autofill { background-color: transparent !important; }
 }
 .glob-column-nombre{
  text-align: left;
+}/* =========================================================
+   MOBILE — MESAS DE EXAMEN COMO PDF ESCALADO
+   Pegar al final del CSS
+========================================================= */
+
+@media (max-width: 768px) {
+
+  .glob-box-table.pdf-view {
+    width: 100%;
+    background: #fff;
+    border-radius: 0;
+    overflow: visible;
+    display: block !important;
+  }
+
+  .pdf-scroll {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    min-height: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 70px 0 95px;
+    background: #fff;
+  }
+
+  /*
+    Cada mesa conserva su tamaño "de PDF",
+    pero se reduce visualmente.
+  */
+  .mesa-detalle-box {
+    width: 960px;
+    max-width: none;
+    margin: 0 0 14px 50%;
+    padding: 12px;
+    transform: translateX(-50%) scale(0.38);
+    transform-origin: top center;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  }
+
+  /*
+    Como transform scale achica visualmente,
+    pero el navegador sigue reservando el alto original,
+    esto compensa el espacio vertical.
+  */
+  .mesa-detalle-box + .mesa-detalle-box {
+    margin-top: -58%;
+  }
+
+  .pdf-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .pdf-logo {
+    width: 58px;
+    height: auto;
+  }
+
+  .pdf-title {
+    font-size: 1.55rem;
+    line-height: 1.1;
+  }
+
+  .pdf-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .pdf-subinfo {
+    font-size: 0.9rem;
+  }
+
+  .pdf-table-wrapper {
+    width: 100%;
+    overflow: visible;
+  }
+
+  .tabla-detalle-mesa {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    font-size: 0.95rem;
+  }
+
+  .tabla-detalle-mesa th,
+  .tabla-detalle-mesa td {
+    padding: 7px 8px;
+    line-height: 1.15;
+  }
+
+  .pdf-actions {
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  .pdfbuttons {
+    transform: scale(1.1);
+    transform-origin: center;
+  }
+}
+
+/* Celulares chicos */
+@media (max-width: 480px) {
+  .mesa-detalle-box {
+    width: 960px;
+    transform: translateX(-50%) scale(0.34);
+  }
+
+  .mesa-detalle-box + .mesa-detalle-box {
+    margin-top: -62%;
+  }
+}
+
+/* Celulares muy angostos */
+@media (max-width: 380px) {
+  .mesa-detalle-box {
+    transform: translateX(-50%) scale(0.31);
+  }
+
+  .mesa-detalle-box + .mesa-detalle-box {
+    margin-top: -65%;
+  }
+}
+/* =========================================================
+   MOBILE — MESAS DE EXAMEN COMO PDF ESCALADO SIN ESPACIOS
+========================================================= */
+
+@media (max-width: 768px) {
+  .glob-box-table.pdf-view {
+    width: 100%;
+    background: #fff;
+    border-radius: 0;
+    overflow: visible;
+    display: block;
+  }
+  .tabla-detalle-mesa thead th {
+    z-index: 0;
+  }
+
+  .pdf-scroll {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    min-height: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 70px 8px 95px;
+    background: #fff;
+  }
+
+  .mesa-detalle-box {
+    width: 960px;
+    max-width: none;
+
+    /* acá se achica como PDF */
+    zoom: 0.38;
+
+    /* centrado */
+    margin: 0 auto 18px;
+
+    padding: 12px;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+
+    transform: none !important;
+    transform-origin: initial !important;
+  }
+
+  .mesa-detalle-box + .mesa-detalle-box {
+    margin-top: 0 !important;
+  }
+
+  .pdf-table-wrapper {
+    width: 100%;
+    overflow: visible;
+  }
+
+  .tabla-detalle-mesa {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+}
+
+@media (max-width: 480px) {
+  .mesa-detalle-box {
+    zoom: 0.35;
+  }
+}
+
+@media (max-width: 380px) {
+  .mesa-detalle-box {
+    zoom: 0.32;
+  }
 }

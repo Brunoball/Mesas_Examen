@@ -1350,8 +1350,8 @@ const Previas = () => {
 
         {/* CONTADOR + TABS + CHIPS + LISTADO */}
         <div className="glob-profesores-list">
-          <div className="glob-contenedor-list-items">
-            <div className="glob-left-inline">
+          <div className="glob-contenedor-list-items" style={{padding:0}}>
+            <div className="glob-left-inline" style={{flexWrap:'nowrap',gap:0}}>
               <div className="sep-boton">
                 <div className="glob-contador-container">
                   <span className="glob-profesores-desktop">
@@ -1450,7 +1450,7 @@ const Previas = () => {
                 title="Vaciar completamente previas"
               >
                 <FaBroom className="glob-profesor-icon-button" />
-                <p>Vaciar tabla</p>
+                <p>Vaciar</p>
               </button>
             </div>
           </div>
@@ -1523,16 +1523,132 @@ const Previas = () => {
             </div>
           )}
 
-          {isMobile && (
-            <div className="glob-no-data-message glob-no-data-mobile">
-              <div className="glob-message-content">
-                <p>En móvil también queda integrado (si querés te lo pego completo).</p>
+{isMobile && (
+  <div className="prev-cards-wrapper">
+    {!hayFiltros && filtroActivo !== 'todos' ? (
+      <div className="glob-no-data-message glob-no-data-mobile">
+        <div className="glob-message-content">
+          <FaFilter className="glob-empty-icon" aria-hidden="true" />
+          <p>Aplicá búsqueda o filtros para ver las previas</p>
+          <button className="glob-btn-show-all" onClick={handleMostrarTodos}>
+            Mostrar todas
+          </button>
+        </div>
+      </div>
+    ) : mostrarLoader ? (
+      <div className="glob-loading-spinner-container">
+        <div className="glob-loading-spinner"></div>
+      </div>
+    ) : basePorTab.length === 0 ? (
+      <div className="glob-no-data-message glob-no-data-mobile">
+        <div className="glob-message-content">
+          <p>{tab === 'inscriptos' ? 'No hay inscriptos aún' : 'No hay previas registradas'}</p>
+        </div>
+      </div>
+    ) : previasFiltradas.length === 0 ? (
+      <div className="glob-no-data-message glob-no-data-mobile">
+        <div className="glob-message-content">
+          <p>No hay resultados con los filtros actuales</p>
+        </div>
+      </div>
+    ) : (
+      previasFiltradas.map((p, index) => {
+        const estado = Number(p?.inscripcion ?? 0) === 1 ? 'INSCRIPTO' : 'PENDIENTE';
+        const mostrarBotonInscribir = estado === 'PENDIENTE' && esCondicionPrevia(p);
+
+        return (
+          <div
+            key={p?.id_previa ?? index}
+            className={`prev-card ${animacionActiva && index < MAX_CASCADE_ITEMS ? 'prev-cascade' : ''}`}
+            style={{ '--stagger': index }}
+          >
+            <div className="prev-card-header">
+              <h3 className="prev-card-title">{p.alumno}</h3>
+              <span className={estado === 'INSCRIPTO' ? 'glob-badge-ok' : 'glob-badge-warn'}>
+                {estado}
+              </span>
+            </div>
+
+            <div className="prev-card-body">
+              <div className="prev-card-row">
+                <span className="prev-card-label">DNI</span>
+                <span className="prev-card-value">{p.dni}</span>
+              </div>
+
+              <div className="prev-card-row">
+                <span className="prev-card-label">Materia</span>
+                <span className="prev-card-value">{p.materia_nombre}</span>
+              </div>
+
+              <div className="prev-card-row">
+                <span className="prev-card-label">Condición</span>
+                <span className="prev-card-value">{p.condicion_nombre}</span>
+              </div>
+
+              <div className="prev-card-row">
+                <span className="prev-card-label">Curso</span>
+                <span className="prev-card-value">{p.materia_curso_division}</span>
               </div>
             </div>
-          )}
+
+            <div className="prev-card-actions">
+              <button
+                className="glob-iconchip is-info"
+                title="Ver información"
+                onClick={() => abrirModalInfo(p)}
+                aria-label="Ver información"
+              >
+                <FaInfoCircle />
+              </button>
+
+              <button
+                className="glob-iconchip is-edit"
+                title="Editar"
+                onClick={() => handleEditarPrevia(p)}
+                aria-label="Editar"
+              >
+                <FaEdit />
+              </button>
+
+              <button
+                className="glob-iconchip is-delete"
+                title="Dar de baja"
+                onClick={() => abrirModalBaja(p)}
+                aria-label="Dar de baja"
+              >
+                <FaUserMinus />
+              </button>
+
+{mostrarBotonInscribir && (
+  <button
+    id="is_affirm"
+    className="glob-iconchip is-affirm"
+    title="Inscribir manualmente"
+    onClick={() => abrirModalInscribir(p)}
+    aria-label="Inscribir"
+  >
+    <FaCheckCircle />
+  </button>
+)}
+
+<button
+  className="glob-iconchip is-delete"
+  title={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
+  onClick={() => abrirModalAccion(p)}
+  aria-label={tab === 'inscriptos' ? 'Marcar NO inscripto' : 'Eliminar registro'}
+>
+  <FaTrash />
+</button>
+            </div>
+          </div>
+        );
+      })
+    )}
+  </div>
+)}
         </div>
 
-        <div className="glob-down-container">
+        <div className="glob-down-container" style={{gap:0}}>
           <button
             className="glob-profesor-button glob-hover-effect glob-volver-atras"
             onClick={() => {

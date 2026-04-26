@@ -1659,9 +1659,9 @@ const MesasExamen = () => {
         </div>
 
         <div className="glob-profesores-list">
-          <div className="glob-contenedor-list-items">
+          <div className="glob-contenedor-list-items" style={{padding:5}}>
             <div className="glob-left-inline">
-              <div className="contador-grups-noencontrado">
+              <div className="contador-grups-noencontrado" style={{gap:10}}>
                 <div className="glob-contador-container">
                   <span className="glob-profesores-desktop">
                     {vista === "grupos" ? "Grupos: " : "No agrupadas: "}
@@ -1783,7 +1783,7 @@ const MesasExamen = () => {
             </div>
           </div>
 
-          <div className="glob-box-table pdf-view">
+          <div className="glob-box-table pdf-view" style={{display:"flex"}}>
             {cargandoVista || loadingDetalle ? (
               <div
                 className="glob-loading-spinner-container"
